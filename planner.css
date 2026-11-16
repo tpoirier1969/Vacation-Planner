@@ -87,3 +87,9 @@ body{width:100%;max-width:100%;min-width:0;overflow-x:clip}
   .tabs{width:100%;overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
   .tabs button{flex:0 0 auto;white-space:nowrap}
 }
+
+/* v0.4.3: iOS Safari auto-zooms focused form controls smaller than 16px.
+   Use 16px minimum for editable controls; do not disable user pinch zoom. */
+input,textarea,select{font-size:16px!important;line-height:1.35}
+#searchText{font-size:16px!important}
+@media(max-width:850px){#explore>.toolbar>.field input{font-size:16px!important}}
