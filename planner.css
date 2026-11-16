@@ -98,3 +98,5 @@ input,textarea,select{font-size:16px!important;line-height:1.35}
 #map,.map-frame .leaflet-container{touch-action:none!important;overscroll-behavior:contain}
 .map-frame .leaflet-tile-pane,.map-frame .leaflet-map-pane{will-change:transform}
 header{flex-wrap:wrap}.app-version{display:inline-block;background:#f7d395;color:#174b4d;border:2px solid #fdf0c9;border-radius:8px;padding:4px 9px;font-size:12px;font-weight:900;letter-spacing:.05em;white-space:nowrap}@media(max-width:520px){header #context{display:none}}
+/* v0.6.0 shared cloud access */
+.cloud-strip{padding:7px 18px;background:#f5e6c8;color:#214e50;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:12px}.cloud-strip button{padding:4px 8px}.cloud-gate{max-width:540px;margin:35px auto;padding:12px}.cloud-gate .card{padding:25px}.cloud-gate form{display:grid;gap:14px}.cloud-gate input{width:100%;box-sizing:border-box}
