@@ -62,3 +62,28 @@ footer{font-weight:750;letter-spacing:.09em;border-top:3px double #c7af89}
 .tile-status button{white-space:nowrap;min-height:35px}
 .map-frame .leaflet-container{background:#dce7e3}
 @media(max-width:850px){.map{touch-action:manipulation}.map-frame .leaflet-container{touch-action:none}}
+
+/* v0.4.2: Prevent iPhone viewport expansion from intrinsic flex/grid widths. */
+html{width:100%;max-width:100%;overflow-x:clip}
+body{width:100%;max-width:100%;min-width:0;overflow-x:clip}
+.shell,#workspace,#home,.panel,.hero,.card,.grid,.map-layout,.map-layout>div,.map-layout>aside,.map-frame,.map,.toolbar,.tabs{min-width:0;max-width:100%}
+.map-frame{width:100%;overflow:hidden}
+.map-frame.expanded{width:100vw;max-width:none;overflow:hidden}
+.map-frame.expanded .map{max-width:none}
+.map-layout>div,.map-layout>aside{min-width:0}
+.map{width:100%}
+.toolbar>*{min-width:0}
+.field input,.field select,.field textarea{min-width:0;max-width:100%}
+.hero h1,.hero p,.card p{overflow-wrap:anywhere}
+@media(max-width:850px){
+  #explore>.toolbar{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:9px;width:100%}
+  #explore>.toolbar>.field{grid-column:1/-1;width:100%;min-width:0;flex:none}
+  #explore>.toolbar>button{width:100%;min-width:0;max-width:100%;padding:10px 8px;white-space:normal;font-size:14px;line-height:1.25}
+  .map-layout{width:100%}
+  .map-frame{width:100%}
+  .map-frame .map{width:100%}
+  .map-float{max-width:calc(100% - 20px)}
+  .map-float button{min-width:0;max-width:100%;white-space:normal}
+  .tabs{width:100%;overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+  .tabs button{flex:0 0 auto;white-space:nowrap}
+}
