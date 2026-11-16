@@ -1,2 +1,1 @@
-// Authoritative application version for this Vacation Planner.
-window.LAZY_ACRES_VACATION_VERSION = '0.1.0';
+window.LAZY_ACRES_VACATION_VERSION = '0.2.0';

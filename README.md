@@ -1,19 +1,17 @@
 # Lazy Acres Vacation Planner
 
-A mobile-friendly early working version of the Vacation Planner.
+Live site (after Pages deployment): https://tpoirier1969.github.io/Vacation-Planner/
 
-## Website
+## v0.2.0
 
-When GitHub Pages is enabled to publish `main` / `(root)`, open https://tpoirier1969.github.io/Vacation-Planner/ .
+Trip-specific workspaces with explicit Exit Trip, interactive Leaflet/OpenStreetMap map, location search (Nominatim), nearby OpenStreetMap POI discovery (Overpass), map-click place saving, per-trip saved places, itinerary, notes and packing preview. A trip remains active across page reloads in the same browser tab via sessionStorage. All saved records remain browser-local via localStorage and are not synchronized across devices.
 
-## Features
+**Limitations:** Suggestions are OSM listings, not personalized editorial recommendations; public search and discovery services can be rate-limited or unavailable. Map requires network access. Packing is not connected to household Shopping List. No shared Supabase writes, backend, API keys or GitHub Actions.
 
-Create trips; collect travel ideas and places; add itinerary activities; use a browser-local preview packing checklist. Data is currently stored in each browser's localStorage and **does not sync**. The map is a placeholder. Existing Shopping List, Scheduler, and Boondocking apps are linked, not integrated.
+## Hosting
 
-## Development
-
-No build step or GitHub Actions required. For local preview, serve the repository with `python3 -m http.server 8000`. Verify on mobile and desktop browsers.
+GitHub Pages from `main` / root. Static site; no build step.
 
 ## Project rules
 
-See `PROJECT_RULES.md` and https://github.com/tpoirier1969/Web-App-Standards .
+See `PROJECT_RULES.md` and [Web-App-Standards](https://github.com/tpoirier1969/Web-App-Standards).
