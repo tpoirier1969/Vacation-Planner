@@ -56,3 +56,9 @@ footer{font-weight:750;letter-spacing:.09em;border-top:3px double #c7af89}
 .map-frame .leaflet-control-zoom a{width:44px;height:44px;line-height:42px;font-size:27px}
 @media(max-width:850px){.map{height:56dvh;min-height:340px;touch-action:pan-x pan-y}.map-layout{display:flex;flex-direction:column}.map-layout>aside{width:100%}.toolbar{gap:7px}.toolbar .field{flex-basis:100%}.toolbar button{flex:1;min-height:44px}.map-float button{font-size:12px}.map-frame.expanded .map{height:100dvh;min-height:100dvh}}
 @media(max-width:360px){.map-float{flex-direction:column}.map-hint{font-size:11px}}
+
+/* Tile-loading feedback and iOS touch handling for unreliable mobile networks. */
+.tile-status{position:absolute;z-index:510;left:10px;right:10px;bottom:62px;display:flex;align-items:center;justify-content:space-between;gap:8px;background:#fff8eaf2;border:1px solid #e2c69a;border-radius:9px;padding:7px 10px;box-shadow:0 2px 12px #0003;font-size:12px;color:#624b2b}
+.tile-status button{white-space:nowrap;min-height:35px}
+.map-frame .leaflet-container{background:#dce7e3}
+@media(max-width:850px){.map{touch-action:manipulation}.map-frame .leaflet-container{touch-action:none}}
