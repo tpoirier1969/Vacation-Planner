@@ -271,6 +271,9 @@ async function enrichDiscoveryCard(place,index){
  try{details=await getDiscoveryPlaceDetails(place);}catch{}
  if(window.__tripSuggestions?.[index]!==place)return;
  const merged=Discovery.combined(place,details);
+ // Preserve returned hours when the user chooses to save the suggestion.
+ if(merged.hours&&!place.hours)place.hours=merged.hours;
+ if(merged.website&&!place.website)place.website=safeExternalURL(merged.website)||'';
  let text=merged.description,wiki=null;
  if(!text){
   wiki=await discoveryWiki(details);
@@ -322,10 +325,10 @@ function makeDiscoveryPopup(place){
   try{
    const details=await getDiscoveryPlaceDetails(place);
    info.replaceChildren();
-   const description=details.description||details.description_international?.en;
-   const hours=details.opening_hours;
+   const description=Discovery.description(details)||Discovery.description(place);
+   const hours=details.opening_hours||place.hours;
    if(description){const el=document.createElement('p');el.textContent=description;info.append(el);}
-   if(hours){const el=document.createElement('p');el.textContent='Hours: '+hours;info.append(el);}
+   if(hours){const el=document.createElement('p');el.textContent='Hours: '+Discovery.hoursText(hours);info.append(el);}
    appendContactInfo(info,details);
    if(!info.childNodes.length){info.textContent='No description, hours or website listed for this place.';}
   }catch(error){info.textContent='Additional details unavailable. You can still save this place or add it to your itinerary.';}
