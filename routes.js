@@ -212,9 +212,10 @@ function createController(config){
     let response;try{response=await fetch(url,{signal:controller.signal});}finally{clearTimeout(timer);}
     if(!response.ok)throw Error(response.status===429?'Free API limit reached':'Routing HTTP '+response.status);
     const outcome=parseRoute(await response.json());
-    if(outcome.legStats.length!==legs.length)throw Error('Routing service returned an unexpected number of road sections.');
+    // Some routing responses omit detailed leg statistics; retain the usable geometry and totals.
+    const detailed=outcome.legStats.length===legs.length;
     segments.push({startIndex:legs[0].i,endIndex:legs[legs.length-1].i,polyline:outcome.polyline,distanceM:outcome.distanceM,durationS:outcome.durationS});
-    legs.forEach((leg,i)=>{stats[leg.i]=outcome.legStats[i];});
+    legs.forEach((leg,i)=>{stats[leg.i]=detailed?outcome.legStats[i]:null;});
     totalDistance+=outcome.distanceM;totalDuration+=outcome.durationS;
     status='Calculated '+(groupNumber+1)+' of '+groups.length+' connected road groups.';render();
    }
