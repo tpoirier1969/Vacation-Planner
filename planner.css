@@ -129,3 +129,149 @@ header{flex-wrap:wrap}.app-version{display:inline-block;background:#f7d395;color
 .discovery-info-body a{display:inline-block;margin-top:4px;font-weight:700}
 
 #activityHoursField[hidden]{display:none!important}
+
+
+/* 1950s roadside-motel design system — brand, chrome-like trim and enamel panels.
+   The transparent marquee is a separate, reusable image asset. */
+:root{
+  --teal:#176f73;--aqua:#45b8b0;--orange:#df593f;--cream:#fff1d2;
+  --ink:#263a3b;--line:#c6a978;
+  --retro-coral:#cd473c;--retro-yellow:#f5bd62;--retro-ivory:#fff7e5;
+  --retro-deep:#145357;--retro-pale:#d9eeea;
+}
+body{
+  background-color:#e9eee5;
+  background-image:radial-gradient(circle at 8% 6%,#fff6df 0,transparent 36%),
+   radial-gradient(circle at 92% 28%,#cce8e3 0,transparent 40%),
+   repeating-linear-gradient(0deg,transparent 0 40px,#1b716008 41px 42px);
+}
+header{
+  position:relative;
+  min-height:180px;
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:space-between;
+  align-items:center;
+  gap:14px;
+  padding:10px max(18px,calc((100vw - 1260px)/2));
+  background:linear-gradient(120deg,#c5e7df 0%,#70c9bd 53%,#f8e6b9 100%);
+  color:var(--retro-deep);
+  border-bottom:8px solid var(--retro-coral);
+  box-shadow:inset 0 -3px 0 #f7ca78,0 5px 0 #135c6070;
+}
+header:before{
+  content:"";position:absolute;inset:0;pointer-events:none;opacity:.28;
+  background:repeating-linear-gradient(115deg,transparent 0 19px,#fff6df55 20px 21px);
+}
+header>*{position:relative;z-index:1}
+header .brand{
+  display:block;flex:0 1 325px;line-height:0;
+  filter:drop-shadow(3px 5px 2px #17494b44);
+}
+header .brand img{
+  display:block;width:min(325px,36vw);height:auto;max-width:100%;
+}
+header #context{
+  display:block;font-size:12px;font-weight:900;letter-spacing:.14em;
+  color:#18565b;text-transform:uppercase;
+  background:#fff8e7e0;padding:9px 14px;border:2px solid #cc664a;
+  border-radius:4px;box-shadow:3px 3px 0 #176a6c55;
+}
+.app-version{
+  background:var(--retro-ivory);color:var(--retro-deep);
+  border:2px solid var(--retro-coral);border-radius:4px;
+  box-shadow:3px 3px 0 #255b5e50;
+}
+.cloud-strip{
+  background:#f8edce;border-bottom:2px solid #bf9369;
+  color:var(--retro-deep);box-shadow:inset 0 3px 0 #fff9ed;
+}
+.shell{padding-top:24px}
+.hero{
+  border:3px solid #c47b52;border-radius:15px;
+  background:linear-gradient(125deg,#fff8e9 0%,#fce9c4 60%,#d6e9df 100%);
+  box-shadow:inset 0 0 0 5px #fff8e9,0 6px 0 #bf9b714f;
+}
+.hero:before{
+  height:11px;
+  background:repeating-linear-gradient(90deg,var(--retro-coral) 0 46px,var(--retro-yellow) 46px 92px,var(--retro-deep) 92px 138px);
+}
+.hero h1,.card h2,.card h3{
+  color:var(--retro-deep);
+}
+.hero h1{font-family:Georgia,serif;text-shadow:2px 3px 0 #d1dcd0}
+.hero-eyebrow{color:#a84b3c;letter-spacing:.13em}
+.poster-stamp{
+  background:var(--retro-coral);outline:3px solid var(--retro-deep);
+  box-shadow:5px 5px 0 #15545c60;
+}
+.card{
+  border:2px solid #d0ab78;border-radius:11px;
+  background:linear-gradient(180deg,#fffcf4,#fff7e7);
+  box-shadow:4px 4px 0 #9a745c2b;
+}
+.card h2{
+  font-family:Georgia,serif;font-weight:900;letter-spacing:-.02em;
+  border-bottom:2px solid #e2bb86;padding-bottom:8px;
+}
+.card h2:before{
+  content:"✦";font-family:Georgia,serif;color:var(--retro-coral);font-size:.8em;margin-right:8px;
+}
+.tabs{
+  border-bottom:4px double #c78960;
+  padding:4px 0 13px;gap:8px;
+}
+.tabs button{
+  background:#fff3d8;border:2px solid #c28a62;border-radius:8px;
+  color:var(--retro-deep);box-shadow:2px 3px 0 #a07a5750;
+  font-weight:850;transition:background-color .15s ease,color .15s ease;
+}
+.tabs button.active{
+  background:var(--retro-deep);border-color:#f2c073;color:#fff7df;
+  box-shadow:inset 0 -3px 0 #edb663,2px 3px 0 #a07a5750;
+}
+.primary,.secondary,.quiet{
+  border:2px solid #fff5da;border-radius:7px;
+  box-shadow:0 2px 0 #1743455c;
+  letter-spacing:.015em;
+}
+.primary{background:var(--retro-coral);color:#fff8e7}
+.primary:hover{background:#b83d35}
+.secondary{background:var(--retro-deep);color:#fff9e9}
+.secondary:hover{background:#0c4145}
+.quiet{background:#d7efea;color:var(--retro-deep)}
+.quiet:hover{background:#c0e3dd}
+.field input,.field select,.field textarea{
+  border:2px solid #ccb997;background:#fffdfa;border-radius:5px;
+}
+.trip{
+  border:2px solid #b98b63;
+  background:linear-gradient(135deg,#d4efe8,#fff0cb);
+  border-radius:11px;box-shadow:4px 5px 0 #9e7a5744;
+}
+.day{
+  border-left:6px solid var(--retro-coral);background:#f6f0df;
+  border-radius:0 8px 8px 0;
+}
+.map-frame{border:3px solid #b98a67;border-radius:11px;box-shadow:3px 5px 0 #89695038}
+.map-category-controls{
+  background:#fff4db;border:2px solid #d1ae7d;border-radius:8px;
+}
+dialog{border:3px solid #ba8667;background:#fff9ed;border-radius:10px}
+footer{
+  border-top:5px double #bd8b60;
+  background:#e1eae3;color:#376363;letter-spacing:.04em;
+}
+@media(max-width:760px){
+ header{min-height:140px;gap:9px;padding:8px 14px;}
+ header .brand{flex:0 0 auto;max-width:56%}
+ header .brand img{width:min(240px,52vw)}
+ header #context{font-size:10px;letter-spacing:.06em;padding:7px;max-width:42%}
+ .app-version{font-size:10px;padding:4px 6px}
+ .shell{padding-top:15px}
+}
+@media(max-width:420px){
+ header .brand{max-width:62%}
+ header .brand img{width:min(222px,61vw)}
+ header #context{max-width:100%;margin:0}
+}
