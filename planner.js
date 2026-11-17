@@ -174,10 +174,11 @@ function makeDiscoveryPopup(place){
 function renderDiscoveryMarkers(found){
  if(!map||!discoveryMarkers)return;
  discoveryMarkers.clearLayers();
- found.forEach((x,i)=>{
-  const icon=L.divIcon({className:'discovery-marker-icon',html:'<span class="discovery-map-pin">'+(i+1)+'</span>',iconSize:[26,30],iconAnchor:[13,29],popupAnchor:[0,-28]});
+ found.forEach(x=>{
+  const icon=L.divIcon({className:'discovery-marker-icon',html:'<span class="discovery-map-pin" aria-hidden="true">●</span>',iconSize:[22,28],iconAnchor:[11,26],popupAnchor:[0,-24]});
   const popup=makeDiscoveryPopup(x);
-  const marker=L.marker([x.lat,x.lng],{icon}).addTo(discoveryMarkers).bindPopup(popup.content);
+  const marker=L.marker([x.lat,x.lng],{icon,title:x.name,alt:x.name}).addTo(discoveryMarkers).bindPopup(popup.content);
+  marker.bindTooltip(x.name,{direction:'top',offset:[0,-20]});
   marker.on('popupopen',()=>popup.load());
  });
 }
@@ -290,7 +291,7 @@ async function discover(){
    window.__tripSuggestions=found;
    renderDiscoveryMarkers(found);
    status.textContent=found.length+' suggestions within the visible map area'+(features.length===60?' (showing first matches)':'')+'.';
-   results.innerHTML=found.length?found.map((x,i)=>'<div class="poi"><strong>'+(i+1)+'. '+esc(x.name)+'</strong><p>'+esc(x.kind.replaceAll(/[._]/g,' '))+(x.address?' · '+esc(x.address):'')+'</p>'+(x.description?'<p>'+esc(x.description)+'</p>':'')+(x.phone?'<p>Phone: <a href="tel:'+esc(x.phone.replace(/[^+0-9]/g,''))+'">'+esc(x.phone)+'</a></p>':'')+(x.website?'<p><a href="'+esc(x.website)+'" target="_blank" rel="noopener noreferrer">Website</a></p>':'')+'<div class="poi-extra" id="poi-extra-'+i+'"></div><div class="row wrap"><button class="quiet small" data-preview="'+i+'">Show on map</button><button class="quiet small" data-place-details="'+i+'">More details</button><button class="secondary small" data-suggest="'+i+'">Save to trip</button></div></div>').join(''):'<p class="empty">No matching places found here. Try another category, name, or map area.</p>';
+   results.innerHTML=found.length?found.map((x,i)=>'<div class="poi"><strong>'+esc(x.name)+'</strong><p>'+esc(x.kind.replaceAll(/[._]/g,' '))+(x.address?' · '+esc(x.address):'')+'</p>'+(x.description?'<p>'+esc(x.description)+'</p>':'')+(x.phone?'<p>Phone: <a href="tel:'+esc(x.phone.replace(/[^+0-9]/g,''))+'">'+esc(x.phone)+'</a></p>':'')+(x.website?'<p><a href="'+esc(x.website)+'" target="_blank" rel="noopener noreferrer">Website</a></p>':'')+'<div class="poi-extra" id="poi-extra-'+i+'"></div><div class="row wrap"><button class="quiet small" data-preview="'+i+'">Show on map</button><button class="quiet small" data-place-details="'+i+'">More details</button><button class="secondary small" data-suggest="'+i+'">Save to trip</button></div></div>').join(''):'<p class="empty">No matching places found here. Try another category, name, or map area.</p>';
 
  }catch(error){status.textContent=error.name==='AbortError'?'Place search timed out. Try again.':'Nearby discovery failed: '+error.message;}
  finally{button.disabled=false;}
@@ -313,7 +314,20 @@ form('#placeForm',d=>{
 form('#manualPlace',d=>state.places.unshift({id:uid(),tripId:active,...d,category:'Saved place'}));form('#activityForm',d=>{
  if(d.category==='Lodging'&&(!d.endDate||d.endDate<=d.date)){alert('Checkout must be after check-in.');return false;}
  const loc=pendingActivityLocation||{};
- state.activities.push({id:uid(),tripId:active,...d,endDate:d.category==='Lodging'?d.endDate:'',category:normalizedCategory(d.category),placeId:loc.placeId||'',lat:loc.lat??null,lng:loc.lng??null});
+ let saved=loc.placeId?state.places.find(p=>p.id===loc.placeId&&p.tripId===active):null;
+ // A mapped itinerary location is also a saved place, with a single stable ID.
+ if(!saved&&loc.lat!=null&&loc.lng!=null){
+   saved=state.places.find(p=>p.tripId===active&&geo(p)&&
+     Math.abs(Number(p.lat)-Number(loc.lat))<0.00005&&
+     Math.abs(Number(p.lng)-Number(loc.lng))<0.00005);
+   if(!saved){
+     saved={id:uid(),tripId:active,name:d.title,category:normalizedCategory(d.category),
+       location:'',notes:d.notes||'',lat:Number(loc.lat),lng:Number(loc.lng)};
+     state.places.unshift(saved);
+   }
+ }
+ state.activities.push({id:uid(),tripId:active,...d,endDate:d.category==='Lodging'?d.endDate:'',
+   category:normalizedCategory(d.category),placeId:saved?.id||'',lat:loc.lat??null,lng:loc.lng??null});
  pendingActivityLocation=null;
 });form('#noteForm',d=>state.notes.unshift({id:uid(),tripId:active,...d}));form('#packForm',d=>state.packing.push({id:uid(),tripId:active,title:d.item,category:PACKING_CATEGORIES.some(c=>c.key===d.category)?d.category:'trip-misc',done:false}));
 document.addEventListener('click',async e=>{
