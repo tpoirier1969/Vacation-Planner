@@ -8,7 +8,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const pointOK=p=>!!p&&p.lat!=null&&p.lng!=null&&p.lat!==''&&p.lng!==''&&Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lng))&&Math.abs(Number(p.lat))<=90&&Math.abs(Number(p.lng))<=180;
 function newRoute(id,tripId,name='New route'){
  return {id,tripId,name,start:null,end:null,waypoints:[],preferences:{...DEFAULT},
-  startDate:'',startTime:'',endDate:'',endTime:'',polyline:'',distanceM:null,durationS:null,legStats:[],visible:true};
+  startDate:'',startTime:'',endDate:'',endTime:'',polyline:'',distanceM:null,durationS:null,legStats:[],routeKind:'day',routeOrder:0,segments:[],gaps:[],visible:true};
 }
 function decodePolyline(value){
  if(typeof value!=='string'||value.length>500000)return [];
@@ -65,25 +65,32 @@ function summary(r){
 function createController(config){
  const $=id=>document.getElementById(id);
  let currentId='',tool='discover',pick='',map=null,layer=null,undoStack=[],busy=false,status='';
- const routes=()=>{const t=config.getTrip();return t?(config.getRoutes()||[]).filter(r=>r.tripId===t.id):[];};
+ const routes=()=>{const t=config.getTrip();return t?(config.getRoutes()||[]).filter(r=>r.tripId===t.id).sort((a,b)=>(a.routeOrder||0)-(b.routeOrder||0)):[];};
+ const routePoints=r=>[r.start,...(r.waypoints||[]),r.end];
+ const sectionKey=(points,i)=>String(i===0?'start':points[i].id||'point-'+i)+'>'+String(i===points.length-2?'end':points[i+1].id||'point-'+(i+1));
+ const validGaps=r=>{const points=routePoints(r),keys=new Set(points.slice(0,-1).map((_,i)=>sectionKey(points,i)));return (r.gaps||[]).filter(k=>keys.has(k));};
+ const sectionRows=r=>{const p=routePoints(r),gaps=new Set(validGaps(r));return p.slice(0,-1).map((from,i)=>({i,key:sectionKey(p,i),from,to:p[i+1],gap:gaps.has(sectionKey(p,i))}));};
+ let selectedSection='';
  const selected=()=>routes().find(r=>r.id===currentId)||null;
  const report=msg=>{status=msg;if($('routeStatus'))$('routeStatus').textContent=msg;};
  function selectDefault(){if(!routes().some(r=>r.id===currentId)){currentId=routes()[0]?.id||'';undoStack=[];}}
- function invalidate(r){r.polyline='';r.distanceM=null;r.durationS=null;r.legStats=[];}
+ function invalidate(r){r.polyline='';r.distanceM=null;r.durationS=null;r.legStats=[];r.segments=[];}
  function update(fn,changedRoad=false){
   const r=selected();if(!r)return;
   const old=JSON.parse(JSON.stringify(r));
   fn(r);
   if(JSON.stringify(r)===JSON.stringify(old))return;
   undoStack.push(old);if(undoStack.length>25)undoStack.shift();
-  if(changedRoad)invalidate(r);
+  if(changedRoad){r.gaps=validGaps(r);invalidate(r);}
   config.persist();
  }
  function draw(){
   if(!layer)return;layer.clearLayers();
   const r=selected();if(!r||r.visible===false)return;
-  if(r.polyline){const coords=decodePolyline(r.polyline);
-   if(coords.length>1)L.polyline(coords,{color:'#b45237',weight:5,opacity:.88,interactive:false}).addTo(layer);
+  const geometries=(r.segments||[]).length?r.segments:(r.polyline&&!validGaps(r).length?[{polyline:r.polyline,startIndex:0}]:[]);
+  for(const segment of geometries){const coords=decodePolyline(segment.polyline);
+   if(coords.length>1){const line=L.polyline(coords,{color:'#b45237',weight:5,opacity:.88,interactive:true}).addTo(layer);
+    line.on('click',()=>{selectedSection=sectionRows(r)[segment.startIndex||0]?.key||'';render();$('routeSectionList')?.scrollIntoView({behavior:'smooth',block:'nearest'});});}
   }
   for(const [name,p,color] of [['Start',r.start,'#28766f'],['End',r.end,'#b45237']]){
    if(pointOK(p))L.circleMarker([p.lat,p.lng],{radius:7,color,fillColor:color,fillOpacity:0.8})
@@ -100,7 +107,7 @@ function createController(config){
  }
  function fitMap(){
   const r=selected();if(!map||!r)return;
-  const coords=r.polyline?decodePolyline(r.polyline):[r.start,...(r.waypoints||[]),r.end].filter(pointOK).map(p=>[p.lat,p.lng]);
+  const coords=(r.segments||[]).length?r.segments.flatMap(x=>decodePolyline(x.polyline)):(r.polyline&&!validGaps(r).length?decodePolyline(r.polyline):[r.start,...(r.waypoints||[]),r.end].filter(pointOK).map(p=>[p.lat,p.lng]));
   if(coords.length>1)map.fitBounds(L.latLngBounds(coords).pad(0.12),{maxZoom:14});
   else if(coords.length===1)map.setView(coords[0],13);
  }
@@ -130,6 +137,7 @@ function createController(config){
   const base=selected(),n=routes().length;
   const r=copy&&base?{...JSON.parse(JSON.stringify(base)),id:config.uid(),name:(base.name+' — alternative').slice(0,160)}:
    newRoute(config.uid(),t.id,n?'Route '+(n+1):'Outbound route');
+  r.routeOrder=Math.max(-1,...routes().map(x=>x.routeOrder||0))+1;
   config.getRoutes().push(r);currentId=r.id;undoStack=[];pick='';status=copy?'Saved separate alternative. Recalculate to compare.':'Add start and end points to begin.';
   config.persist();
  }
@@ -169,22 +177,51 @@ function createController(config){
    status='Found '+(p.formatted||text)+'. Check the marker on the map.';render();fitMap();
   }catch(e){report('Location lookup failed: '+e.message);}
  }
+ function toggleSection(key){
+  const r=selected(),row=r&&sectionRows(r).find(x=>x.key===key);if(!row)return;
+  update(route=>{const gaps=new Set(validGaps(route));if(gaps.has(key))gaps.delete(key);else gaps.add(key);route.gaps=[...gaps];},true);
+  selectedSection=key;status=row.gap?'Driving section reconnected. Recalculate roads.':'Driving section removed; its endpoints are retained. Recalculate remaining roads.';render();
+ }
+ function moveRoute(direction){
+  const list=routes(),index=list.findIndex(r=>r.id===currentId),other=index+direction;
+  if(index<0||other<0||other>=list.length)return;
+  [list[index],list[other]]=[list[other],list[index]];
+  list.forEach((r,i)=>r.routeOrder=i);
+  config.persist();status='Route order saved.';render();
+ }
  async function calculate(){
   const r=selected(),key=root.LAZY_ACRES_GEOAPIFY_KEY;if(!r)return;
   if(!key)return report('Geoapify key is missing.');
   const invalid=windowError(r);if(invalid)return report(invalid);
-  let url;try{url=routeURL(r,key);}catch(e){return report(e.message);}
-  if(busy)return;busy=true;status='Calculating roads…';render();
-  const routeId=r.id;
+  const rows=sectionRows(r),groups=[];let group=[];
+  for(const leg of rows){
+   if(leg.gap||!pointOK(leg.from)||!pointOK(leg.to)){
+    if(group.length){groups.push(group);group=[];}
+   }else group.push(leg);
+  }
+  if(group.length)groups.push(group);
+  if(!groups.length){update(route=>{invalidate(route);route.gaps=validGaps(route);});return report('There are no connected, mapped driving sections to calculate.');}
+  if(busy)return;busy=true;status='Calculating '+groups.length+' connected road section'+(groups.length===1?'':'s')+'…';render();
+  const routeId=r.id,signature=JSON.stringify({start:r.start,end:r.end,waypoints:r.waypoints,preferences:r.preferences,gaps:validGaps(r)});
   try{
-   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),18000);
-   let response;try{response=await fetch(url,{signal:controller.signal});}finally{clearTimeout(timer);}
-   if(!response.ok)throw Error(response.status===429?'Free API limit reached':'Routing HTTP '+response.status);
-   const outcome=parseRoute(await response.json());
+   const segments=[],stats=Array(rows.length).fill(null);let totalDistance=0,totalDuration=0;
+   for(const [groupNumber,legs] of groups.entries()){
+    const points=[legs[0].from,...legs.map(x=>x.to)];
+    const subroute={...r,start:points[0],end:points[points.length-1],waypoints:points.slice(1,-1)};
+    const url=routeURL(subroute,key),controller=new AbortController(),timer=setTimeout(()=>controller.abort(),18000);
+    let response;try{response=await fetch(url,{signal:controller.signal});}finally{clearTimeout(timer);}
+    if(!response.ok)throw Error(response.status===429?'Free API limit reached':'Routing HTTP '+response.status);
+    const outcome=parseRoute(await response.json());
+    if(outcome.legStats.length!==legs.length)throw Error('Routing service returned an unexpected number of road sections.');
+    segments.push({startIndex:legs[0].i,endIndex:legs[legs.length-1].i,polyline:outcome.polyline,distanceM:outcome.distanceM,durationS:outcome.durationS});
+    legs.forEach((leg,i)=>{stats[leg.i]=outcome.legStats[i];});
+    totalDistance+=outcome.distanceM;totalDuration+=outcome.durationS;
+    status='Calculated '+(groupNumber+1)+' of '+groups.length+' connected road groups.';render();
+   }
    const latest=selected();if(!latest||latest.id!==routeId)return;
-   if(routeURL(latest,key)!==url)return report('Stops changed while calculating. Try again.');
-   update(route=>Object.assign(route,outcome));
-   status='Route calculated: '+summary(selected())+'. No live traffic or stop durations.';render();fitMap();
+   if(JSON.stringify({start:latest.start,end:latest.end,waypoints:latest.waypoints,preferences:latest.preferences,gaps:validGaps(latest)})!==signature)return report('Road sections changed during calculation. Recalculate.');
+   update(route=>{route.segments=segments;route.legStats=stats;route.polyline=groups.length===1&&groups[0].length===rows.length?segments[0].polyline:'';route.distanceM=totalDistance;route.durationS=totalDuration;});
+   status='Connected roads calculated: '+summary(selected())+'. Removed sections remain disconnected.';render();fitMap();
   }catch(e){report(e.name==='AbortError'?'Routing request timed out.':'Routing failed: '+e.message);}
   finally{busy=false;render();}
  }
@@ -201,6 +238,8 @@ function createController(config){
   $('routePicker').innerHTML=list.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+
    (x.distanceM!=null?' · '+(x.distanceM/1609.344).toFixed(0)+' mi':'')+'</option>').join('');
   $('routePicker').value=currentId;
+  $('routeMoveUp').disabled=!r||list[0]?.id===currentId;
+  $('routeMoveDown').disabled=!r||list[list.length-1]?.id===currentId;
   $('routeComparison').innerHTML=list.length>1?'<details class="route-compare-details"><summary>Compare saved routes ('+list.length+')</summary>'+
    list.map(x=>'<div class="route-compare-row '+(x.id===currentId?'selected':'')+'"><button type="button" class="quiet small" data-route-select="'+esc(x.id)+'">'+esc(x.name)+'</button>'+
     '<span>'+esc(summary(x))+'</span></div>').join('')+'</details>':'';
@@ -216,6 +255,7 @@ function createController(config){
   const p={...DEFAULT,...r.preferences};$('routeStrategy').value=p.strategy;$('routeVehicle').value=p.mode;
   for(const [id,key] of [['routeAvoidHighways','avoidHighways'],['routeAvoidTolls','avoidTolls'],['routeAvoidFerries','avoidFerries']])$(id).checked=!!p[key];
   $('routeVisible').checked=r.visible!==false;
+  $('routeKind').value=['day','outbound','return'].includes(r.routeKind)?r.routeKind:'day';
   $('routeMetrics').textContent=summary(r);
   $('routeWaypointList').innerHTML=(r.waypoints||[]).map((p,i)=>'<div class="route-waypoint">'+
     '<span class="route-waypoint-name">'+(i+1)+'. '+esc(p.label)+' <small>'+esc(p.kind==='stop'?'Stop':'Road point')+'</small></span>'+
@@ -223,13 +263,16 @@ function createController(config){
     '<button type="button" class="quiet small" data-route-move="'+i+':down" '+(i===r.waypoints.length-1?'disabled':'')+'>↓</button>'+
     '<button type="button" class="quiet small" data-route-remove="'+i+'" aria-label="Remove waypoint">×</button></div></div>').join('')||
     '<p class="muted small-details">No road points or stops yet.</p>';
+  $('routeSectionList').innerHTML=sectionRows(r).map(({i,key,from,to,gap})=>'<div class="route-leg-row route-section '+(gap?'route-section-gap ':'')+(selectedSection===key?'route-section-selected':'')+'" data-section-key="'+esc(key)+'" tabindex="0" role="group" aria-label="Driving section '+(i+1)+'">'+
+    '<span><strong>'+esc((i+1)+'. '+(from?.label||'Unmapped start')+' → '+(to?.label||'Unmapped destination'))+'</strong><small>'+esc(gap?'Not driving this section':(r.legStats?.[i]?summary(r.legStats[i]):'Recalculate for road estimate'))+'</small></span>'+
+    '<button type="button" class="quiet small" data-section-toggle="'+esc(key)+'">'+(gap?'Reconnect':'Remove section')+'</button></div>').join('');
   $('routeLegMetrics').innerHTML=Array.isArray(r.legStats)&&r.legStats.length===r.waypoints.length+1?
     '<details class="route-leg-breakdown"><summary>Driving distance & time between points</summary>'+
     r.legStats.map((leg,i)=>{
      const from=i===0?r.start?.label:r.waypoints[i-1]?.label;
      const to=i===r.waypoints.length?r.end?.label:r.waypoints[i]?.label;
      return '<div class="route-leg-row"><span>'+esc(from||'Start')+' → '+esc(to||'End')+'</span>'+
-       '<strong>'+esc(summary({distanceM:leg.distanceM,durationS:leg.durationS}))+'</strong></div>';
+       '<strong>'+esc(leg?summary({distanceM:leg.distanceM,durationS:leg.durationS}):'Not driven')+'</strong></div>';
     }).join('')+'</details>':'';
   const options=[...config.getPlaces().filter(pointOK).map(x=>({type:'places',id:x.id,label:'Idea: '+x.name})),
    ...config.getActivities().filter(pointOK).map(x=>({type:'activities',id:x.id,label:'Itinerary: '+x.title}))];
@@ -242,19 +285,27 @@ function createController(config){
    btn.setAttribute('aria-pressed',String(pick===btn.dataset.routePick));
   }
   $('routeUndo').disabled=!undoStack.length;
+  $('routeMoveUp').disabled=!r||list[0]?.id===currentId;
+  $('routeMoveDown').disabled=!r||list[list.length-1]?.id===currentId;
   $('routeSuggest').disabled=busy||!pointOK(r.start)||!pointOK(r.end);
   $('routeStatus').textContent=status||'Save points, then calculate the route. Changes are shared via Supabase.';
   draw();
  }
  function setTool(next){tool=next==='routes'?'routes':'discover';if(tool!=='routes')pick='';config.onPickChange?.();render();}
- function onTripChange(){currentId='';undoStack=[];pick='';status='';render();}
+ function onTripChange(){currentId='';undoStack=[];pick='';selectedSection='';status='';render();}
  function bind(){
   $('exploreToolTabs').addEventListener('click',e=>{const b=e.target.closest('[data-explore-tool]');if(b)setTool(b.dataset.exploreTool);});
   $('routeNew').addEventListener('click',()=>addRoute());
   $('routeAlternative').addEventListener('click',()=>addRoute(true));
   $('routeDelete').addEventListener('click',removeRoute);
   $('routeUndo').addEventListener('click',undo);
-  $('routePicker').addEventListener('change',e=>{currentId=e.target.value;undoStack=[];pick='';status='';render();});
+  $('routeMoveUp').addEventListener('click',()=>moveRoute(-1));
+  $('routeMoveDown').addEventListener('click',()=>moveRoute(1));
+  $('routeKind').addEventListener('change',e=>{if(!['day','outbound','return'].includes(e.target.value))return;update(r=>r.routeKind=e.target.value);render();});
+  $('routeSectionList').addEventListener('click',e=>{const toggle=e.target.closest('[data-section-toggle]'),row=e.target.closest('[data-section-key]');if(row)selectedSection=row.dataset.sectionKey;if(toggle)toggleSection(toggle.dataset.sectionToggle);else render();});
+  $('routeSectionList').addEventListener('focusin',e=>{const row=e.target.closest('[data-section-key]');if(row)selectedSection=row.dataset.sectionKey;});
+  document.addEventListener('keydown',e=>{if(tool!=='routes'||!selectedSection||!selected()||e.key!=='Delete'||e.target.closest('input,textarea,select,[contenteditable=true],button'))return;e.preventDefault();toggleSection(selectedSection);});
+  $('routePicker').addEventListener('change',e=>{currentId=e.target.value;undoStack=[];pick='';selectedSection='';status='';render();});
   $('routeComparison').addEventListener('click',e=>{
    const b=e.target.closest('[data-route-select]');if(!b)return;
    currentId=b.dataset.routeSelect;undoStack=[];pick='';status='';render();
