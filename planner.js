@@ -273,6 +273,43 @@ async function discoveryWiki(data){
  }
  return wikiSummaryCache.get(target.api);
 }
+async function discoveryWikidata(data){
+ const target=Discovery.wikidataTarget(data);
+ if(!target)return null;
+ if(!wikiSummaryCache.has(target.api)){
+  if(wikiSummaryCache.size>=100)wikiSummaryCache.delete(wikiSummaryCache.keys().next().value);
+  wikiSummaryCache.set(target.api,Discovery.wikidataSummary(data));
+ }
+ return wikiSummaryCache.get(target.api);
+}
+async function discoveryOverview(place,details={}){
+ const description=Discovery.description(details)||Discovery.description(place);
+ if(description)return {text:description,source:'OpenStreetMap'};
+ // Look up only records explicitly identified by this place's mapped tags.
+ // Do not substitute a same-named Wikipedia entry without a reference.
+ for(const data of [details,place]){
+  const wiki=await discoveryWiki(data);
+  if(wiki)return {...wiki,source:'Wikipedia'};
+ }
+ for(const data of [details,place]){
+  const wiki=await discoveryWikidata(data);
+  if(wiki)return wiki;
+ }
+ return {text:Discovery.categorySummary({...place,...details,
+  categories:place.categories||details.categories,
+  datasource:place.datasource||details.datasource}),source:'OpenStreetMap category'};
+}
+function addDiscoveryExplanation(host,overview){
+ const paragraph=document.createElement('p');paragraph.className='discovery-description';
+ paragraph.textContent=overview.text;
+ if(overview.url&&/^https:\/\/(en\.wikipedia\.org|www\.wikidata\.org)\/wiki\//.test(overview.url)){
+  const link=document.createElement('a');link.href=overview.url;
+  link.target='_blank';link.rel='noopener noreferrer';
+  link.textContent=' · Read at '+(overview.source||'source');
+  paragraph.append(link);
+ }
+ host.append(paragraph);
+}
 async function enrichDiscoveryCard(place,index){
  const container=$('#poi-card-'+index),summary=$('#poi-description-'+index),hours=$('#poi-hours-'+index);
  if(!container||!summary||window.__tripSuggestions?.[index]!==place)return;
@@ -283,19 +320,10 @@ async function enrichDiscoveryCard(place,index){
  // Preserve returned hours when the user chooses to save the suggestion.
  if(merged.hours&&!place.hours)place.hours=merged.hours;
  if(merged.website&&!place.website)place.website=safeExternalURL(merged.website)||'';
- let text=merged.description,wiki=null;
- if(!text){
-  wiki=await discoveryWiki(details);
-  if(!wiki)wiki=await discoveryWiki(place);
-  if(wiki)text=wiki.text;
- }
+ const overview=await discoveryOverview(place,details);
  if(window.__tripSuggestions?.[index]!==place)return;
- summary.textContent=text||'No description available from open sources.';
- if(wiki){
-  const link=document.createElement('a');link.href=wiki.url;link.target='_blank';
-  link.rel='noopener noreferrer';link.textContent=' · Wikipedia';
-  summary.append(link);
- }
+ summary.replaceChildren();
+ addDiscoveryExplanation(summary,overview);
  hours.textContent=merged.hours?'Hours: '+Discovery.hoursText(merged.hours):'Hours not listed — check before visiting';
  const contact=$('#poi-contact-'+index);
  if(contact){
