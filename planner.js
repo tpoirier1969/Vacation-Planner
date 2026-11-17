@@ -557,6 +557,33 @@ document.addEventListener('toggle',event=>{
  else collapsedPlaceCategories.add(key);
 },true);
 
+function moveBackToIdeas(id){
+ const item=state.activities.find(a=>a.id===id&&a.tripId===active);
+ if(!item)return;
+ const booking=[];
+ if(item.reservationStatus==='booked')booking.push('Reservation: booked / tickets purchased');
+ else if(item.reservationStatus==='needed')booking.push('Reservation: need to book');
+ if(item.confirmationCode)booking.push('Confirmation: '+item.confirmationCode);
+ if(item.bookingUrl)booking.push('Booking link: '+item.bookingUrl);
+ if(booking.length&&!confirm('This itinerary entry has booking information. It will be retained in the idea notes. Move this plan back to Ideas?'))return;
+ const idea=state.places.find(x=>x.id===item.placeId&&x.tripId===active);
+ const originalNotes=idea?.notes?.trim()||'';
+ let notes=item.notes?.trim()||'';
+ if(originalNotes&&notes!==originalNotes&&!notes.includes(originalNotes)){
+  notes+=[notes?'\n\n':'','Previous idea notes:\n',originalNotes].join('');
+ }
+ if(booking.length){
+  const extra=booking.filter(x=>!notes.includes(x));
+  if(extra.length)notes+=(notes?'\n\n':'')+extra.join('\n');
+ }
+ const restored={...Ideas.fromItinerary(item),notes,
+  lat:item.lat??idea?.lat??null,lng:item.lng??idea?.lng??null};
+ if(idea)Object.assign(idea,restored);
+ else state.places.unshift({id:uid(),tripId:active,location:'',geoapifyId:'',...restored});
+ state.activities=state.activities.filter(x=>x.id!==item.id);
+ persist();
+ setTab('places');
+}
 document.addEventListener('click',async e=>{
  const detailsButton=e.target.closest('[data-place-details]');
  if(detailsButton){
@@ -577,7 +604,7 @@ document.addEventListener('click',async e=>{
   return;
  }
  const editButton=e.target.closest('[data-edit]');if(editButton){const [kind,id]=editButton.dataset.edit.split(':');openEdit(kind,id);return;}
- const open=e.target.closest('[data-open]');if(open)showTrip(open.dataset.open);const rm=e.target.closest('[data-remove]');if(rm){const [key,id]=rm.dataset.remove.split(':');if(confirm('Remove this item from the trip?')){state[key]=state[key].filter(x=>x.id!==id);persist()}}const unschedule=e.target.closest('[data-unschedule]');if(unschedule){const item=state.activities.find(a=>a.id===unschedule.dataset.unschedule&&a.tripId===active);if(item){if(!state.places.some(p=>p.id===item.placeId)){state.places.unshift({id:uid(),tripId:active,name:item.title,category:normalizedCategory(item.category),notes:item.notes||'',hours:item.hours||'',location:'',lat:item.lat??null,lng:item.lng??null});}state.activities=state.activities.filter(a=>a.id!==item.id);persist();}return;}const loc=e.target.closest('[data-locate]');if(loc){const x=state.places.find(p=>p.id===loc.dataset.locate);if(x&&geo(x)){setTab('explore');setTimeout(()=>map?.setView([x.lat,x.lng],14),100)}}const plan=e.target.closest('[data-plan]');if(plan)planPlace(plan.dataset.plan);const preview=e.target.closest('[data-preview]');if(preview){const x=window.__tripSuggestions?.[Number(preview.dataset.preview)];if(x){map?.setView([x.lat,x.lng],15);const discovered=discoveryMarkers?.getLayers().find(m=>{const q=m.getLatLng();return Math.abs(q.lat-x.lat)<0.000001&&Math.abs(q.lng-x.lng)<0.000001});if(discovered)discovered.openPopup();else L.popup().setLatLng([x.lat,x.lng]).setContent(mapMenuContent({lat:x.lat,lng:x.lng},x.name,'','',detectedCategory([x.kind]))).openOn(map)}}const suggest=e.target.closest('[data-suggest]');if(suggest){const x=window.__tripSuggestions?.[Number(suggest.dataset.suggest)];if(x)openPlace(x.lat,x.lng,x.name,'','places',detectedCategory([x.kind]))}});
+ const open=e.target.closest('[data-open]');if(open)showTrip(open.dataset.open);const rm=e.target.closest('[data-remove]');if(rm){const [key,id]=rm.dataset.remove.split(':');if(confirm('Remove this item from the trip?')){state[key]=state[key].filter(x=>x.id!==id);persist()}}const unschedule=e.target.closest('[data-unschedule]');if(unschedule){moveBackToIdeas(unschedule.dataset.unschedule);return;}const loc=e.target.closest('[data-locate]');if(loc){const x=state.places.find(p=>p.id===loc.dataset.locate);if(x&&geo(x)){setTab('explore');setTimeout(()=>map?.setView([x.lat,x.lng],14),100)}}const plan=e.target.closest('[data-plan]');if(plan)planPlace(plan.dataset.plan);const preview=e.target.closest('[data-preview]');if(preview){const x=window.__tripSuggestions?.[Number(preview.dataset.preview)];if(x){map?.setView([x.lat,x.lng],15);const discovered=discoveryMarkers?.getLayers().find(m=>{const q=m.getLatLng();return Math.abs(q.lat-x.lat)<0.000001&&Math.abs(q.lng-x.lng)<0.000001});if(discovered)discovered.openPopup();else L.popup().setLatLng([x.lat,x.lng]).setContent(mapMenuContent({lat:x.lat,lng:x.lng},x.name,'','',detectedCategory([x.kind]))).openOn(map)}}const suggest=e.target.closest('[data-suggest]');if(suggest){const x=window.__tripSuggestions?.[Number(suggest.dataset.suggest)];if(x)openPlace(x.lat,x.lng,x.name,'','places',detectedCategory([x.kind]))}});
 $('#packList').addEventListener('change',e=>{if(e.target.dataset.pack){const x=state.packing.find(p=>p.id===e.target.dataset.pack&&p.tripId===active);if(x){x.done=e.target.checked;persist()}}});
 if(!trip())active=null;render();if(active){const t=trip();if(t?.lat==null&&t?.destination)searchLocation(t.destination,true)}
 };
