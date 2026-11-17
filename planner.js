@@ -24,75 +24,85 @@ function initMap(){if(!trip()||tab!=='explore')return;if(typeof L==='undefined')
 function refreshMarkers(){if(!map||!markers)return;markers.clearLayers();for(const x of forTrip('places'))if(geo(x)){const marker=L.marker([x.lat,x.lng]).addTo(markers);const el=document.createElement('div');const title=document.createElement('strong');title.textContent=x.name;el.append(title,document.createElement('br'));const btn=document.createElement('button');btn.textContent='Add to itinerary';btn.className='secondary small';btn.onclick=()=>planPlace(x.id);el.append(btn);marker.bindPopup(el)}}
 function openPlace(lat,lng,name,notes){selectedPoint={lat:Number(lat),lng:Number(lng)};$('#placeName').value=name||'';$('#placeNotes').value=notes||'';$('#coordinates').value=Number(lat).toFixed(5)+', '+Number(lng).toFixed(5);$('#placeDialog').showModal()}
 async function searchLocation(q,store=false){if(!q.trim())return;if(!store&&document.activeElement instanceof HTMLElement)document.activeElement.blur();$('#searchButton').disabled=true;const token=++searchToken;try{const response=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(q),{headers:{'Accept':'application/json'}});if(!response.ok)throw Error('Search service unavailable');const results=await response.json();if(token!==searchToken)return;if(!results.length){if(!store)alert('No location found. Try a more specific place name.');return}const p=results[0],lat=Number(p.lat),lng=Number(p.lon);if(store&&trip()){trip().lat=lat;trip().lng=lng;persist()}setTab('explore');setTimeout(()=>{initMap();map?.setView([lat,lng],11)},100)}catch(e){if(!store)alert('Location search failed: '+e.message)}finally{$('#searchButton').disabled=false}}
-const filters={attractions:'["tourism"~"attraction|viewpoint|artwork|zoo|theme_park"]',nature:'["natural"~"peak|waterfall|beach|cave_entrance|spring|wood|cliff"]',camping:'["tourism"~"camp_site|caravan_site|wilderness_hut"]',museums:'["tourism"~"museum|gallery"]["name"]',food:'["amenity"~"restaurant|cafe"]',activities:'["leisure"~"nature_reserve|park|marina|fishing"]',wineries:'["craft"="winery"]',all:'["name"]'};
-const discoveryKeywords=[
-  {pattern:/winer(y|ies)|vineyard|wine tasting/i,filter:'["craft"="winery"]'},
-  {pattern:/antique|thrift|second.hand/i,filter:'["shop"~"antiques|second_hand"]'},
-  {pattern:/waterfall|falls/i,filter:'["waterway"="waterfall"]'},
-  {pattern:/lighthouse/i,filter:'["man_made"="lighthouse"]'},
-  {pattern:/hiking|trail/i,filter:'["highway"~"path|footway"]'},
-  {pattern:/fishing|fish access/i,filter:'["leisure"="fishing"]'},
-  {pattern:/boat launch|boat ramp|boating/i,filter:'["leisure"="slipway"]'},
-  {pattern:/restaurant|cafe|coffee/i,filter:'["amenity"~"restaurant|cafe"]'},
-  {pattern:/museum|historical/i,filter:'["tourism"="museum"]'},
-  {pattern:/shopping|shops/i,filter:'["shop"]'}
+// Geoapify Places API: category/name search constrained to the visible map.
+const DISCOVERY_CATEGORIES={
+ attractions:'tourism.attraction,tourism.sights,entertainment',
+ nature:'natural,tourism.sights',
+ camping:'camping',
+ museums:'entertainment.museum,tourism.sights',
+ food:'catering.restaurant,catering.cafe',
+ activities:'leisure,sport',
+ wineries:'production.winery',
+ all:'tourism,entertainment,catering,commercial,leisure,natural,camping,production.winery'
+};
+const DISCOVERY_TERMS=[
+ {pattern:/winer(y|ies)|vineyard|wine tasting/i,categories:'production.winery'},
+ {pattern:/restaurant|cafe|coffee/i,categories:'catering.restaurant,catering.cafe'},
+ {pattern:/museum|historical/i,categories:'entertainment.museum,tourism.sights'},
+ {pattern:/antique|thrift/i,categories:'commercial.antiques,commercial.second_hand'},
+ {pattern:/shop|shopping/i,categories:'commercial'},
+ {pattern:/hiking|trail/i,categories:'leisure,natural'},
+ {pattern:/boat|marina|fishing/i,categories:'leisure,sport'},
+ {pattern:/waterfall|falls/i,categories:'natural,tourism.sights'},
+ {pattern:/lighthouse/i,categories:'tourism.sights'}
 ];
-function discoveryFilter(category,term){
-  const match=discoveryKeywords.find(x=>x.pattern.test(term));
-  if(match)return match.filter;
-  if(term){const safe=term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/"/g,'\\\"');return '["name"~"'+safe+'",i]';}
-  return filters[category]||filters.all;
-}
-const DISCOVERY_ENDPOINTS=['https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter'];
-async function fetchDiscovery(query){
-  let lastError;
-  for(const endpoint of DISCOVERY_ENDPOINTS){
-    const controller=new AbortController();
-    const timer=setTimeout(()=>controller.abort(),12000);
-    try{
-      const response=await fetch(endpoint,{method:'POST',body:new URLSearchParams({data:query}),signal:controller.signal,headers:{'Accept':'application/json'}});
-      if(!response.ok)throw Error('HTTP '+response.status);
-      const json=await response.json();
-      if(!Array.isArray(json.elements))throw Error('Invalid map data response');
-      return json.elements;
-    }catch(error){lastError=error;}
-    finally{clearTimeout(timer);}
-  }
-  throw Error('Map-data providers are temporarily unavailable'+(lastError?.name==='AbortError'?' (request timed out)':''));
-}
+const discoveryCache=new Map();
 async function discover(){
-  if(!map)return;
-  const bounds=map.getBounds(),south=bounds.getSouth(),north=bounds.getNorth(),west=bounds.getWest(),east=bounds.getEast();
-  const category=$('#category').value,term=$('#discoverText').value.trim();
-  const button=$('#discover'),status=$('#discoverStatus'),results=$('#suggestions');
-  // Large public Overpass bounding-box scans are costly. Never silently search a smaller area.
-  if(north-south>2||east-west>3||west < -180||east > 180){
-    status.textContent='This map view is too large for reliable discovery. Zoom in a little and search again.';
-    results.innerHTML='';
-    return;
-  }
-  button.disabled=true;
-  status.textContent='Searching visible map area…';
-  results.innerHTML='';
-  window.__tripSuggestions=[];
-  try{
-    const bbox=[south,west,north,east].map(n=>n.toFixed(5)).join(',');
-    const query='[out:json][timeout:15];nwr'+discoveryFilter(category,term)+'('+bbox+');out center 60;';
-    const elements=await fetchDiscovery(query);
-    const found=elements.filter(x=>x.tags?.name&&(x.lat!=null||x.center?.lat!=null)).slice(0,35).map(x=>({name:x.tags.name,lat:x.lat??x.center.lat,lng:x.lon??x.center.lon,kind:x.tags.tourism||x.tags.amenity||x.tags.natural||x.tags.leisure||x.tags.craft||x.tags.shop||'Point of interest'}));
-    status.textContent=found.length+' suggestions within the visible map area.';
-    results.innerHTML=found.length?found.map((x,i)=>'<div class="poi"><strong>'+esc(x.name)+'</strong><p>'+esc(x.kind.replaceAll('_',' '))+'</p><div class="row"><button class="quiet small" data-preview="'+i+'">Show on map</button><button class="secondary small" data-suggest="'+i+'">Save to trip</button></div></div>').join(''):'<p class="empty">No matching places found in this map view. Try another term or category.</p>';
-    window.__tripSuggestions=found;
-  }catch(error){status.textContent='Nearby suggestions could not be loaded. Both map-data services failed. Please retry shortly.';}
-  finally{button.disabled=false;}
+ if(!map)return;
+ const bounds=map.getBounds(),category=$('#category').value,term=$('#discoverText').value.trim();
+ const button=$('#discover'),status=$('#discoverStatus'),results=$('#suggestions');
+ const key=window.LAZY_ACRES_GEOAPIFY_KEY;
+ if(!key||key==='PASTE_YOUR_GEOAPIFY_BROWSER_KEY_HERE'){
+   status.textContent='Nearby discovery is not configured yet.';
+   return;
+ }
+ const west=bounds.getWest(),east=bounds.getEast(),south=bounds.getSouth(),north=bounds.getNorth();
+ if(west < -180||east > 180||east<=west){
+   status.textContent='Move the map to an area that does not cross the international date line.';return;
+ }
+ const match=DISCOVERY_TERMS.find(x=>x.pattern.test(term));
+ const categories=match?.categories||DISCOVERY_CATEGORIES[category]||DISCOVERY_CATEGORIES.all;
+ const nameFilter=term&&!match?term:'';
+ const params=new URLSearchParams({categories,filter:'rect:'+west.toFixed(5)+','+south.toFixed(5)+','+east.toFixed(5)+','+north.toFixed(5),limit:'60',apiKey:key});
+ if(nameFilter)params.set('name',nameFilter);
+ const cacheKey=[categories,nameFilter,params.get('filter')].join('|');
+ button.disabled=true;status.textContent='Searching visible map area…';results.innerHTML='';window.__tripSuggestions=[];
+ try{
+   let features=discoveryCache.get(cacheKey);
+   if(!features){
+     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000);
+     try{
+       const response=await fetch('https://api.geoapify.com/v2/places?'+params.toString(),{signal:controller.signal});
+       if(!response.ok){
+         if(response.status===401||response.status===403)throw Error('Geoapify rejected the website key (HTTP '+response.status+').');
+         if(response.status===429)throw Error('Geoapify daily allowance or request limit reached (HTTP 429).');
+         throw Error('Geoapify returned HTTP '+response.status+'.');
+       }
+       const data=await response.json();
+       if(!Array.isArray(data.features))throw Error('Unexpected response from Geoapify.');
+       features=data.features;
+       if(discoveryCache.size>=30)discoveryCache.delete(discoveryCache.keys().next().value);
+       discoveryCache.set(cacheKey,features);
+     }finally{clearTimeout(timeout);}
+   }
+   const found=features.map(f=>{
+     const p=f.properties||{},coords=f.geometry?.coordinates;
+     return {name:p.name||p.address_line1||'',lat:Number(p.lat??coords?.[1]),lng:Number(p.lon??coords?.[0]),kind:(p.categories||[]).find(x=>x!=='building')||'Point of interest',address:p.formatted||''};
+   }).filter(x=>x.name&&Number.isFinite(x.lat)&&Number.isFinite(x.lng)).slice(0,35);
+   window.__tripSuggestions=found;
+   status.textContent=found.length+' suggestions within the visible map area'+(features.length===60?' (showing first matches)':'')+'.';
+   results.innerHTML=found.length?found.map((x,i)=>'<div class="poi"><strong>'+esc(x.name)+'</strong><p>'+esc(x.kind.replaceAll(/[._]/g,' '))+(x.address?' · '+esc(x.address):'')+'</p><div class="row"><button class="quiet small" data-preview="'+i+'">Show on map</button><button class="secondary small" data-suggest="'+i+'">Save to trip</button></div></div>').join(''):'<p class="empty">No matching places found here. Try another category, name, or map area.</p>';
+ }catch(error){status.textContent=error.name==='AbortError'?'Place search timed out. Try again.':'Nearby discovery failed: '+error.message;}
+ finally{button.disabled=false;}
 }
+
 function planPlace(id){const x=state.places.find(p=>p.id===id&&p.tripId===active);if(!x)return;setTab('itinerary');$('#activityForm').elements.title.value=x.name;$('#activityForm').elements.notes.value=[x.notes,x.location,geo(x)?x.lat+', '+x.lng:''].filter(Boolean).join(' · ');$('#activityForm').elements.date.value=trip().start||'';$('#activityForm').elements.date.focus()}
 function form(sel,handler){$(sel).addEventListener('submit',e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.target));if(handler(d)!==false){e.target.reset();persist()}})}
 $('#newTrip').onclick=()=>$('#tripDialog').showModal();$('#cancelTrip').onclick=()=>$('#tripDialog').close();$('#exitTrip').onclick=exitTrip;$('#cancelPlace').onclick=()=>$('#placeDialog').close();$('#tabs').onclick=e=>{const b=e.target.closest('[data-tab]');if(b)setTab(b.dataset.tab)};$('#searchButton').onclick=()=>searchLocation($('#searchText').value);$('#searchText').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();searchLocation(e.target.value)}};$('#discover').onclick=discover;$('#tripCenter').onclick=()=>{const t=trip();if(t?.lat!=null&&t?.lng!=null)map?.setView([t.lat,t.lng],10);else if(t?.destination)searchLocation(t.destination,true)};
 form('#tripForm',d=>{if(d.start&&d.end&&d.end<d.start){alert('End date must be on or after start date.');return false}const t={id:uid(),...d};state.trips.push(t);$('#tripDialog').close();setTimeout(()=>showTrip(t.id),0)});
 form('#placeForm',d=>{if(!selectedPoint)return false;state.places.unshift({id:uid(),tripId:active,...d,...selectedPoint});$('#placeDialog').close()});
 form('#manualPlace',d=>state.places.unshift({id:uid(),tripId:active,...d,category:'Saved place'}));form('#activityForm',d=>state.activities.push({id:uid(),tripId:active,...d}));form('#noteForm',d=>state.notes.unshift({id:uid(),tripId:active,...d}));form('#packForm',d=>state.packing.push({id:uid(),tripId:active,title:d.item,category:PACKING_CATEGORIES.some(c=>c.key===d.category)?d.category:'trip-misc',done:false}));
-document.addEventListener('click',e=>{const open=e.target.closest('[data-open]');if(open)showTrip(open.dataset.open);const rm=e.target.closest('[data-remove]');if(rm){const [key,id]=rm.dataset.remove.split(':');if(confirm('Remove this item from the trip?')){state[key]=state[key].filter(x=>x.id!==id);persist()}}const loc=e.target.closest('[data-locate]');if(loc){const x=state.places.find(p=>p.id===loc.dataset.locate);if(x&&geo(x)){setTab('explore');setTimeout(()=>map?.setView([x.lat,x.lng],14),100)}}const plan=e.target.closest('[data-plan]');if(plan)planPlace(plan.dataset.plan);const preview=e.target.closest('[data-preview]');if(preview){const x=window.__tripSuggestions?.[Number(preview.dataset.preview)];if(x){map?.setView([x.lat,x.lng],15);if(window.__previewMarker)map.removeLayer(window.__previewMarker);window.__previewMarker=L.marker([x.lat,x.lng]).addTo(map).bindPopup(esc(x.name)).openPopup()}}const suggest=e.target.closest('[data-suggest]');if(suggest){const x=window.__tripSuggestions?.[Number(suggest.dataset.suggest)];if(x)openPlace(x.lat,x.lng,x.name,'Discovered via OpenStreetMap · '+x.kind)}});
+document.addEventListener('click',e=>{const open=e.target.closest('[data-open]');if(open)showTrip(open.dataset.open);const rm=e.target.closest('[data-remove]');if(rm){const [key,id]=rm.dataset.remove.split(':');if(confirm('Remove this item from the trip?')){state[key]=state[key].filter(x=>x.id!==id);persist()}}const loc=e.target.closest('[data-locate]');if(loc){const x=state.places.find(p=>p.id===loc.dataset.locate);if(x&&geo(x)){setTab('explore');setTimeout(()=>map?.setView([x.lat,x.lng],14),100)}}const plan=e.target.closest('[data-plan]');if(plan)planPlace(plan.dataset.plan);const preview=e.target.closest('[data-preview]');if(preview){const x=window.__tripSuggestions?.[Number(preview.dataset.preview)];if(x){map?.setView([x.lat,x.lng],15);if(window.__previewMarker)map.removeLayer(window.__previewMarker);window.__previewMarker=L.marker([x.lat,x.lng]).addTo(map).bindPopup(esc(x.name)).openPopup()}}const suggest=e.target.closest('[data-suggest]');if(suggest){const x=window.__tripSuggestions?.[Number(suggest.dataset.suggest)];if(x)openPlace(x.lat,x.lng,x.name,'Discovered via Geoapify · '+x.kind+(x.address?' · '+x.address:''))}});
 $('#packList').addEventListener('change',e=>{if(e.target.dataset.pack){const x=state.packing.find(p=>p.id===e.target.dataset.pack&&p.tripId===active);if(x){x.done=e.target.checked;persist()}}});
 if(!trip())active=null;render();if(active){const t=trip();if(t?.lat==null&&t?.destination)searchLocation(t.destination,true)}
 };
