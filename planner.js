@@ -159,14 +159,14 @@ function detectedCategory(tags=[],name='',searchCategory=''){
  if(searchCategory==='wineries')return 'Wineries';
  return 'Other';
 }
-function mapMenuContent(latlng,name='',notes='',savedId='',category='Other'){
+function mapMenuContent(latlng,name='',notes='',savedId='',category='Other',source=null){
  const el=document.createElement('div'),title=document.createElement('strong');
  title.textContent=name||'Place on map';el.append(title,document.createElement('br'));
  const decided=!!savedId&&state.activities.some(x=>x.tripId===active&&x.placeId===savedId);
  const actions=savedId?
   [[decided?'View itinerary':'Choose for itinerary',()=>decided?setTab('itinerary'):planPlace(savedId)]]:[
-   ['Save idea',()=>openPlace(latlng.lat,latlng.lng,name,notes,'places',category)],
-   ['Add to itinerary',()=>openPlace(latlng.lat,latlng.lng,name,notes,'itinerary',category)]
+   ['Save idea',()=>openPlace(latlng.lat,latlng.lng,name,notes,'places',category,source)],
+   ['Add to itinerary',()=>openPlace(latlng.lat,latlng.lng,name,notes,'itinerary',category,source)]
   ];
  for(const [label,action] of actions){
   const btn=document.createElement('button');btn.type='button';btn.className='secondary small';btn.textContent=label;
@@ -198,10 +198,23 @@ async function showMapPlaceMenu(latlng,name='',notes=''){
   if(token!==mapLookupToken||!map?.hasLayer(popup))return;
   const places=(json.features||[]).map(f=>{
    const p=f.properties||{},coords=f.geometry?.coordinates;
-   return {name:p.name||'',lat:Number(p.lat??coords?.[1]),lng:Number(p.lon??coords?.[0]),address:p.formatted||'',category:detectedCategory(p.categories||[],p.name||'')};
+   return {
+    name:p.name||'',lat:Number(p.lat??coords?.[1]),lng:Number(p.lon??coords?.[0]),
+    kind:(p.categories||[]).find(x=>x!=='building')||'Point of interest',
+    categories:p.categories||[],address:p.formatted||'',placeId:p.place_id||'',
+    hours:p.opening_hours||p.datasource?.raw?.opening_hours||'',
+    description:p.description||'',wiki_and_media:p.wiki_and_media||null,
+    datasource:p.datasource||null,website:placeWebsite(p),phone:placePhone(p),
+    category:detectedCategory(p.categories||[],p.name||'')
+   };
   }).filter(x=>x.name&&Number.isFinite(x.lat)&&Number.isFinite(x.lng)).slice(0,7);
+  function selectDetected(place){
+   const view=makeDiscoveryPopup(place);
+   popup.setLatLng({lat:place.lat,lng:place.lng}).setContent(view.content);
+   void view.load();
+  }
   if(!places.length){popup.setContent(mapMenuContent(latlng));return;}
-  if(places.length===1){const place=places[0];popup.setContent(mapMenuContent({lat:place.lat,lng:place.lng},place.name,'','',place.category));return;}
+  if(places.length===1){selectDetected(places[0]);return;}
   const box=document.createElement('div'),heading=document.createElement('strong');
   heading.textContent='Which place did you mean?';box.append(heading);
   for(const place of places){
@@ -209,7 +222,7 @@ async function showMapPlaceMenu(latlng,name='',notes=''){
    row.style.display='block';row.style.marginTop='6px';row.style.textAlign='left';
    row.textContent=place.name+' · '+place.category;
    row.title=place.address;
-   row.onclick=()=>popup.setContent(mapMenuContent({lat:place.lat,lng:place.lng},place.name,'','',place.category));
+   row.onclick=()=>selectDetected(place);
    box.append(row);
   }
   const manual=document.createElement('button');manual.type='button';manual.className='secondary small';
@@ -426,8 +439,8 @@ function refreshMarkers(){
  }
  buildMapFilters();
 }
-function openPlace(lat,lng,name,notes,destination='places',category='Other'){
- const suggestion=(window.__tripSuggestions||[]).find(x=>Math.abs(Number(x.lat)-Number(lat))<0.00001&&Math.abs(Number(x.lng)-Number(lng))<0.00001);
+function openPlace(lat,lng,name,notes,destination='places',category='Other',source=null){
+ const suggestion=source||(window.__tripSuggestions||[]).find(x=>Math.abs(Number(x.lat)-Number(lat))<0.00001&&Math.abs(Number(x.lng)-Number(lng))<0.00001);
  selectedPoint={lat:Number(lat),lng:Number(lng),geoapifyId:suggestion?.placeId||'',hours:suggestion?.hours||''};placeDestination=destination;
  $('#placeName').value=name||'';$('#placeNotes').value=cleanImportedNotes(notes);
  const categories=$('#placeForm').elements.category;categories.value=PLACE_CATEGORIES.includes(category)?category:'Other';
