@@ -760,12 +760,13 @@ document.addEventListener('click',async e=>{
   try{
    const details=await getDiscoveryPlaceDetails(place);
    if(window.__tripSuggestions?.[i]!==place)return;
+   const overview=await discoveryOverview(place,details);
+   if(window.__tripSuggestions?.[i]!==place)return;
    target.replaceChildren();
-   const description=details.description||details.description_international?.en;
-   if(description){const el=document.createElement('p');el.textContent=description;target.append(el);}
-   if(details.opening_hours){const el=document.createElement('p');el.textContent='Hours: '+details.opening_hours;target.append(el);}
+   addDiscoveryExplanation(target,overview);
+   const hours=details.opening_hours||place.hours;
+   if(hours){const el=document.createElement('p');el.textContent='Hours: '+Discovery.hoursText(hours);target.append(el);}
    appendContactInfo(target,details);
-   if(!target.childNodes.length)target.textContent='No further details available for this listing.';
   }catch(error){target.textContent='Additional details are unavailable right now.';}
   finally{detailsButton.disabled=false;}
   return;
