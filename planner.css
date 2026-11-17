@@ -288,6 +288,10 @@ body{
 .explore-tool-tabs button{flex:1;min-width:0;border:1px solid #d4b98b;border-radius:5px;background:#f5e7cb;color:var(--retro-deep);font-size:13px;font-weight:800;padding:9px 5px}
 .explore-tool-tabs button.active{color:#fff9e9;background:var(--retro-deep);border-color:var(--retro-deep)}
 .explore-side{padding:11px!important}
+.map-layer-controls{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:7px 8px;margin:8px 0 4px;background:#f5ead2;border:1px solid #dfcdae;border-radius:6px}
+.map-layer-controls strong{font-size:12px;flex-basis:100%}
+.map-layer-controls label{display:flex;align-items:center;gap:4px;font-size:12px;font-weight:700;white-space:nowrap}
+.map-layer-controls input{accent-color:var(--retro-deep);width:18px;height:18px}
 .route-picker-row{gap:5px;align-items:end}
 .route-picker-row .route-picker{flex:1 1 160px;min-width:0;margin:0}
 .route-picker-row select{width:100%}
