@@ -15,7 +15,7 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 1. Live two-account verification: Donna's email sign-in, shared household membership, Realtime refresh between two authenticated browsers, concurrent-edit behavior, save/reload, and mobile layout. Source code and mock tests are not enough.
 2. Itinerary and Ideas UX acceptance: category balance, compact layout, promotion/return flows, date/time and fixed-event constraints, booking details, and visual checks in actual browsers.
-3. **Add Vacation Planner to the Lazy Acres Suite landing page** after verifying the exact landing-page repository and its existing launcher conventions. Use the canonical production URL `https://tpoirier1969.github.io/Vacation-Planner/`. This is a separate app; do not assume a target and do not modify unrelated Suite entries.
+3. **Completed:** Added Vacation Planner to `tpoirier1969/Lazy-Acres-Suite` household launcher in Suite v0.1.84; verified deployed module registry and live Suite version. Its card opens `https://tpoirier1969.github.io/Vacation-Planner/` and uses the original Vacation Planner sign artwork.
 4. Trip-specific sharing/access beyond current household model, if needed.
 5. Scheduler integration: connect to the existing Lazy Acres Scheduler deliberately, without creating a second calendar system.
 6. Cross-app integrations with existing Shopping/Packing and Boondocking apps, without migrating or duplicating their authoritative records.
@@ -24,6 +24,13 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 9. Browser save extension, location-aware research notes, and optional trip photos.
 10. Review quality of satellite imagery.
 11. Construction/accident traffic alerts and costly integrations remain deferred for the $0 proof of concept unless a free sustainable data source emerges.
+
+## UI and map usability — outstanding
+
+- Rework the header following the approved concept: enlarge the roadside-sign logo to occupy the left portion of the header/trip region, relocate the compact trip title, date and Edit/Exit controls to the right; maintain compact mobile responsiveness. **The visual concept was approved but has not been implemented in code.**
+- Add independent **Ideas**, **Itinerary**, and **Route** visibility controls for map overlays. These are temporary display choices; hiding items must never delete persistent records. Existing category filtering should still work alongside them.
+- Provide **Build route from Itinerary** using selected day/date range and decided mapped activities; preserve fixed-time appointment order and clearly distinguish manual itinerary order from suggested travel order, without rewriting itinerary dates.
+- v0.6.20: direct map clicks again look up named nearby places and reverse-geocode when necessary, do not offer an immediate blank-name Save button while lookup is underway, and prefill the chosen name in Save Idea. Mocked acceptance checks passed, but verify with real map clicks after deployment.
 
 ## Route release acceptance and limitations
 
