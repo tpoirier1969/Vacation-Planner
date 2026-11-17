@@ -127,3 +127,5 @@ header{flex-wrap:wrap}.app-version{display:inline-block;background:#f7d395;color
 .discovery-info-body{margin:8px 0;font-size:12px;line-height:1.4}
 .discovery-info-body p{margin:5px 0}
 .discovery-info-body a{display:inline-block;margin-top:4px;font-weight:700}
+
+#activityHoursField[hidden]{display:none!important}
