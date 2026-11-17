@@ -164,8 +164,7 @@ function createController(config){
    const response=await fetch(url);if(!response.ok)throw Error('Geocoding HTTP '+response.status);
    const data=await response.json(),p=data.features?.[0]?.properties;
    if(!p||!pointOK({lat:p.lat,lng:p.lon}))throw Error('No place matched. Try a more complete address.');
-   if(!routes().some(x=>x.id===id))return;
-   currentId=id;
+   if(selected()?.id!==id)return;
    update(route=>route[role]={label:p.formatted||text,lat:Number(p.lat),lng:Number(p.lon)},true);
    status='Found '+(p.formatted||text)+'. Check the marker on the map.';render();fitMap();
   }catch(e){report('Location lookup failed: '+e.message);}
