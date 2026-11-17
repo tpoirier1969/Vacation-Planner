@@ -354,6 +354,22 @@ function createController(config){
   $('routeSuggest').addEventListener('click',()=>void calculate());
   $('routeZoom').addEventListener('click',fitMap);
   $('routeSourceAdd').addEventListener('click',addExisting);
+  $('routeFromItinerary').addEventListener('click',()=>{
+   const selectedRoute=selected();if(!selectedRoute)return;
+   if(!selectedRoute.startDate)return report('Select a route start day to import its itinerary stops.');
+   const existing=new Set((selectedRoute.waypoints||[]).filter(p=>p.sourceType==='activities').map(p=>p.sourceId));
+   const planned=config.getActivities().filter(x=>x.date===selectedRoute.startDate&&pointOK(x)&&!existing.has(x.id))
+    .sort((a,b)=>(a.time||'99:99').localeCompare(b.time||'99:99'));
+   if(!planned.length)return report('No new mapped itinerary activities on this day.');
+   if(planned.length+(selectedRoute.waypoints||[]).length>MAX_WAYPOINTS)
+    return report('Route limit is '+MAX_WAYPOINTS+' intermediate stops. Remove road points or split into another day route.');
+   update(route=>{route.waypoints.push(...planned.map(x=>({
+    id:config.uid(),lat:Number(x.lat),lng:Number(x.lng),label:x.title,kind:'stop',
+    sourceType:'activities',sourceId:x.id
+   })));},true);
+   status='Added '+planned.length+' itinerary stop(s) in scheduled-time order. Dates and times are unchanged; recalculate roads.';
+   render();
+  });
   $('routeControls').addEventListener('click',e=>{
    const picker=e.target.closest('[data-route-pick]'),lookup=e.target.closest('[data-route-geocode]');
    if(picker)setPick(picker.dataset.routePick);
