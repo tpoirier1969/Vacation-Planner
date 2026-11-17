@@ -288,6 +288,12 @@ header #context{
 .route-waypoint-name small{font-size:10px;font-weight:650;color:#65716d;display:block}
 .route-waypoint-actions{display:flex;gap:3px}
 .route-waypoint-actions button{padding:4px 7px;min-width:29px;min-height:28px}
+.route-leg-breakdown{margin:7px 0 9px;border:1px solid #dfc8a6;border-radius:6px;padding:2px 7px}
+.route-leg-breakdown>summary{cursor:pointer;font-weight:750;font-size:12px;padding:5px 0}
+.route-leg-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid #eadcc5;font-size:11px}
+.route-leg-row span{overflow-wrap:anywhere;flex:1}
+.route-leg-row strong{white-space:nowrap;font-size:11px;color:var(--retro-deep)}
+
 .route-source-row{margin:8px 0;gap:5px}
 .route-source-row select{min-width:0;flex:1 1 150px;padding:6px 7px;border:1px solid #ccb997;border-radius:5px;background:#fffdfa}
 .route-source-row button{flex:0 0 auto}
