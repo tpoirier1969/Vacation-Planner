@@ -91,7 +91,7 @@ function createController(config){
  }
  function draw(){
   if(!layer)return;layer.clearLayers();
-  const r=selected();if(!r||r.visible===false)return;
+  const r=selected();if(!r||r.visible===false||document.getElementById('mapShowRoutes')?.checked===false)return;
   const geometries=(r.segments||[]).length?r.segments:(r.polyline&&!validGaps(r).length?[{polyline:r.polyline,startIndex:0}]:[]);
   for(const segment of geometries){const coords=decodePolyline(segment.polyline);
    if(coords.length>1){const line=L.polyline(coords,{color:'#b45237',weight:5,opacity:.88,interactive:true}).addTo(layer);
