@@ -77,6 +77,11 @@ function segmentList(r){
  return pairs.map((x,i)=>({...x,leg:segments.find(s=>s.fromId===x.fromId&&s.toId===x.toId)||null,
   fallback:segments.length?null:(r.legStats||[])[i]||null,disconnected:gapKeys(r).includes(x.key)}));
 }
+function routeDisplayType(r){
+ if(r?.routeKind==='day')return 'day';
+ const direction=r?.preferences?.journeyDirection;
+ return direction==='outbound'||direction==='return'?direction:'journey';
+}
 function summary(r){
  if(r?.distanceM==null||r?.durationS==null)return 'Not calculated yet';
  let meters=r.distanceM,seconds=r.durationS;
@@ -179,7 +184,7 @@ function createController(config){
   const r=copy&&base?{...JSON.parse(JSON.stringify(base)),id:config.uid(),name:(base.name+' — alternative').slice(0,160)}:
    newRoute(config.uid(),t.id,n?'Day route '+(n+1):'Outbound route');
   r.routeOrder=Math.max(-1,...routes().map(x=>x.routeOrder||0))+1;
-  if(!copy)r.routeKind=n?'day':'outbound';
+  if(!copy){r.routeKind=n?'day':'journey';r.preferences={...r.preferences,journeyDirection:n?'':'outbound'};}
   config.getRoutes().push(r);currentId=r.id;undoStack=[];pick='';selectedLeg='';status=copy?'Saved separate alternative. Recalculate to compare.':'Add start and end points to begin.';
   config.persist();
  }
@@ -252,9 +257,9 @@ function createController(config){
    button.setAttribute('aria-selected',String(button.dataset.exploreTool===tool));
   }
   const r=selected(),list=routes();
-  const kindText={outbound:'Out',day:'Day',return:'Return'};
+  const kindText={outbound:'Out',day:'Day',return:'Return',journey:'Journey'};
   $('routePicker').innerHTML=list.map(x=>'<option value="'+esc(x.id)+'">'+
-   esc((kindText[x.routeKind]||'Day')+(x.startDate?' '+x.startDate:'')+' · '+x.name)+
+   esc((kindText[routeDisplayType(x)]||'Day')+(x.startDate?' '+x.startDate:'')+' · '+x.name)+
    (x.distanceM!=null?' · '+(x.distanceM/1609.344).toFixed(0)+' mi':'')+'</option>').join('');
   $('routePicker').value=currentId;
   $('routeComparison').innerHTML=list.length>1?'<details class="route-compare-details"><summary>Compare saved routes ('+list.length+')</summary>'+
@@ -265,7 +270,7 @@ function createController(config){
   $('routeDelete').disabled=!r;
   $('routeAlternative').disabled=!r||list.length>=MAX_ROUTES;
   if(!r){$('routeEmpty').textContent=list.length?'Select a route.':'Create an outbound, return, or day-trip route.';draw();return;}
-  $('routeKind').value=['outbound','day','return'].includes(r.routeKind)?r.routeKind:'day';
+  $('routeKind').value=routeDisplayType(r);
   $('routeDayUp').disabled=list[0]?.id===r.id;
   $('routeDayDown').disabled=list[list.length-1]?.id===r.id;
   for(const [id,value] of [['routeName',r.name],['routeStart',r.start?.label],['routeEnd',r.end?.label],
@@ -323,8 +328,11 @@ function createController(config){
    const b=e.target.closest('[data-route-select]');if(!b)return;
    currentId=b.dataset.routeSelect;undoStack=[];pick='';selectedLeg='';status='';render();
   });
-  $('routeKind').addEventListener('change',e=>{if(!['outbound','day','return'].includes(e.target.value))return;
-   update(r=>r.routeKind=e.target.value);status='Route type saved.';render();});
+  $('routeKind').addEventListener('change',e=>{if(!['journey','outbound','day','return'].includes(e.target.value))return;
+   update(r=>{
+    r.routeKind=e.target.value==='day'?'day':'journey';
+    r.preferences={...r.preferences,journeyDirection:['outbound','return'].includes(e.target.value)?e.target.value:''};
+   });status='Route type saved.';render();});
   for(const [button,offset] of [['routeDayUp',-1],['routeDayDown',1]]){
    $(button).addEventListener('click',()=>{
     const sorted=routes(),i=sorted.findIndex(x=>x.id===currentId),other=sorted[i+offset];if(!other)return;
@@ -418,6 +426,6 @@ function createController(config){
  bind();
  return {attachMap,render,onTripChange,consumeMapClick,cancelPick,isPicking:()=>!!pick,getPick:()=>pick,setTool};
 }
-root.VacationRouteDomain=Object.freeze({newRoute,decodePolyline,routeURL,parseRoute,windowError,summary,pointOK,legPairs,gapKeys,segmentList});
+root.VacationRouteDomain=Object.freeze({newRoute,decodePolyline,routeURL,parseRoute,windowError,summary,pointOK,legPairs,gapKeys,segmentList,routeDisplayType});
 root.createVacationRoutes=createController;
 })(window);
