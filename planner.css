@@ -13,7 +13,6 @@ header{border-bottom:6px solid var(--orange);box-shadow:0 3px 0 #f9cb82;backgrou
 .home-hero{min-height:0;padding:19px 22px 17px}
 
 
-.trip-hero{background:linear-gradient(130deg,#fff3d5,#d8ede5)}
 .card{border:2px solid #d4c8ad;box-shadow:3px 3px 0 #e0d2b6}
 .card h2{font-weight:900;letter-spacing:-.025em}
 .section-star{color:var(--orange)}
