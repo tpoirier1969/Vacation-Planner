@@ -448,12 +448,27 @@ async function discover(){
    }
    const found=features.map(f=>{
      const p=f.properties||{},coords=f.geometry?.coordinates;
-     return {name:p.name||p.address_line1||'',lat:Number(p.lat??coords?.[1]),lng:Number(p.lon??coords?.[0]),kind:(p.categories||[]).find(x=>x!=='building')||'Point of interest',address:p.formatted||'',placeId:p.place_id||'',hours:p.opening_hours||p.datasource?.raw?.opening_hours||'',phone:placePhone(p),website:placeWebsite(p),description:p.description||''};
+     return {name:p.name||p.address_line1||'',lat:Number(p.lat??coords?.[1]),lng:Number(p.lon??coords?.[0]),kind:(p.categories||[]).find(x=>x!=='building')||'Point of interest',address:p.formatted||'',placeId:p.place_id||'',hours:p.opening_hours||p.datasource?.raw?.opening_hours||'',phone:placePhone(p),website:placeWebsite(p),description:p.description||'',wiki_and_media:p.wiki_and_media||null,datasource:p.datasource||null};
    }).filter(x=>x.name&&Number.isFinite(x.lat)&&Number.isFinite(x.lng)).slice(0,60);
    window.__tripSuggestions=found;
    renderDiscoveryMarkers(found);
    status.textContent=found.length+' suggestions within the visible map area'+(features.length===60?' (showing first matches)':'')+'.';
-   results.innerHTML=found.length?found.map((x,i)=>'<div class="poi"><strong>'+esc(x.name)+'</strong><p>'+esc(x.kind.replaceAll(/[._]/g,' '))+(x.address?' · '+esc(x.address):'')+'</p>'+(x.description?'<p>'+esc(x.description)+'</p>':'')+(x.phone?'<p>Phone: <a href="tel:'+esc(x.phone.replace(/[^+0-9]/g,''))+'">'+esc(x.phone)+'</a></p>':'')+(x.website?'<p><a href="'+esc(x.website)+'" target="_blank" rel="noopener noreferrer">Website</a></p>':'')+'<div class="poi-extra" id="poi-extra-'+i+'"></div><div class="row wrap"><button class="quiet small" data-preview="'+i+'">Show on map</button><button class="quiet small" data-place-details="'+i+'">More details</button><button class="secondary small" data-suggest="'+i+'">Save to trip</button></div></div>').join(''):'<p class="empty">No matching places found here. Try another category, name, or map area.</p>';
+   results.innerHTML=found.length?found.map((x,i)=>{
+    const review=Discovery.reviewSearchUrl(x),blurb=Discovery.description(x);
+    return '<article class="poi" id="poi-card-'+i+'" data-discovery-index="'+i+'">'+
+     '<strong>'+esc(x.name)+'</strong>'+
+     '<p class="poi-meta">'+esc(x.kind.replaceAll(/[._]/g,' '))+(x.address?' · '+esc(x.address):'')+'</p>'+
+     '<p class="poi-description" id="poi-description-'+i+'">'+esc(blurb||'Checking available descriptions…')+'</p>'+
+     '<p class="poi-hours" id="poi-hours-'+i+'">'+esc(x.hours?'Hours: '+Discovery.hoursText(x.hours):'Checking hours…')+'</p>'+
+     '<div id="poi-contact-'+i+'" class="poi-contact"></div>'+
+     '<div class="row wrap poi-links">'+(review?'<a href="'+esc(review)+'" target="_blank" rel="noopener noreferrer">Find ratings & reviews on Google Maps</a>':'')+
+       (x.website?'<a href="'+esc(x.website)+'" target="_blank" rel="noopener noreferrer">Website</a>':'')+'</div>'+
+     '<div class="poi-extra" id="poi-extra-'+i+'"></div>'+
+     '<div class="row wrap poi-actions"><button class="quiet small" data-preview="'+i+'">Show on map</button>'+
+     '<button class="quiet small" data-place-details="'+i+'">More details</button>'+
+     '<button class="secondary small" data-suggest="'+i+'">Save to Ideas</button></div></article>';
+   }).join(''):'<p class="empty">No matching places found here. Try another category, name, or map area.</p>';
+   observeDiscoveryCards();
 
  }catch(error){status.textContent=error.name==='AbortError'?'Place search timed out. Try again.':'Nearby discovery failed: '+error.message;}
  finally{button.disabled=false;}
