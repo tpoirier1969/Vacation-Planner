@@ -11,13 +11,13 @@ retry.type='button';retry.className='quiet small hidden';retry.textContent='Retr
 function status(s){$('#cloudStatus').textContent=s;}
 function row(kind,x){const base={id:x.id,household_id:HOUSE};
 if(kind==='trips')return {...base,name:x.name,destination:x.destination||'',start_date:x.start||null,end_date:x.end||null,lat:x.lat??null,lng:x.lng??null};
-if(kind==='places')return {...base,trip_id:x.tripId,name:x.name,category:x.category||'',location:x.location||'',notes:x.notes||'',geoapify_id:x.geoapifyId||null,opening_hours:x.hours||null,lat:x.lat??null,lng:x.lng??null};
+if(kind==='places')return {...base,trip_id:x.tripId,name:x.name,category:x.category||'',location:x.location||'',notes:x.notes||'',geoapify_id:x.geoapifyId||null,opening_hours:x.hours||null,lat:x.lat??null,lng:x.lng??null,idea_date:x.date||null,idea_end_date:x.endDate||null,idea_start_time:x.time||null,idea_end_time:x.endTime||null,fixed_date:!!x.fixedDate};
 if(kind==='activities')return {...base,trip_id:x.tripId,title:x.title,activity_date:x.date||null,end_date:x.endDate||null,category:x.category||'Other',place_id:x.placeId||null,lat:x.lat??null,lng:x.lng??null,opening_hours:x.hours||null,notes:x.notes||'',start_time:x.time||null,end_time:x.endTime||null,fixed_date:!!x.fixedDate,must_do:!!x.mustDo,reservation_status:x.reservationStatus||'none',confirmation_code:x.confirmationCode||null,booking_url:x.bookingUrl||null};
 if(kind==='notes')return {...base,trip_id:x.tripId,title:x.title,body:x.body||''};
 return {...base,trip_id:x.tripId,title:x.title,category:x.category||'trip-misc',done:!!x.done};
 }
 function item(kind,r){if(kind==='trips')return {id:r.id,name:r.name,destination:r.destination||'',start:r.start_date||'',end:r.end_date||'',lat:r.lat,lng:r.lng};
-if(kind==='places')return {id:r.id,tripId:r.trip_id,name:r.name,category:r.category||'',location:r.location||'',notes:r.notes||'',geoapifyId:r.geoapify_id||'',hours:r.opening_hours||'',lat:r.lat,lng:r.lng};
+if(kind==='places')return {id:r.id,tripId:r.trip_id,name:r.name,category:r.category||'',location:r.location||'',notes:r.notes||'',geoapifyId:r.geoapify_id||'',hours:r.opening_hours||'',lat:r.lat,lng:r.lng,date:r.idea_date||'',endDate:r.idea_end_date||'',time:r.idea_start_time?.slice(0,5)||'',endTime:r.idea_end_time?.slice(0,5)||'',fixedDate:!!r.fixed_date};
 if(kind==='activities')return {id:r.id,tripId:r.trip_id,title:r.title,date:r.activity_date||'',endDate:r.end_date||'',category:r.category||'Other',placeId:r.place_id||'',lat:r.lat,lng:r.lng,hours:r.opening_hours||'',notes:r.notes||'',time:r.start_time?.slice(0,5)||'',endTime:r.end_time?.slice(0,5)||'',fixedDate:!!r.fixed_date,mustDo:!!r.must_do,reservationStatus:r.reservation_status||'none',confirmationCode:r.confirmation_code||'',bookingUrl:r.booking_url||''};
 if(kind==='notes')return {id:r.id,tripId:r.trip_id,title:r.title,body:r.body||''};
 return {id:r.id,tripId:r.trip_id,title:r.title,category:r.category,done:r.done};
