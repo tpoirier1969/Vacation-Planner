@@ -26,6 +26,19 @@ test('new routes support ordered day routes without changing legacy data', () =>
   assert.equal(route.visible, true);
 });
 
+test('database route kinds remain day or journey, with direction as an option', () => {
+  const route = sampleRoute();
+  assert.equal(route.routeKind, 'day');
+  assert.equal(routeDomain.routeDisplayType(route), 'day');
+  route.routeKind = 'journey';
+  assert.equal(routeDomain.routeDisplayType(route), 'journey');
+  route.preferences.journeyDirection = 'outbound';
+  assert.equal(routeDomain.routeDisplayType(route), 'outbound');
+  route.preferences.journeyDirection = 'return';
+  assert.equal(routeDomain.routeDisplayType(route), 'return');
+  assert.ok(['day', 'journey'].includes(route.routeKind));
+});
+
 test('leg identifiers are tied to stable stop IDs', () => {
   const route = sampleRoute();
   const legs = routeDomain.legPairs(route);
