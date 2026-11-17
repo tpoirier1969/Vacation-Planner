@@ -35,7 +35,10 @@ $('#placeList').innerHTML=filteredIdeas.length?PLACE_CATEGORIES.map(category=>{
  const items=filteredIdeas.filter(x=>normalizedCategory(x.category)===category);
  if(!items.length)return '';
  return '<details class="list-category" data-category="'+esc(category)+'" '+(collapsedPlaceCategories.has(category)?'':'open')+'><summary>'+esc(category)+' <span class="count">'+items.length+'</span></summary><div class="category-body">'+items.map(x=>
-  '<div class="day"><div class="row entry-head"><strong>'+esc(x.name)+'</strong>'+editAndRemove('places',x)+'</div>'+(x.location?'<div class="muted small-details">'+esc(x.location)+'</div>':'')+ideaTiming(x)+(x.notes?'<p>'+esc(x.notes)+'</p>':'')+'<div class="row wrap">'+(geo(x)?'<button class="quiet small" data-locate="'+esc(x.id)+'">Show on map</button>':'')+'<button class="secondary small" data-plan="'+esc(x.id)+'">Choose for itinerary</button></div></div>'
+  '<div class="day"><div class="row entry-head"><strong>'+esc(x.name)+'</strong>'+
+  '<label class="idea-category-inline">Category <select data-idea-category="'+esc(x.id)+'" aria-label="Category for '+esc(x.name)+'">'+
+  PLACE_CATEGORIES.map(c=>'<option value="'+esc(c)+'" '+(normalizedCategory(x.category)===c?'selected':'')+'>'+esc(c)+'</option>').join('')+
+  '</select></label>'+editAndRemove('places',x)+'</div>'+(x.location?'<div class="muted small-details">'+esc(x.location)+'</div>':'')+ideaTiming(x)+(x.notes?'<p>'+esc(x.notes)+'</p>':'')+'<div class="row wrap">'+(geo(x)?'<button class="quiet small" data-locate="'+esc(x.id)+'">Show on map</button>':'')+'<button class="secondary small" data-plan="'+esc(x.id)+'">Choose for itinerary</button></div></div>'
  ).join('')+'</div></details>';
 }).join('') :'<p class="empty">No ideas under consideration. Add an activity, event, place, or other possibility here.</p>';
 const activities=forTrip('activities').slice().sort(Itinerary.compareEntries);
@@ -137,9 +140,13 @@ function fillActivity({name,category='Other',notes='',lat=null,lng=null,placeId=
  if(geoapifyId&&!hours)loadItineraryHours(geoapifyId);
 }
 
-function detectedCategory(tags=[]){
- const c=tags.join(' ').toLowerCase();
- if(/winery|vineyard/.test(c))return 'Wineries';
+function detectedCategory(tags=[],name='',searchCategory=''){
+ // Geoapify returns a hierarchy of categories. Classify against the ENTIRE list,
+ // not just the first generic category (for example, "production" before
+ // "production.winery"). Names help when OSM tags are incomplete.
+ const c=(Array.isArray(tags)?tags:[tags]).filter(Boolean).join(' ').toLowerCase();
+ const label=String(name||'').toLowerCase();
+ if(/winery|vineyard|wine[_ .-]?tasting/.test(c)||/\b(winery|vineyard|wine[ -]?tasting|tasting room)\b/.test(label))return 'Wineries';
  if(/accommodation|hotel|motel|guest_house|hostel/.test(c))return 'Lodging';
  if(/catering|restaurant|cafe|fast_food/.test(c))return 'Restaurants';
  if(/commercial|shop|shopping/.test(c))return 'Shopping';
@@ -148,6 +155,8 @@ function detectedCategory(tags=[]){
  if(/fishing/.test(c))return 'Fishing';
  if(/event/.test(c))return 'Events';
  if(/tourism|entertainment|natural|leisure/.test(c))return 'Attractions';
+ // A winery-only discovery search may return a generic production tag.
+ if(searchCategory==='wineries')return 'Wineries';
  return 'Other';
 }
 function mapMenuContent(latlng,name='',notes='',savedId='',category='Other'){
@@ -189,7 +198,7 @@ async function showMapPlaceMenu(latlng,name='',notes=''){
   if(token!==mapLookupToken||!map?.hasLayer(popup))return;
   const places=(json.features||[]).map(f=>{
    const p=f.properties||{},coords=f.geometry?.coordinates;
-   return {name:p.name||'',lat:Number(p.lat??coords?.[1]),lng:Number(p.lon??coords?.[0]),address:p.formatted||'',category:detectedCategory(p.categories||[])};
+   return {name:p.name||'',lat:Number(p.lat??coords?.[1]),lng:Number(p.lon??coords?.[0]),address:p.formatted||'',category:detectedCategory(p.categories||[],p.name||'')};
   }).filter(x=>x.name&&Number.isFinite(x.lat)&&Number.isFinite(x.lng)).slice(0,7);
   if(!places.length){popup.setContent(mapMenuContent(latlng));return;}
   if(places.length===1){const place=places[0];popup.setContent(mapMenuContent({lat:place.lat,lng:place.lng},place.name,'','',place.category));return;}
@@ -316,7 +325,7 @@ function makeDiscoveryPopup(place){
  const heading=document.createElement('strong');heading.textContent=place.name;wrap.append(heading);
  const subtitle=document.createElement('div');subtitle.className='muted';subtitle.textContent=place.address||place.kind;wrap.append(subtitle);
  const info=document.createElement('div');info.className='discovery-info-body';info.textContent='Loading available place details…';wrap.append(info);
- const actions=mapMenuContent({lat:place.lat,lng:place.lng},place.name,'','',detectedCategory([place.kind]));
+ const actions=mapMenuContent({lat:place.lat,lng:place.lng},place.name,'','',detectedCategory(place.categories||[place.kind],place.name,place.searchCategory));
  actions.querySelector('strong')?.remove();wrap.append(actions);
  let requestStarted=false;
  async function load(){
@@ -451,7 +460,7 @@ async function discover(){
    }
    const found=features.map(f=>{
      const p=f.properties||{},coords=f.geometry?.coordinates;
-     return {name:p.name||p.address_line1||'',lat:Number(p.lat??coords?.[1]),lng:Number(p.lon??coords?.[0]),kind:(p.categories||[]).find(x=>x!=='building')||'Point of interest',address:p.formatted||'',placeId:p.place_id||'',hours:p.opening_hours||p.datasource?.raw?.opening_hours||'',phone:placePhone(p),website:placeWebsite(p),description:p.description||'',wiki_and_media:p.wiki_and_media||null,datasource:p.datasource||null};
+     return {name:p.name||p.address_line1||'',lat:Number(p.lat??coords?.[1]),lng:Number(p.lon??coords?.[0]),kind:(p.categories||[]).find(x=>x!=='building')||'Point of interest',categories:p.categories||[],searchCategory:match?.categories?.includes('production.winery')?'wineries':category,address:p.formatted||'',placeId:p.place_id||'',hours:p.opening_hours||p.datasource?.raw?.opening_hours||'',phone:placePhone(p),website:placeWebsite(p),description:p.description||'',wiki_and_media:p.wiki_and_media||null,datasource:p.datasource||null};
    }).filter(x=>x.name&&Number.isFinite(x.lat)&&Number.isFinite(x.lng)).slice(0,60);
    window.__tripSuggestions=found;
    renderDiscoveryMarkers(found);
@@ -484,6 +493,17 @@ function planPlace(id){
 }
 function form(sel,handler){$(sel).addEventListener('submit',e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.target));if(handler(d)!==false){e.target.reset();persist()}})}
 $('#ideaCategoryFilter').addEventListener('change',e=>{ideaFilter=e.target.value;render();});
+// A one-step category correction, without editing any other Idea fields.
+$('#placeList').addEventListener('change',e=>{
+ const select=e.target.closest?.('[data-idea-category]');
+ if(!select||!PLACE_CATEGORIES.includes(select.value))return;
+ const idea=state.places.find(x=>x.id===select.dataset.ideaCategory&&x.tripId===active);
+ if(!idea||normalizedCategory(idea.category)===select.value)return;
+ idea.category=select.value;
+ // Keep the moved Idea visible when the old category was filtered.
+ if(ideaFilter!=='all'&&ideaFilter!==select.value)ideaFilter=select.value;
+ persist();
+});
 $('#newTrip').onclick=()=>$('#tripDialog').showModal();$('#cancelTrip').onclick=()=>$('#tripDialog').close();$('#exitTrip').onclick=exitTrip;$('#cancelPlace').onclick=()=>$('#placeDialog').close();$('#tabs').onclick=e=>{const b=e.target.closest('[data-tab]');if(b)setTab(b.dataset.tab)};$('#searchButton').onclick=()=>searchLocation($('#searchText').value);$('#searchText').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();searchLocation(e.target.value)}};$('#discover').onclick=discover;$('#discoverText').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();if(!$('#discover').disabled)discover();}});$('#tripCenter').onclick=()=>{const t=trip();if(t?.lat!=null&&t?.lng!=null)map?.setView([t.lat,t.lng],10);else if(t?.destination)searchLocation(t.destination,true)};
 form('#tripForm',d=>{if(d.start&&d.end&&d.end<d.start){alert('End date must be on or after start date.');return false}const t={id:uid(),...d};state.trips.push(t);$('#tripDialog').close();setTimeout(()=>showTrip(t.id),0)});
 form('#placeForm',d=>{
@@ -695,7 +715,7 @@ document.addEventListener('click',async e=>{
   return;
  }
  const editButton=e.target.closest('[data-edit]');if(editButton){const [kind,id]=editButton.dataset.edit.split(':');openEdit(kind,id);return;}
- const open=e.target.closest('[data-open]');if(open)showTrip(open.dataset.open);const rm=e.target.closest('[data-remove]');if(rm){const [key,id]=rm.dataset.remove.split(':');if(confirm('Remove this item from the trip?')){state[key]=state[key].filter(x=>x.id!==id);persist()}}const unschedule=e.target.closest('[data-unschedule]');if(unschedule){moveBackToIdeas(unschedule.dataset.unschedule);return;}const loc=e.target.closest('[data-locate]');if(loc){const x=state.places.find(p=>p.id===loc.dataset.locate);if(x&&geo(x)){setTab('explore');setTimeout(()=>map?.setView([x.lat,x.lng],14),100)}}const plan=e.target.closest('[data-plan]');if(plan)planPlace(plan.dataset.plan);const preview=e.target.closest('[data-preview]');if(preview){const x=window.__tripSuggestions?.[Number(preview.dataset.preview)];if(x){map?.setView([x.lat,x.lng],15);const discovered=discoveryMarkers?.getLayers().find(m=>{const q=m.getLatLng();return Math.abs(q.lat-x.lat)<0.000001&&Math.abs(q.lng-x.lng)<0.000001});if(discovered)discovered.openPopup();else L.popup().setLatLng([x.lat,x.lng]).setContent(mapMenuContent({lat:x.lat,lng:x.lng},x.name,'','',detectedCategory([x.kind]))).openOn(map)}}const suggest=e.target.closest('[data-suggest]');if(suggest){const x=window.__tripSuggestions?.[Number(suggest.dataset.suggest)];if(x)openPlace(x.lat,x.lng,x.name,'','places',detectedCategory([x.kind]))}});
+ const open=e.target.closest('[data-open]');if(open)showTrip(open.dataset.open);const rm=e.target.closest('[data-remove]');if(rm){const [key,id]=rm.dataset.remove.split(':');if(confirm('Remove this item from the trip?')){state[key]=state[key].filter(x=>x.id!==id);persist()}}const unschedule=e.target.closest('[data-unschedule]');if(unschedule){moveBackToIdeas(unschedule.dataset.unschedule);return;}const loc=e.target.closest('[data-locate]');if(loc){const x=state.places.find(p=>p.id===loc.dataset.locate);if(x&&geo(x)){setTab('explore');setTimeout(()=>map?.setView([x.lat,x.lng],14),100)}}const plan=e.target.closest('[data-plan]');if(plan)planPlace(plan.dataset.plan);const preview=e.target.closest('[data-preview]');if(preview){const x=window.__tripSuggestions?.[Number(preview.dataset.preview)];if(x){map?.setView([x.lat,x.lng],15);const discovered=discoveryMarkers?.getLayers().find(m=>{const q=m.getLatLng();return Math.abs(q.lat-x.lat)<0.000001&&Math.abs(q.lng-x.lng)<0.000001});if(discovered)discovered.openPopup();else L.popup().setLatLng([x.lat,x.lng]).setContent(mapMenuContent({lat:x.lat,lng:x.lng},x.name,'','',detectedCategory(x.categories||[x.kind],x.name,x.searchCategory))).openOn(map)}}const suggest=e.target.closest('[data-suggest]');if(suggest){const x=window.__tripSuggestions?.[Number(suggest.dataset.suggest)];if(x)openPlace(x.lat,x.lng,x.name,'','places',detectedCategory(x.categories||[x.kind],x.name,x.searchCategory))}});
 $('#packList').addEventListener('change',e=>{if(e.target.dataset.pack){const x=state.packing.find(p=>p.id===e.target.dataset.pack&&p.tripId===active);if(x){x.done=e.target.checked;persist()}}});
 if(!trip())active=null;render();if(active){const t=trip();if(t?.lat==null&&t?.destination)searchLocation(t.destination,true)}
 };
