@@ -253,6 +253,49 @@ header #context{
 
 /* Compact, collapsible lists with in-place editing; tied to Saved Places and itinerary. */
 
+
+/* Discover/Route panel: shared compact sidebar; no extra map or giant cards. */
+.explore-tool-tabs{display:flex;gap:5px;border-bottom:1px solid #ccad85;margin:-3px 0 11px;padding-bottom:7px}
+.explore-tool-tabs button{flex:1;min-width:0;border:1px solid #d4b98b;border-radius:5px;background:#f5e7cb;color:var(--retro-deep);font-size:13px;font-weight:800;padding:9px 5px}
+.explore-tool-tabs button.active{color:#fff9e9;background:var(--retro-deep);border-color:var(--retro-deep)}
+.explore-side{padding:11px!important}
+.route-picker-row{gap:5px;align-items:end}
+.route-picker-row .route-picker{flex:1 1 160px;min-width:0;margin:0}
+.route-picker-row select{width:100%}
+.route-picker-row button{padding:7px 8px;min-height:36px}
+#exploreRoutePanel .field{font-size:12px;margin:6px 0}
+#exploreRoutePanel .field input,#exploreRoutePanel .field select{font-size:16px;min-height:36px;padding:5px 7px;width:100%}
+.route-point{padding:5px 0 8px;border-bottom:1px solid #e2d5bb}
+.route-point .row{gap:5px}
+.route-point .row button{flex:1 1 auto;min-height:33px}
+.route-time-range{margin-top:7px}
+.route-checks{display:flex;flex-wrap:wrap;gap:6px 12px;margin:6px 0 8px}
+.route-checks label,.route-show{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;white-space:nowrap}
+.route-checks input,.route-show input{width:18px;height:18px;accent-color:var(--retro-deep)}
+.route-waypoints-header{display:flex;align-items:center;justify-content:space-between;padding-top:7px;margin-top:5px;border-top:1px solid #d9c6a7;font-size:13px}
+.route-action-row{margin:5px 0}
+.route-action-row button{flex:1 1 120px;min-height:36px}
+.route-action-row button.active{background:var(--retro-coral);color:#fff;border-color:var(--retro-coral)}
+.route-waypoint{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:7px 0;border-bottom:1px solid #e5d9c4}
+.route-waypoint-name{flex:1;min-width:0;font-size:12px;line-height:1.3;overflow-wrap:anywhere}
+.route-waypoint-name small{font-size:10px;font-weight:650;color:#65716d;display:block}
+.route-waypoint-actions{display:flex;gap:3px}
+.route-waypoint-actions button{padding:4px 7px;min-width:29px;min-height:28px}
+.route-source-row{margin:8px 0;gap:5px}
+.route-source-row select{min-width:0;flex:1 1 150px;padding:6px 7px;border:1px solid #ccb997;border-radius:5px;background:#fffdfa}
+.route-source-row button{flex:0 0 auto}
+.route-show{margin:9px 0}
+.route-metrics{font-weight:800;color:var(--retro-deep);padding:6px 0;border-top:1px solid #e0ccb0}
+.route-calc-buttons{gap:5px}
+.route-calc-buttons button{flex:1 1 125px}
+#routeStatus{min-height:20px;margin:7px 0}
+.map-frame.placing-route .map{cursor:crosshair}
+@media(max-width:550px){
+ .route-picker-row{gap:4px}
+ .route-picker-row .route-picker{flex-basis:100%}
+ .route-picker-row button{flex:1}
+}
+
 /* Compact Ideas category filtering; the filter is a view, not a database field. */
 .ideas-filter{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 8px;padding:5px 0 8px;border-bottom:1px solid #e2d2b7}
 .ideas-filter label{font-size:13px;font-weight:750;color:var(--retro-deep)}
