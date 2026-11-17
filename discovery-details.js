@@ -39,6 +39,54 @@ async function wikipediaSummary(data,fetcher=fetch){
   return {text,url:typeof url==='string'&&/^https:\/\/en\.wikipedia\.org\/wiki\//.test(url)?url:target.page};
  }catch{return null;}finally{clearTimeout(timer);}
 }
+
+/* Exact OSM/Geoapify IDs avoid mismatching nearby attractions by name. */
+function wikidataTarget(data){
+ const id=String(data?.wikidata||data?.wiki_and_media?.wikidata||data?.datasource?.raw?.wikidata||'').trim();
+ if(!/^Q[1-9][0-9]{0,11}$/.test(id))return null;
+ const params=new URLSearchParams({action:'wbgetentities',ids:id,
+  props:'descriptions|sitelinks',languages:'en',sitefilter:'enwiki',format:'json',origin:'*'});
+ return {id,api:'https://www.wikidata.org/w/api.php?'+params.toString(),page:'https://www.wikidata.org/wiki/'+id};
+}
+async function wikidataSummary(data,fetcher=fetch){
+ const target=wikidataTarget(data);
+ if(!target)return null;
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),7500);
+ try{
+  const response=await fetcher(target.api,{signal:controller.signal,headers:{Accept:'application/json'}});
+  if(!response.ok)return null;
+  const json=await response.json(),entity=json?.entities?.[target.id];
+  if(!entity||entity.missing!==undefined)return null;
+  const title=entity.sitelinks?.enwiki?.title;
+  if(typeof title==='string'&&title.length>1){
+   const article=await wikipediaSummary({wiki_and_media:{wikipedia:'en:'+title}},fetcher);
+   if(article)return {...article,source:'Wikipedia'};
+  }
+  const short=entity.descriptions?.en?.value;
+  return typeof short==='string'&&short.trim()?{text:sentence(short,225),url:target.page,source:'Wikidata'}:null;
+ }catch{return null;}finally{clearTimeout(timer);}
+}
+function categorySummary(data){
+ const raw=data?.datasource?.raw||{};
+ const tags=[...(Array.isArray(data?.categories)?data.categories:[]),data?.kind||'',
+  raw.historic?'historic.'+raw.historic:'',raw.natural?'natural.'+raw.natural:'',
+  raw.tourism?'tourism.'+raw.tourism:'',raw.leisure?'leisure.'+raw.leisure:''].join(' ').toLowerCase();
+ const types=[
+  [/lighthouse/,'lighthouse'],[/waterfall/,'waterfall'],[/viewpoint/,'scenic viewpoint'],
+  [/museum/,'museum'],[/monument/,'monument'],[/memorial/,'memorial'],
+  [/ruins/,'historic ruins'],[/battlefield/,'battlefield'],
+  [/cave_entrance|cave\.entrance/,'cave entrance'],
+  [/rock_formation/,'rock formation'],[/nature_reserve/,'nature reserve'],
+  [/national_park/,'national park'],[/observation_tower/,'observation tower'],
+  [/beach/,'beach'],[/sculpture/,'sculpture'],[/castle/,'castle'],
+  [/gallery/,'art gallery'],[/zoo/,'zoo'],[/aquarium/,'aquarium'],
+  [/hiking|trail/,'trail or hiking area'],[/vineyard|winery/,'winery or vineyard'],
+  [/historic/,'historic site'],[/park/,'park'],[/tourism|entertainment/,'visitor attraction']
+ ];
+ const type=types.find(([pattern])=>pattern.test(tags))?.[1];
+ return type?'Mapped as a '+type+' in OpenStreetMap; no fuller description was provided.':'No description available from the open-data sources.';
+}
+
 const DAYS={Mo:'Mon',Tu:'Tue',We:'Wed',Th:'Thu',Fr:'Fri',Sa:'Sat',Su:'Sun'};
 function hoursText(input){
  const str=String(input??'').trim();
@@ -68,5 +116,5 @@ function combined(place,details={}){
   wikipedia:details.wiki_and_media?.wikipedia||place.wikipedia||''
  };
 }
-root.VacationDiscovery=Object.freeze({sentence,description,wikiTarget,wikipediaSummary,hoursText,reviewSearchUrl,combined});
+root.VacationDiscovery=Object.freeze({sentence,description,wikiTarget,wikipediaSummary,wikidataTarget,wikidataSummary,categorySummary,hoursText,reviewSearchUrl,combined});
 })(window);
