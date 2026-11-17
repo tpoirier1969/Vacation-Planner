@@ -5,7 +5,7 @@ const MAX_WAYPOINTS=16,MAX_ROUTES=40;
 const DEFAULT={strategy:'balanced',mode:'drive',avoidHighways:false,avoidTolls:false,avoidFerries:false};
 const STRATEGIES=['balanced','short','less_maneuvers'],MODES=['drive','light_truck'];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
-const pointOK=p=>!!p&&Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lng))&&Math.abs(Number(p.lat))<=90&&Math.abs(Number(p.lng))<=180;
+const pointOK=p=>!!p&&p.lat!=null&&p.lng!=null&&p.lat!==''&&p.lng!==''&&Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lng))&&Math.abs(Number(p.lat))<=90&&Math.abs(Number(p.lng))<=180;
 function newRoute(id,tripId,name='New route'){
  return {id,tripId,name,start:null,end:null,waypoints:[],preferences:{...DEFAULT},
   startDate:'',startTime:'',endDate:'',endTime:'',polyline:'',distanceM:null,durationS:null,visible:true};
@@ -49,7 +49,7 @@ function routeURL(route,key){
 function parseRoute(data){
  const p=data?.features?.[0]?.properties,polyline=p?.polyline5;
  if(typeof polyline!=='string'||decodePolyline(polyline).length<2)throw Error('No drivable road geometry returned.');
- if(!Number.isFinite(Number(p.distance))||!Number.isFinite(Number(p.time)))throw Error('Missing route distance or duration.');
+ if(p.distance==null||p.time==null||!Number.isFinite(Number(p.distance))||!Number.isFinite(Number(p.time)))throw Error('Missing route distance or duration.');
  return {polyline,distanceM:Number(p.distance),durationS:Number(p.time)};
 }
 function windowError(route){
@@ -59,7 +59,7 @@ function windowError(route){
 }
 function summary(r){
  if(r?.distanceM==null||r?.durationS==null)return 'Not calculated yet';
- const hours=Math.floor(r.durationS/3600),mins=Math.round(r.durationS/60)%60;
+ const totalMins=Math.max(1,Math.round(r.durationS/60)),hours=Math.floor(totalMins/60),mins=totalMins%60;
  return (r.distanceM/1609.344).toFixed(0)+' mi · '+(hours?hours+' hr ':'')+mins+' min driving';
 }
 function createController(config){
