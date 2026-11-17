@@ -21,24 +21,81 @@ $('#mapAdd').addEventListener('click',()=>{addingPlace=!addingPlace;syncMapMode(
 $('#mapFullscreen').addEventListener('click',()=>{expandedMap=!expandedMap;syncExpanded()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&expandedMap){expandedMap=false;syncExpanded()}});
 function initMap(){if(!trip()||tab!=='explore')return;if(typeof L==='undefined'){$('#map').textContent='Map could not load. Check your connection.';return}if(!map){map=L.map('map',{zoomControl:false,tap:false,scrollWheelZoom:true,touchZoom:'center',bounceAtZoomLimits:false,zoomAnimation:false,fadeAnimation:false,markerZoomAnimation:false}).setView([46.55,-87.4],8);L.control.zoom({position:'bottomright'}).addTo(map);tileLayer=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19,keepBuffer:6,updateWhenIdle:false,updateWhenZooming:false}).addTo(map);tileLayer.on('loading',()=>setTileStatus('Loading map tiles…',true));tileLayer.on('load',()=>{if(tileErrors)setTileStatus('Some tiles failed to load. Retry when reception improves.',true);else setTileStatus('',false)});tileLayer.on('tileerror',()=>{tileErrors++;setTileStatus('Some map tiles could not load. Check reception or retry.',true)});map.on('moveend zoomend',()=>{if(tileErrors)setTileStatus('Some map tiles may be missing. Retry if needed.',true)});markers=L.layerGroup().addTo(map);if(typeof ResizeObserver!=='undefined'){new ResizeObserver(()=>{if(map&&trip()&&tab==='explore')map.invalidateSize({pan:false,debounceMoveend:true})}).observe($('#map'))};map.on('click',e=>{if(addingPlace){addingPlace=false;syncMapMode()}showMapPlaceMenu(e.latlng)});map.on('contextmenu',e=>showMapPlaceMenu(e.latlng));const t=trip();if(t?.lat!=null&&t?.lng!=null)map.setView([t.lat,t.lng],10)}setTimeout(()=>map?.invalidateSize({pan:false,debounceMoveend:true}),100);refreshMarkers()}
-function mapMenuContent(latlng,name='',notes='',savedId=''){
+const PLACE_CATEGORIES=['Lodging','Restaurants','Wineries','Shopping','Hiking','Boating','Fishing','Events','Attractions','Other'];
+function detectedCategory(tags=[]){
+ const c=tags.join(' ').toLowerCase();
+ if(/winery|vineyard/.test(c))return 'Wineries';
+ if(/accommodation|hotel|motel|guest_house|hostel/.test(c))return 'Lodging';
+ if(/catering|restaurant|cafe|fast_food/.test(c))return 'Restaurants';
+ if(/commercial|shop|shopping/.test(c))return 'Shopping';
+ if(/hiking|trail/.test(c))return 'Hiking';
+ if(/boat|marina|slipway/.test(c))return 'Boating';
+ if(/fishing/.test(c))return 'Fishing';
+ if(/event/.test(c))return 'Events';
+ if(/tourism|entertainment|natural|leisure/.test(c))return 'Attractions';
+ return 'Other';
+}
+function mapMenuContent(latlng,name='',notes='',savedId='',category='Other'){
  const el=document.createElement('div'),title=document.createElement('strong');
  title.textContent=name||'Place on map';el.append(title,document.createElement('br'));
  const actions=savedId?[['Add to itinerary',()=>planPlace(savedId)]]:[
-   ['Save place',()=>openPlace(latlng.lat,latlng.lng,name,notes,'places')],
-   ['Add to itinerary',()=>openPlace(latlng.lat,latlng.lng,name,notes,'itinerary')]
+  ['Save place',()=>openPlace(latlng.lat,latlng.lng,name,notes,'places',category)],
+  ['Add to itinerary',()=>openPlace(latlng.lat,latlng.lng,name,notes,'itinerary',category)]
  ];
  for(const [label,action] of actions){
-   const btn=document.createElement('button');btn.type='button';btn.className='secondary small';btn.textContent=label;
-   btn.style.margin='5px 5px 0 0';btn.onclick=()=>{map?.closePopup();action()};el.append(btn);
+  const btn=document.createElement('button');btn.type='button';btn.className='secondary small';btn.textContent=label;
+  btn.style.margin='5px 5px 0 0';btn.onclick=()=>{map?.closePopup();action()};el.append(btn);
  }
  return el;
 }
-function showMapPlaceMenu(latlng,name='',notes=''){if(!map)return;L.popup().setLatLng(latlng).setContent(mapMenuContent(latlng,name,notes)).openOn(map)}
-function refreshMarkers(){if(!map||!markers)return;markers.clearLayers();for(const x of forTrip('places'))if(geo(x)){const marker=L.marker([x.lat,x.lng]).addTo(markers);marker.bindPopup(mapMenuContent({lat:x.lat,lng:x.lng},x.name,x.notes||'',x.id));}}
-function openPlace(lat,lng,name,notes,destination='places'){
+let mapLookupToken=0;
+async function showMapPlaceMenu(latlng,name='',notes=''){
+ if(!map)return;
+ const popup=L.popup().setLatLng(latlng).setContent(mapMenuContent(latlng,name,notes)).openOn(map);
+ if(name)return;
+ const key=window.LAZY_ACRES_GEOAPIFY_KEY;
+ if(!key||key==='PASTE_YOUR_GEOAPIFY_BROWSER_KEY_HERE')return;
+ const token=++mapLookupToken,controller=new AbortController(),timer=setTimeout(()=>controller.abort(),6500);
+ const loading=document.createElement('div');loading.textContent='Identifying nearby places…';
+ const fallback=mapMenuContent(latlng);
+ loading.append(fallback);popup.setContent(loading);
+ try{
+  const params=new URLSearchParams({
+   categories:'accommodation,catering,commercial,tourism,entertainment,leisure,production.winery',
+   filter:'circle:'+latlng.lng.toFixed(6)+','+latlng.lat.toFixed(6)+',90',
+   bias:'proximity:'+latlng.lng.toFixed(6)+','+latlng.lat.toFixed(6),
+   limit:'12',apiKey:key
+  });
+  const res=await fetch('https://api.geoapify.com/v2/places?'+params,{signal:controller.signal});
+  if(!res.ok)throw Error('Nearby place lookup failed');
+  const json=await res.json();
+  if(token!==mapLookupToken||!map?.hasLayer(popup))return;
+  const places=(json.features||[]).map(f=>{
+   const p=f.properties||{},coords=f.geometry?.coordinates;
+   return {name:p.name||'',lat:Number(p.lat??coords?.[1]),lng:Number(p.lon??coords?.[0]),address:p.formatted||'',category:detectedCategory(p.categories||[])};
+  }).filter(x=>x.name&&Number.isFinite(x.lat)&&Number.isFinite(x.lng)).slice(0,7);
+  if(!places.length){popup.setContent(mapMenuContent(latlng));return;}
+  const box=document.createElement('div'),heading=document.createElement('strong');
+  heading.textContent='Which place did you mean?';box.append(heading);
+  for(const place of places){
+   const row=document.createElement('button');row.type='button';row.className='quiet small';
+   row.style.display='block';row.style.marginTop='6px';row.style.textAlign='left';
+   row.textContent=place.name+' · '+place.category;
+   row.title=place.address;
+   row.onclick=()=>popup.setContent(mapMenuContent({lat:place.lat,lng:place.lng},place.name,place.address,'',place.category));
+   box.append(row);
+  }
+  const manual=document.createElement('button');manual.type='button';manual.className='secondary small';
+  manual.style.marginTop='8px';manual.textContent='Use exact clicked location';
+  manual.onclick=()=>popup.setContent(mapMenuContent(latlng));box.append(manual);
+  popup.setContent(box);
+ }catch(error){if(token===mapLookupToken&&map?.hasLayer(popup))popup.setContent(mapMenuContent(latlng));}
+ finally{clearTimeout(timer);}
+}
+function refreshMarkers(){if(!map||!markers)return;markers.clearLayers();for(const x of forTrip('places'))if(geo(x)){const marker=L.marker([x.lat,x.lng]).addTo(markers);marker.bindPopup(mapMenuContent({lat:x.lat,lng:x.lng},x.name,x.notes||'',x.id,x.category||'Other'));}}
+function openPlace(lat,lng,name,notes,destination='places',category='Other'){
  selectedPoint={lat:Number(lat),lng:Number(lng)};placeDestination=destination;
- $('#placeName').value=name||'';$('#placeNotes').value=notes||'';
+ $('#placeName').value=name||'';$('#placeNotes').value=notes||'';\n const categories=$('#placeForm').elements.category;categories.value=PLACE_CATEGORIES.includes(category)?category:'Other';
  $('#coordinates').value=Number(lat).toFixed(5)+', '+Number(lng).toFixed(5);
  $('#placeDialog').querySelector('h2').textContent=destination==='itinerary'?'Add to itinerary':'Save this stop';
  $('#placeForm').querySelector('button.primary').textContent=destination==='itinerary'?'Continue to itinerary':'Save to trip';
