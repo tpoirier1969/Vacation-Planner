@@ -13,7 +13,7 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Next priorities
 
-1. Live two-account verification: Donna's email sign-in, shared household membership, Realtime refresh between two authenticated browsers, concurrent-edit behavior, save/reload, and mobile layout. Source code and mock tests are not enough.
+1. Live two-account verification: Donna's email sign-in, shared household membership, Realtime refresh between two authenticated browsers, concurrent-edit behavior, save/reload, and mobile layout. Current Supabase membership check on Nov 17 found only one enrolled user; the Suite Home Screen shortcut can present a separate login session from Safari. The v0.6.22 gate will identify the signed-in account and allow switching; confirm that the approved email receives a valid session in the actual iPhone launcher. Source code and mock tests are not enough.
 2. Itinerary and Ideas UX acceptance: category balance, compact layout, promotion/return flows, date/time and fixed-event constraints, booking details, and visual checks in actual browsers.
 3. **Completed:** Added Vacation Planner to `tpoirier1969/Lazy-Acres-Suite` household launcher in Suite v0.1.84; verified deployed module registry and live Suite version. Its card opens `https://tpoirier1969.github.io/Vacation-Planner/` and uses the original Vacation Planner sign artwork.
 4. Trip-specific sharing/access beyond current household model, if needed.
@@ -28,8 +28,9 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 ## UI and map usability — outstanding
 
 - **Completed in v0.6.21:** Rebuilt the masthead to display the enlarged roadside-sign logo at left and a compact active-trip summary with destination, dates, Edit Trip, and Exit Trip at right. Moved connection status into the same masthead, removed the redundant full-width trip hero, and added responsive desktop/tablet/phone sizing. Visual acceptance on actual devices remains pending.
-- Add independent **Ideas**, **Itinerary**, and **Route** visibility controls for map overlays. These are temporary display choices; hiding items must never delete persistent records. Existing category filtering should still work alongside them.
-- Provide **Build route from Itinerary** using selected day/date range and decided mapped activities; preserve fixed-time appointment order and clearly distinguish manual itinerary order from suggested travel order, without rewriting itinerary dates.
+- **Implemented for v0.6.22, live QA outstanding:** Independent **Ideas**, **Itinerary**, and **Route** visibility controls for map overlays. These are temporary display choices; hiding items never deletes persistent records. Existing category filtering remains available.
+- **Partially implemented for v0.6.22:** Import mapped itinerary activities from a selected start day into the route, sorted by scheduled start time, preserving itinerary dates. Still outstanding: multi-day selected date ranges, fixed-time conflict checks, and clearer differentiation between manual itinerary order and suggested travel order.
+- **Implemented for v0.6.22, live QA outstanding:** Outbound/day/return route ordering; numbered connected driving sections with selectable Leaflet lines; remove/reconnect a single section without deleting endpoints, remove start/end explicitly, and preserve legacy continuous paths until successfully recalculated. Geometries are requested per-leg with Geoapify `through_stop`. Run `node --test tests/routes.test.mjs` and verify authenticated mobile/desktop editing.
 - v0.6.20: direct map clicks again look up named nearby places and reverse-geocode when necessary, do not offer an immediate blank-name Save button while lookup is underway, and prefill the chosen name in Save Idea. Mocked acceptance checks passed, but verify with real map clicks after deployment.
 
 ## Route release acceptance and limitations
