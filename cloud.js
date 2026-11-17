@@ -11,14 +11,14 @@ function read(k,fallback){try{return JSON.parse(localStorage.getItem(k))??fallba
 function cache(){try{localStorage.setItem(CACHE,JSON.stringify(current));localStorage.setItem(QUEUE,JSON.stringify(pending))}catch{}}
 function row(kind,x){const base={id:x.id,household_id:HOUSE};
 if(kind==='trips')return {...base,name:x.name,destination:x.destination||'',start_date:x.start||null,end_date:x.end||null,lat:x.lat??null,lng:x.lng??null};
-if(kind==='places')return {...base,trip_id:x.tripId,name:x.name,category:x.category||'',location:x.location||'',notes:x.notes||'',lat:x.lat??null,lng:x.lng??null};
-if(kind==='activities')return {...base,trip_id:x.tripId,title:x.title,activity_date:x.date||null,end_date:x.endDate||null,category:x.category||'Other',place_id:x.placeId||null,lat:x.lat??null,lng:x.lng??null,notes:x.notes||''};
+if(kind==='places')return {...base,trip_id:x.tripId,name:x.name,category:x.category||'',location:x.location||'',notes:x.notes||'',geoapify_id:x.geoapifyId||null,opening_hours:x.hours||null,lat:x.lat??null,lng:x.lng??null};
+if(kind==='activities')return {...base,trip_id:x.tripId,title:x.title,activity_date:x.date||null,end_date:x.endDate||null,category:x.category||'Other',place_id:x.placeId||null,lat:x.lat??null,lng:x.lng??null,opening_hours:x.hours||null,notes:x.notes||''};
 if(kind==='notes')return {...base,trip_id:x.tripId,title:x.title,body:x.body||''};
 return {...base,trip_id:x.tripId,title:x.title,category:x.category||'trip-misc',done:!!x.done};
 }
 function item(kind,r){if(kind==='trips')return {id:r.id,name:r.name,destination:r.destination||'',start:r.start_date||'',end:r.end_date||'',lat:r.lat,lng:r.lng};
-if(kind==='places')return {id:r.id,tripId:r.trip_id,name:r.name,category:r.category||'',location:r.location||'',notes:r.notes||'',lat:r.lat,lng:r.lng};
-if(kind==='activities')return {id:r.id,tripId:r.trip_id,title:r.title,date:r.activity_date||'',endDate:r.end_date||'',category:r.category||'Other',placeId:r.place_id||'',lat:r.lat,lng:r.lng,notes:r.notes||''};
+if(kind==='places')return {id:r.id,tripId:r.trip_id,name:r.name,category:r.category||'',location:r.location||'',notes:r.notes||'',geoapifyId:r.geoapify_id||'',hours:r.opening_hours||'',lat:r.lat,lng:r.lng};
+if(kind==='activities')return {id:r.id,tripId:r.trip_id,title:r.title,date:r.activity_date||'',endDate:r.end_date||'',category:r.category||'Other',placeId:r.place_id||'',lat:r.lat,lng:r.lng,hours:r.opening_hours||'',notes:r.notes||''};
 if(kind==='notes')return {id:r.id,tripId:r.trip_id,title:r.title,body:r.body||''};
 return {id:r.id,tripId:r.trip_id,title:r.title,category:r.category,done:r.done};
 }
