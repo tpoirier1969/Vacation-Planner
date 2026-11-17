@@ -13,14 +13,17 @@ function editAndRemove(kind,x){
 function render(){const t=trip();$('#home').classList.toggle('hidden',!!t);$('#workspace').classList.toggle('hidden',!t);$('#context').textContent=t?'TRIP WORKSPACE':'THE OPEN ROAD IS CALLING';$('#tripCards').innerHTML=state.trips.length?state.trips.map(x=>'<button class="trip" data-open="'+esc(x.id)+'"><span class="chip">Open trip</span><strong>'+esc(x.name)+'</strong><span>'+esc(x.destination||'Destination undecided')+'</span><small>'+formatDate(x.start)+(x.end?' – '+formatDate(x.end):'')+'</small></button>').join(''):'<p class="empty">No trips yet. Create a trip to begin exploring.</p>';if(!t)return;
 $('#tripTitle').textContent=t.name;$('#tripSub').textContent=(t.destination||'Explore anywhere')+' · '+formatDate(t.start)+(t.end?' – '+formatDate(t.end):'');
 TABS.forEach(n=>{$('#'+n).classList.toggle('hidden',n!==tab);document.querySelector('[data-tab="'+n+'"]').classList.toggle('active',n===tab)});if(tab==='explore')setTimeout(initMap,0);
-const savedPlaces=forTrip('places');
+// Ideas are choices under consideration. An idea linked to a decided itinerary
+// entry is retained for its source/map metadata but is not listed as pending.
+const plannedIdeaIds=new Set(forTrip('activities').map(x=>x.placeId).filter(Boolean));
+const savedPlaces=forTrip('places').filter(x=>!plannedIdeaIds.has(x.id));
 $('#placeList').innerHTML=savedPlaces.length?PLACE_CATEGORIES.map(category=>{
  const items=savedPlaces.filter(x=>normalizedCategory(x.category)===category);
  if(!items.length)return '';
  return '<details class="list-category" data-category="'+esc(category)+'" '+(collapsedPlaceCategories.has(category)?'':'open')+'><summary>'+esc(category)+' <span class="count">'+items.length+'</span></summary><div class="category-body">'+items.map(x=>
-  '<div class="day"><div class="row entry-head"><strong>'+esc(x.name)+'</strong>'+editAndRemove('places',x)+'</div>'+(x.location?'<div class="muted small-details">'+esc(x.location)+'</div>':'')+(x.notes?'<p>'+esc(x.notes)+'</p>':'')+'<div class="row wrap">'+(geo(x)?'<button class="quiet small" data-locate="'+esc(x.id)+'">Show on map</button>':'')+'<button class="secondary small" data-plan="'+esc(x.id)+'">Add to itinerary</button></div></div>'
+  '<div class="day"><div class="row entry-head"><strong>'+esc(x.name)+'</strong>'+editAndRemove('places',x)+'</div>'+(x.location?'<div class="muted small-details">'+esc(x.location)+'</div>':'')+(x.notes?'<p>'+esc(x.notes)+'</p>':'')+'<div class="row wrap">'+(geo(x)?'<button class="quiet small" data-locate="'+esc(x.id)+'">Show on map</button>':'')+'<button class="secondary small" data-plan="'+esc(x.id)+'">Choose for itinerary</button></div></div>'
  ).join('')+'</div></details>';
-}).join(''):'<p class="empty">No saved places yet. Explore the map and tap somewhere interesting.</p>';
+}).join('') :'<p class="empty">No ideas under consideration. Add an activity, event, place, or other possibility here.</p>';
 const activities=forTrip('activities').slice().sort(Itinerary.compareEntries);
 const activityDays=[...new Set(activities.map(x=>x.date||''))];
 $('#activityList').innerHTML=activities.length?activityDays.map(day=>
@@ -42,9 +45,9 @@ $('#activityList').innerHTML=activities.length?activityDays.map(day=>
    (x.hours?'<div class="muted small-details">Hours: '+esc(x.hours)+'</div>':'')+
    (x.confirmationCode?'<div class="muted small-details">Confirmation: '+esc(x.confirmationCode)+'</div>':'')+
    (link?'<a class="small-details" href="'+esc(link)+'" target="_blank" rel="noopener noreferrer">Booking / tickets</a>':'')+
-   '<div class="row wrap"><button class="quiet small" data-unschedule="'+esc(x.id)+'">Move to Saved Places</button></div></div>';
+   '<div class="row wrap"><button class="quiet small" data-unschedule="'+esc(x.id)+'">Move back to Ideas</button></div></div>';
  }).join('')+'</section>'
-).join(''):'<p class="empty">Your itinerary is empty. Add activities or bring over a saved place.</p>';
+).join('') :'<p class="empty">Nothing decided yet. Choose an idea or add a plan directly.</p>';
 $('#noteList').innerHTML=forTrip('notes').length?forTrip('notes').map(x=>'<div class="day"><div class="row entry-head"><strong>'+esc(x.title)+'</strong>'+editAndRemove('notes',x)+'</div><p style="white-space:pre-wrap">'+esc(x.body)+'</p></div>').join(''):'<p class="empty">Save links, questions, reservations, and research here.</p>';
 const packing=forTrip('packing');const checked=packing.filter(x=>x.done).length;$('#packProgress').textContent=checked+' of '+packing.length+' items packed · '+PACKING_CATEGORIES.length+' categories';$('#packList').innerHTML=PACKING_CATEGORIES.map(c=>{const items=packing.filter(x=>(x.category||'trip-misc')===c.key);return '<details class="pack-category" '+(items.length?'open':'')+'><summary><span class="pack-category-name">'+esc(c.label)+'</span><span class="pack-count">'+items.filter(x=>x.done).length+' / '+items.length+'</span></summary><div class="pack-items">'+(items.length?items.map(x=>'<div class="check"><input type="checkbox" aria-label="Packed '+esc(x.title)+'" data-pack="'+esc(x.id)+'" '+(x.done?'checked':'')+'><span style="'+(x.done?'text-decoration:line-through;opacity:.6':'')+'">'+esc(x.title)+'</span><span class="entry-actions"><button class="quiet small" data-edit="packing:'+esc(x.id)+'">Edit</button><button class="quiet small" data-remove="packing:'+esc(x.id)+'">Remove</button></span></div>').join(''):'<p class="muted pack-empty">Nothing on this list yet.</p>')+'</div></details>'}).join('');refreshMarkers();}
 window.applyVacationPlannerRemoteState=next=>{
@@ -81,9 +84,9 @@ $('#mapAdd').addEventListener('click',()=>{addingPlace=!addingPlace;syncMapMode(
 $('#mapFullscreen').addEventListener('click',()=>{expandedMap=!expandedMap;syncExpanded()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&expandedMap){expandedMap=false;syncExpanded()}});
 function initMap(){if(!trip()||tab!=='explore')return;if(typeof L==='undefined'){$('#map').textContent='Map could not load. Check your connection.';return}if(!map){map=L.map('map',{zoomControl:false,tap:false,scrollWheelZoom:true,wheelPxPerZoomLevel:180,wheelDebounceTime:80,zoomSnap:0.5,touchZoom:'center',bounceAtZoomLimits:false,zoomAnimation:false,fadeAnimation:false,markerZoomAnimation:false}).setView([46.55,-87.4],8);L.control.zoom({position:'bottomright'}).addTo(map);baseLayers={street:L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19,keepBuffer:6,updateWhenIdle:false,updateWhenZooming:false}),satellite:L.tileLayer('https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}',{attribution:'Imagery: USDA, USGS The National Map',maxZoom:19,maxNativeZoom:16,keepBuffer:6,updateWhenIdle:false,updateWhenZooming:false})};Object.values(baseLayers).forEach(registerBaseLayer);setMapStyle(mapStyle);map.on('moveend zoomend',()=>{if(tileErrors)setTileStatus('Some map tiles may be missing. Retry if needed.',true)});markers=L.layerGroup().addTo(map);discoveryMarkers=L.layerGroup().addTo(map);if(typeof ResizeObserver!=='undefined'){new ResizeObserver(()=>{if(map&&trip()&&tab==='explore')map.invalidateSize({pan:false,debounceMoveend:true})}).observe($('#map'))};map.on('click',e=>{if(addingPlace){addingPlace=false;syncMapMode()}showMapPlaceMenu(e.latlng)});map.on('contextmenu',e=>showMapPlaceMenu(e.latlng));const t=trip();if(t?.lat!=null&&t?.lng!=null)map.setView([t.lat,t.lng],10)}setTimeout(()=>map?.invalidateSize({pan:false,debounceMoveend:true}),100);refreshMarkers()}
-const PLACE_CATEGORIES=['Lodging','Restaurants','Wineries','Shopping','Hiking','Boating','Fishing','Events','Attractions','Other'];
+const PLACE_CATEGORIES=['Lodging','Restaurants','Wineries','Shopping','Hiking','Boating','Fishing','Events','Attractions','Activities','Scenic Drives','Other'];
 const collapsedPlaceCategories=new Set();
-const FLAG_COLORS={Lodging:'#845ec2',Restaurants:'#d65a44',Wineries:'#8e396f',Shopping:'#ca8422',Hiking:'#307d4d',Boating:'#187a9b',Fishing:'#2675c9',Events:'#d13f79',Attractions:'#4d8f83',Other:'#717885'};
+const FLAG_COLORS={Lodging:'#845ec2',Restaurants:'#d65a44',Wineries:'#8e396f',Shopping:'#ca8422',Hiking:'#307d4d',Boating:'#187a9b',Fishing:'#2675c9',Events:'#d13f79',Attractions:'#4d8f83',Activities:'#637a94','Scenic Drives':'#a16f44',Other:'#717885'};
 const visibleCategories=new Set(PLACE_CATEGORIES);
 const normalizedCategory=x=>PLACE_CATEGORIES.includes(x)?x:'Other';
 function flagIcon(category,state){
@@ -102,7 +105,7 @@ $('#activityCategory').addEventListener('change',syncActivityCategory);
 $('#activityForm').elements.fixedDate.addEventListener('change',syncActivityCategory);
 function cleanImportedNotes(notes){return String(notes||'').replace(/^Discovered via Geoapify[^\n]*$/gmi,'').replace(/^building\.[\w.]+$/gmi,'').trim();}
 async function loadItineraryHours(geoapifyId){try{const d=await getDiscoveryPlaceDetails({placeId:geoapifyId});if(pendingActivityLocation?.geoapifyId===geoapifyId&&!$('#activityHours').value)$('#activityHours').value=d.opening_hours||d.datasource?.raw?.opening_hours||'';}catch{}}
-function fillActivity({name,category='Other',notes='',lat=null,lng=null,placeId='',geoapifyId='',hours=''}){setTab('itinerary');const f=$('#activityForm');f.reset();f.elements.title.value=name;f.elements.category.value=normalizedCategory(category);f.elements.notes.value=cleanImportedNotes(notes);f.elements.hours.value=hours;f.elements.date.value=trip()?.start||'';if(f.elements.category.value==='Lodging'&&trip()?.end)f.elements.endDate.value=trip().end;pendingActivityLocation={placeId,lat,lng,geoapifyId};syncActivityCategory();f.elements.date.focus();if(geoapifyId&&!hours)loadItineraryHours(geoapifyId);}
+function fillActivity({name,category='Other',notes='',lat=null,lng=null,placeId='',geoapifyId='',hours=''}){setTab('itinerary');const f=$('#activityForm');f.reset();f.elements.title.value=name;f.elements.category.value=normalizedCategory(category);f.elements.notes.value=cleanImportedNotes(notes);f.elements.hours.value=hours;f.elements.date.value=f.elements.category.value==='Lodging'?(trip()?.start||''):'';if(f.elements.category.value==='Lodging'&&trip()?.end)f.elements.endDate.value=trip().end;pendingActivityLocation={placeId,lat,lng,geoapifyId};syncActivityCategory();f.elements.date.focus();if(geoapifyId&&!hours)loadItineraryHours(geoapifyId);}
 
 function detectedCategory(tags=[]){
  const c=tags.join(' ').toLowerCase();
@@ -121,7 +124,7 @@ function mapMenuContent(latlng,name='',notes='',savedId='',category='Other'){
  const el=document.createElement('div'),title=document.createElement('strong');
  title.textContent=name||'Place on map';el.append(title,document.createElement('br'));
  const actions=savedId?[['Add to itinerary',()=>planPlace(savedId)]]:[
-  ['Save place',()=>openPlace(latlng.lat,latlng.lng,name,notes,'places',category)],
+  ['Save idea',()=>openPlace(latlng.lat,latlng.lng,name,notes,'places',category)],
   ['Add to itinerary',()=>openPlace(latlng.lat,latlng.lng,name,notes,'itinerary',category)]
  ];
  for(const [label,action] of actions){
@@ -280,8 +283,8 @@ function openPlace(lat,lng,name,notes,destination='places',category='Other'){
  $('#placeName').value=name||'';$('#placeNotes').value=cleanImportedNotes(notes);
  const categories=$('#placeForm').elements.category;categories.value=PLACE_CATEGORIES.includes(category)?category:'Other';
  $('#coordinates').value=Number(lat).toFixed(5)+', '+Number(lng).toFixed(5);
- $('#placeDialog').querySelector('h2').textContent=destination==='itinerary'?'Add to itinerary':'Save this stop';
- $('#placeForm').querySelector('button.primary').textContent=destination==='itinerary'?'Continue to itinerary':'Save to trip';
+ $('#placeDialog').querySelector('h2').textContent=destination==='itinerary'?'Add to itinerary':'Save this idea';
+ $('#placeForm').querySelector('button.primary').textContent=destination==='itinerary'?'Continue to itinerary':'Save idea';
  $('#placeDialog').showModal();
 }
 async function searchLocation(q,store=false){if(!q.trim())return;if(!store&&document.activeElement instanceof HTMLElement)document.activeElement.blur();$('#searchButton').disabled=true;const token=++searchToken;try{const response=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(q),{headers:{'Accept':'application/json'}});if(!response.ok)throw Error('Search service unavailable');const results=await response.json();if(token!==searchToken)return;if(!results.length){if(!store)alert('No location found. Try a more specific place name.');return}const p=results[0],lat=Number(p.lat),lng=Number(p.lon);if(store&&trip()){trip().lat=lat;trip().lng=lng;persist()}setTab('explore');setTimeout(()=>{initMap();map?.setView([lat,lng],11)},100)}catch(e){if(!store)alert('Location search failed: '+e.message)}finally{$('#searchButton').disabled=false}}
@@ -381,18 +384,9 @@ form('#manualPlace',d=>state.places.unshift({id:uid(),tripId:active,...d,categor
  const issue=Itinerary.validateDraft(d);
  if(issue){alert(issue);return false;}
  const loc=pendingActivityLocation||{};
- let saved=loc.placeId?state.places.find(p=>p.id===loc.placeId&&p.tripId===active):null;
- // A mapped itinerary location is also a saved place, with a single stable ID.
- if(!saved&&loc.lat!=null&&loc.lng!=null){
-   saved=state.places.find(p=>p.tripId===active&&geo(p)&&
-     Math.abs(Number(p.lat)-Number(loc.lat))<0.00005&&
-     Math.abs(Number(p.lng)-Number(loc.lng))<0.00005);
-   if(!saved){
-     saved={id:uid(),tripId:active,name:d.title,category:normalizedCategory(d.category),
-       location:'',notes:cleanImportedNotes(d.notes),geoapifyId:loc.geoapifyId||'',hours:d.hours||'',lat:Number(loc.lat),lng:Number(loc.lng)};
-     state.places.unshift(saved);
-   }
- }
+ // A decided itinerary item can originate from a considered idea, but a
+ // directly added itinerary item does not also create an unwanted idea.
+ const saved=loc.placeId?state.places.find(p=>p.id===loc.placeId&&p.tripId===active):null;
  state.activities.push({id:uid(),tripId:active,...d,endDate:d.category==='Lodging'?d.endDate:'',
    category:normalizedCategory(d.category),placeId:saved?.id||'',lat:loc.lat??null,lng:loc.lng??null,hours:d.hours||'',notes:cleanImportedNotes(d.notes)});
  pendingActivityLocation=null;
@@ -405,10 +399,10 @@ const EDIT_FORMS={
   {name:'start',label:'Start date',type:'date'},
   {name:'end',label:'End date',type:'date'}
  ]},
- places:{title:'Edit saved place',fields:[
-  {name:'name',label:'Place name',required:true,maxlength:160},
+ places:{title:'Edit idea',fields:[
+  {name:'name',label:'Idea, activity or place',required:true,maxlength:160},
   {name:'category',label:'Category',type:'select',options:PLACE_CATEGORIES},
-  {name:'location',label:'Location or link',maxlength:400},
+  {name:'location',label:'Location or link (optional)',maxlength:400},
   {name:'hours',label:'Business hours',maxlength:500},
   {name:'notes',label:'Notes',type:'textarea'}
  ]},
