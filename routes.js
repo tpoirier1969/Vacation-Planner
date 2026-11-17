@@ -8,7 +8,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const pointOK=p=>!!p&&p.lat!=null&&p.lng!=null&&p.lat!==''&&p.lng!==''&&Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lng))&&Math.abs(Number(p.lat))<=90&&Math.abs(Number(p.lng))<=180;
 function newRoute(id,tripId,name='New route'){
  return {id,tripId,name,start:null,end:null,waypoints:[],preferences:{...DEFAULT},
-  startDate:'',startTime:'',endDate:'',endTime:'',polyline:'',distanceM:null,durationS:null,visible:true};
+  startDate:'',startTime:'',endDate:'',endTime:'',polyline:'',distanceM:null,durationS:null,legStats:[],visible:true};
 }
 function decodePolyline(value){
  if(typeof value!=='string'||value.length>500000)return [];
@@ -50,7 +50,7 @@ function parseRoute(data){
  const p=data?.features?.[0]?.properties,polyline=p?.polyline5;
  if(typeof polyline!=='string'||decodePolyline(polyline).length<2)throw Error('No drivable road geometry returned.');
  if(p.distance==null||p.time==null||!Number.isFinite(Number(p.distance))||!Number.isFinite(Number(p.time)))throw Error('Missing route distance or duration.');
- return {polyline,distanceM:Number(p.distance),durationS:Number(p.time)};
+ return {polyline,distanceM:Number(p.distance),durationS:Number(p.time),legStats:(p.legs||[]).map(x=>({distanceM:Number(x.distance)||0,durationS:Number(x.time)||0}))};
 }
 function windowError(route){
  if(route.startDate&&route.endDate&&route.endDate<route.startDate)return 'End day is before start day.';
@@ -69,7 +69,7 @@ function createController(config){
  const selected=()=>routes().find(r=>r.id===currentId)||null;
  const report=msg=>{status=msg;if($('routeStatus'))$('routeStatus').textContent=msg;};
  function selectDefault(){if(!routes().some(r=>r.id===currentId)){currentId=routes()[0]?.id||'';undoStack=[];}}
- function invalidate(r){r.polyline='';r.distanceM=null;r.durationS=null;}
+ function invalidate(r){r.polyline='';r.distanceM=null;r.durationS=null;r.legStats=[];}
  function update(fn,changedRoad=false){
   const r=selected();if(!r)return;
   const old=JSON.parse(JSON.stringify(r));
@@ -224,6 +224,14 @@ function createController(config){
     '<button type="button" class="quiet small" data-route-move="'+i+':down" '+(i===r.waypoints.length-1?'disabled':'')+'>↓</button>'+
     '<button type="button" class="quiet small" data-route-remove="'+i+'" aria-label="Remove waypoint">×</button></div></div>').join('')||
     '<p class="muted small-details">No road points or stops yet.</p>';
+  $('routeLegMetrics').innerHTML=Array.isArray(r.legStats)&&r.legStats.length===r.waypoints.length+1?
+    '<details class="route-leg-breakdown"><summary>Driving distance & time between points</summary>'+
+    r.legStats.map((leg,i)=>{
+     const from=i===0?r.start?.label:r.waypoints[i-1]?.label;
+     const to=i===r.waypoints.length?r.end?.label:r.waypoints[i]?.label;
+     return '<div class="route-leg-row"><span>'+esc(from||'Start')+' → '+esc(to||'End')+'</span>'+
+       '<strong>'+esc(summary({distanceM:leg.distanceM,durationS:leg.durationS}))+'</strong></div>';
+    }).join('')+'</details>':'';
   const options=[...config.getPlaces().filter(pointOK).map(x=>({type:'places',id:x.id,label:'Idea: '+x.name})),
    ...config.getActivities().filter(pointOK).map(x=>({type:'activities',id:x.id,label:'Itinerary: '+x.title}))];
   const former=$('routeSourceStop').value;
