@@ -462,7 +462,7 @@ async function searchLocation(q,store=false){if(!q.trim())return;if(!store&&docu
 // Geoapify Places API: category/name search constrained to the visible map.
 const DISCOVERY_CATEGORIES={
  lodging:'accommodation',
- restaurants:'catering.restaurant,catering.cafe',
+ restaurants:'catering.restaurant,catering.cafe,catering.fast_food,catering.food_court',
  wineries:'production.winery',
  shopping:'commercial',
  hiking:'leisure,natural',
@@ -475,7 +475,8 @@ const DISCOVERY_CATEGORIES={
 };
 const DISCOVERY_TERMS=[
  {pattern:/winer(y|ies)|vineyard|wine tasting/i,categories:'production.winery'},
- {pattern:/restaurant|cafe|coffee/i,categories:'catering.restaurant,catering.cafe'},
+ {pattern:/restaurant|diner|bistro|take[ -]?out|takeaway|fast[ -]?food/i,categories:'catering.restaurant,catering.cafe,catering.fast_food,catering.food_court'},
+ {pattern:/cafe|coffee/i,categories:'catering.cafe'},
  {pattern:/museum|historical/i,categories:'entertainment.museum,tourism.sights'},
  {pattern:/antique|thrift/i,categories:'commercial.antiques,commercial.second_hand'},
  {pattern:/shop|shopping/i,categories:'commercial'},
@@ -484,6 +485,25 @@ const DISCOVERY_TERMS=[
  {pattern:/waterfall|falls/i,categories:'natural,tourism.sights'},
  {pattern:/lighthouse/i,categories:'tourism.sights'}
 ];
+// "catering" is an OpenStreetMap category group. A caterer-for-hire alone
+// does not qualify for Restaurants. A caterer with a separate restaurant/cafe
+// tag DOES qualify; preserve it.
+function isCustomerFacingRestaurant(p){
+ const tags=(Array.isArray(p.categories)?p.categories:[]).map(s=>String(s).toLowerCase());
+ const amenity=String(p.datasource?.raw?.amenity||'').toLowerCase();
+ const type=String(p.datasource?.raw?.cuisine||'').toLowerCase();
+ const hasDiningTag=tags.some(t=>/^catering\.(restaurant|cafe|fast_food|food_court)(?:\.|$)/.test(t));
+ const hasDiningAmenity=['restaurant','cafe','fast_food','food_court'].includes(amenity);
+ return hasDiningTag||hasDiningAmenity;
+}
+function diningLabel(p){
+ const tags=Array.isArray(p.categories)?p.categories:[];
+ const amenity=String(p.datasource?.raw?.amenity||'').toLowerCase();
+ if(tags.some(t=>/^catering\.fast_food/.test(t))||amenity==='fast_food')return 'Takeout / fast food';
+ if(tags.some(t=>/^catering\.food_court/.test(t))||amenity==='food_court')return 'Food court';
+ if(tags.some(t=>/^catering\.cafe/.test(t))||amenity==='cafe')return 'Cafe';
+ return 'Restaurant';
+}
 const discoveryCache=new Map();
 async function discover(){
  if(!map)return;
@@ -499,7 +519,8 @@ async function discover(){
    status.textContent='Move the map to an area that does not cross the international date line.';return;
  }
  const match=DISCOVERY_TERMS.find(x=>x.pattern.test(term));
- const categories=match?.categories||DISCOVERY_CATEGORIES[category]||DISCOVERY_CATEGORIES.all;
+ const categories=category==='restaurants'?DISCOVERY_CATEGORIES.restaurants:(match?.categories||DISCOVERY_CATEGORIES[category]||DISCOVERY_CATEGORIES.all);
+ const restaurantOnly=category==='restaurants'||/catering\.(restaurant|fast_food|food_court|cafe)/.test(categories)&&!!match;
  const nameFilter=term&&!match?term:'';
  const params=new URLSearchParams({categories,filter:'rect:'+west.toFixed(5)+','+south.toFixed(5)+','+east.toFixed(5)+','+north.toFixed(5),limit:'60',apiKey:key});
  if(nameFilter)params.set('name',nameFilter);
@@ -523,9 +544,9 @@ async function discover(){
        discoveryCache.set(cacheKey,features);
      }finally{clearTimeout(timeout);}
    }
-   const found=features.map(f=>{
+   const found=features.filter(f=>!restaurantOnly||isCustomerFacingRestaurant(f.properties||{})).map(f=>{
      const p=f.properties||{},coords=f.geometry?.coordinates;
-     return {name:p.name||p.address_line1||'',lat:Number(p.lat??coords?.[1]),lng:Number(p.lon??coords?.[0]),kind:(p.categories||[]).find(x=>x!=='building')||'Point of interest',categories:p.categories||[],searchCategory:match?.categories?.includes('production.winery')?'wineries':category,address:p.formatted||'',placeId:p.place_id||'',hours:p.opening_hours||p.datasource?.raw?.opening_hours||'',phone:placePhone(p),website:placeWebsite(p),description:p.description||'',wikipedia:p.wikipedia||'',wikidata:p.wikidata||'',wiki_and_media:p.wiki_and_media||null,datasource:p.datasource||null};
+     return {name:p.name||p.address_line1||'',lat:Number(p.lat??coords?.[1]),lng:Number(p.lon??coords?.[0]),kind:restaurantOnly?diningLabel(p):((p.categories||[]).find(x=>x!=='building')||'Point of interest'),categories:p.categories||[],searchCategory:match?.categories?.includes('production.winery')?'wineries':category,address:p.formatted||'',placeId:p.place_id||'',hours:p.opening_hours||p.datasource?.raw?.opening_hours||'',phone:placePhone(p),website:placeWebsite(p),description:p.description||'',wikipedia:p.wikipedia||'',wikidata:p.wikidata||'',wiki_and_media:p.wiki_and_media||null,datasource:p.datasource||null};
    }).filter(x=>x.name&&Number.isFinite(x.lat)&&Number.isFinite(x.lng)).slice(0,60);
    window.__tripSuggestions=found;
    renderDiscoveryMarkers(found);
