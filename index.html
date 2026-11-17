@@ -2,7 +2,7 @@
  const v=window.LAZY_ACRES_VACATION_VERSION;
  document.getElementById('versionFlag').textContent='v'+v;
  document.getElementById('footerVersion').textContent='v'+v;
- for(const file of ['geoapify-config.js','itinerary.js','planner.js','cloud.js']){
+ for(const file of ['geoapify-config.js','itinerary.js','ideas.js','planner.js','cloud.js']){
   await new Promise((resolve,reject)=>{
    const script=document.createElement('script');script.src='./'+file+'?v='+encodeURIComponent(v);
    script.onload=resolve;script.onerror=()=>reject(new Error('Could not load '+file));
