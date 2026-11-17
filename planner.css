@@ -117,3 +117,6 @@ header{flex-wrap:wrap}.app-version{display:inline-block;background:#f7d395;color
 /* Numbered markers from the most recent discovery search. */
 .discovery-marker-icon{background:none;border:0}
 .discovery-map-pin{display:flex;align-items:center;justify-content:center;width:26px;height:28px;border:2px solid white;border-radius:50% 50% 50% 50%;background:#344e53;color:white;font-weight:800;font-size:12px;box-shadow:0 2px 5px #0009}
+
+/* Respect conditional lodging checkout field even though field labels use flex display. */
+#activityEndField[hidden]{display:none!important}
