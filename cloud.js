@@ -114,10 +114,21 @@ async function flush(){
 }
 async function start(){
  if(!client){status('Supabase library unavailable. Check your connection.');return;}
- const {data:{session}}=await client.auth.getSession();
+ const {data:{session},error:sessionError}=await client.auth.getSession();
+ if(sessionError){$('#cloudGate').classList.remove('hidden');status('Cannot restore sign-in: '+sessionError.message);return;}
  if(!session){$('#cloudGate').classList.remove('hidden');status('Sign in to open your shared planner');return;}
+ // A valid Supabase login is separate from authorization to this household's rows.
  const {data:member,error}=await client.from('vacation_members').select('household_id').eq('user_id',session.user.id).maybeSingle();
- if(error||member?.household_id!==HOUSE){$('#cloudGate').classList.remove('hidden');status('This email is signed in but has not yet been approved for the shared planner.');return;}
+ if(error||member?.household_id!==HOUSE){
+  $('#cloudGate').classList.remove('hidden');
+  $('#cloudAccountNotice').textContent='Signed in as '+(session.user.email||'an unidentified account')+'.';
+  $('#cloudAccountNotice').classList.remove('hidden');
+  $('#cloudSwitchAccount').classList.remove('hidden');
+  $('#cloudLogin').classList.add('hidden');
+  status(error?'Cannot verify shared-planner access: '+error.message:
+   'This signed-in account is not approved for the shared planner. Switch to your approved email.');
+  return;
+ }
  authorized=true;$('#cloudGate').classList.add('hidden');$('#cloudReady').classList.remove('hidden');
  try{
   current=await fetchAll();
@@ -127,6 +138,12 @@ async function start(){
  }catch(e){$('#cloudReady').classList.add('hidden');status('Cannot load trips from Supabase: '+e.message);}
 }
 $('#cloudLogin').addEventListener('submit',async e=>{e.preventDefault();const email=$('#cloudEmail').value.trim();status('Sending sign-in link…');const {error}=await client.auth.signInWithOtp({email,options:{emailRedirectTo:location.origin+location.pathname}});status(error?'Sign-in failed: '+error.message:'Check your email for a sign-in link, then return here.');});
+$('#cloudSwitchAccount').addEventListener('click',async()=>{
+ status('Signing out so you can use the approved email…');
+ const {error}=await client.auth.signOut();
+ if(error){status('Could not switch accounts: '+error.message);return;}
+ location.reload();
+});
 $('#cloudSignOut').addEventListener('click',async()=>{if(pending.length&&!confirm('Changes are NOT saved to Supabase. Sign out and discard them?'))return;await client.auth.signOut();location.reload()});
 retry.addEventListener('click',flush);
 window.addEventListener('online',()=>{if(pending.length)flush();else if(authorized)requestRefresh(0)});
