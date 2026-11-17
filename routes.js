@@ -202,6 +202,9 @@ function createController(config){
   $('routePicker').innerHTML=list.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+
    (x.distanceM!=null?' · '+(x.distanceM/1609.344).toFixed(0)+' mi':'')+'</option>').join('');
   $('routePicker').value=currentId;
+  $('routeComparison').innerHTML=list.length>1?'<details class="route-compare-details"><summary>Compare saved routes ('+list.length+')</summary>'+
+   list.map(x=>'<div class="route-compare-row '+(x.id===currentId?'selected':'')+'"><button type="button" class="quiet small" data-route-select="'+esc(x.id)+'">'+esc(x.name)+'</button>'+
+    '<span>'+esc(summary(x))+'</span></div>').join('')+'</details>':'';
   $('routeEmpty').classList.toggle('hidden',!!r);
   $('routeControls').classList.toggle('hidden',!r);
   $('routeDelete').disabled=!r;
@@ -245,6 +248,10 @@ function createController(config){
   $('routeDelete').addEventListener('click',removeRoute);
   $('routeUndo').addEventListener('click',undo);
   $('routePicker').addEventListener('change',e=>{currentId=e.target.value;undoStack=[];pick='';status='';render();});
+  $('routeComparison').addEventListener('click',e=>{
+   const b=e.target.closest('[data-route-select]');if(!b)return;
+   currentId=b.dataset.routeSelect;undoStack=[];pick='';status='';render();
+  });
   $('routeName').addEventListener('change',e=>{const name=e.target.value.trim().slice(0,160);if(!name)return report('Route name required.');
    update(r=>r.name=name);status='Route renamed.';render();});
   for(const role of ['start','end']){
