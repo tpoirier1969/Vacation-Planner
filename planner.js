@@ -175,63 +175,147 @@ function mapMenuContent(latlng,name='',notes='',savedId='',category='Other',sour
  return el;
 }
 let mapLookupToken=0;
+function mapPlaceDistance(latlng,place){
+ const lat1=Number(latlng.lat)*Math.PI/180,lat2=Number(place.lat)*Math.PI/180;
+ const dlat=lat2-lat1,dlng=(Number(place.lng)-Number(latlng.lng))*Math.PI/180;
+ const a=Math.sin(dlat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dlng/2)**2;
+ return Math.round(6371000*2*Math.atan2(Math.sqrt(a),Math.sqrt(Math.max(0,1-a))));
+}
+function mapPlaceFromFeature(feature){
+ const p=feature?.properties||{},coords=feature?.geometry?.coordinates;
+ const lat=Number(p.lat??coords?.[1]),lng=Number(p.lon??coords?.[0]);
+ if(!Number.isFinite(lat)||!Number.isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180)return null;
+ const name=String(p.name||'').trim();
+ if(!name)return null;
+ const categories=p.categories||[];
+ return {name,lat,lng,
+  kind:categories.find?.(x=>x!=='building')||p.category||'Point of interest',
+  categories,address:p.formatted||'',placeId:p.place_id||'',hours:p.opening_hours||p.datasource?.raw?.opening_hours||'',
+  description:p.description||'',wikipedia:p.wikipedia||'',wikidata:p.wikidata||'',
+  wiki_and_media:p.wiki_and_media||null,datasource:p.datasource||null,
+  website:placeWebsite(p),phone:placePhone(p),
+  category:detectedCategory(categories,name)};
+}
 async function showMapPlaceMenu(latlng,name='',notes=''){
  if(!map)return;
+ const token=++mapLookupToken;
  const popup=L.popup().setLatLng(latlng).setContent(mapMenuContent(latlng,name,notes)).openOn(map);
  if(name)return;
  const key=window.LAZY_ACRES_GEOAPIFY_KEY;
- if(!key||key==='PASTE_YOUR_GEOAPIFY_BROWSER_KEY_HERE')return;
- const token=++mapLookupToken,controller=new AbortController(),timer=setTimeout(()=>controller.abort(),6500);
- const loading=document.createElement('div');loading.textContent='Identifying nearby places…';
- const fallback=mapMenuContent(latlng);
- loading.append(fallback);popup.setContent(loading);
+ const alive=()=>token===mapLookupToken&&map?.hasLayer(popup);
+ function showManual(message){
+  if(!alive())return;
+  const box=document.createElement('div'),text=document.createElement('p'),button=document.createElement('button');
+  text.textContent=message;
+  button.type='button';button.className='secondary small';
+  button.textContent='Save this exact point manually';
+  button.onclick=()=>popup.setContent(mapMenuContent(latlng));
+  box.append(text,button);popup.setContent(box);
+ }
+ if(!key||key==='PASTE_YOUR_GEOAPIFY_BROWSER_KEY_HERE'){
+  showManual('Place-name lookup is not configured.');return;
+ }
+ const loading=document.createElement('div');
+ loading.textContent='Identifying this place…';
+ popup.setContent(loading);
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),9000);
+ async function request(url){
+  const response=await fetch(url,{signal:controller.signal});
+  if(!response.ok)throw Error('HTTP '+response.status);
+  const data=await response.json();
+  if(!Array.isArray(data.features))throw Error('Invalid location search result');
+  return data.features;
+ }
+ function select(place){
+  if(!alive())return;
+  const view=makeDiscoveryPopup(place);
+  popup.setLatLng({lat:place.lat,lng:place.lng}).setContent(view.content);
+  void view.load();
+ }
  try{
-  const params=new URLSearchParams({
-   categories:'accommodation,catering,commercial,tourism,entertainment,leisure,production.winery',
-   filter:'circle:'+latlng.lng.toFixed(6)+','+latlng.lat.toFixed(6)+',90',
-   bias:'proximity:'+latlng.lng.toFixed(6)+','+latlng.lat.toFixed(6),
-   limit:'12',apiKey:key
+  let matches=[],placeError=null;
+  const nearby=new URLSearchParams({
+   categories:'accommodation,catering,commercial,tourism,entertainment,leisure,natural,sport,production.winery',
+   filter:'circle:'+Number(latlng.lng).toFixed(6)+','+Number(latlng.lat).toFixed(6)+',220',
+   bias:'proximity:'+Number(latlng.lng).toFixed(6)+','+Number(latlng.lat).toFixed(6),
+   limit:'30',apiKey:key
   });
-  const res=await fetch('https://api.geoapify.com/v2/places?'+params,{signal:controller.signal});
-  if(!res.ok)throw Error('Nearby place lookup failed');
-  const json=await res.json();
-  if(token!==mapLookupToken||!map?.hasLayer(popup))return;
-  const places=(json.features||[]).map(f=>{
-   const p=f.properties||{},coords=f.geometry?.coordinates;
-   return {
-    name:p.name||'',lat:Number(p.lat??coords?.[1]),lng:Number(p.lon??coords?.[0]),
-    kind:(p.categories||[]).find(x=>x!=='building')||'Point of interest',
-    categories:p.categories||[],address:p.formatted||'',placeId:p.place_id||'',
-    hours:p.opening_hours||p.datasource?.raw?.opening_hours||'',
-    description:p.description||'',wikipedia:p.wikipedia||'',wikidata:p.wikidata||'',
-    wiki_and_media:p.wiki_and_media||null,datasource:p.datasource||null,website:placeWebsite(p),phone:placePhone(p),
-    category:detectedCategory(p.categories||[],p.name||'')
-   };
-  }).filter(x=>x.name&&Number.isFinite(x.lat)&&Number.isFinite(x.lng)).slice(0,7);
-  function selectDetected(place){
-   const view=makeDiscoveryPopup(place);
-   popup.setLatLng({lat:place.lat,lng:place.lng}).setContent(view.content);
-   void view.load();
+  try{
+   matches=(await request('https://api.geoapify.com/v2/places?'+nearby)).map(mapPlaceFromFeature).filter(Boolean);
+  }catch(e){placeError=e;}
+  if(!alive())return;
+  // Nearest results appear first, and duplicate entries are suppressed.
+  matches.sort((a,b)=>mapPlaceDistance(latlng,a)-mapPlaceDistance(latlng,b));
+  const seen=new Set();
+  matches=matches.filter(p=>{
+   const identity=p.placeId||p.name.toLowerCase()+':'+p.lat.toFixed(5)+':'+p.lng.toFixed(5);
+   if(seen.has(identity))return false;seen.add(identity);return true;
+  }).slice(0,10);
+  if(matches.length===1&&mapPlaceDistance(latlng,matches[0])<=90){
+   select(matches[0]);return;
   }
-  if(!places.length){popup.setContent(mapMenuContent(latlng));return;}
-  if(places.length===1){selectDetected(places[0]);return;}
+  if(!matches.length){
+   // Some labels on the basemap are addresses or unclassified OSM amenities,
+   // not Geoapify Places categories. Reverse geocode as a deliberate fallback.
+   for(const type of ['amenity','']){
+    try{
+     const params=new URLSearchParams({
+      lat:Number(latlng.lat).toFixed(6),lon:Number(latlng.lng).toFixed(6),
+      limit:'3',apiKey:key
+     });
+     if(type)params.set('type',type);
+     const results=await request('https://api.geoapify.com/v1/geocode/reverse?'+params);
+     if(!alive())return;
+     const accepted=results.map(f=>{
+      const p=f.properties||{};
+      const distance=Number(p.distance);
+      if(Number.isFinite(distance)&&distance>120)return null;
+      const isNamed=typeof p.name==='string'&&p.name.trim();
+      const address=(p.result_type==='amenity'||p.result_type==='building'||p.result_type==='street')?
+       String(p.address_line1||'').trim():'';
+      const name=String(isNamed||address||'').trim();
+      if(!name)return null;
+      return {name,lat:Number(latlng.lat),lng:Number(latlng.lng),kind:p.result_type||'Location',
+       categories:[p.category].filter(Boolean),address:p.formatted||'',placeId:p.place_id||'',
+       datasource:p.datasource||null,sourceLabel:isNamed?'Nearby named place':'Nearby address',
+       category:detectedCategory([p.category].filter(Boolean),name)};
+     }).filter(Boolean);
+     if(accepted.length){matches=accepted.slice(0,5);break;}
+    }catch{/* Try another reverse-geocoding level or offer manual save. */}
+   }
+  }
+  if(!alive())return;
+  if(!matches.length){
+   showManual(placeError?
+    'No place name could be retrieved here. You can still save the exact point.':
+    'No named place or street address found at this point.');
+   return;
+  }
+  if(matches.length===1&&mapPlaceDistance(latlng,matches[0])<=90){
+   select(matches[0]);return;
+  }
   const box=document.createElement('div'),heading=document.createElement('strong');
   heading.textContent='Which place did you mean?';box.append(heading);
-  for(const place of places){
-   const row=document.createElement('button');row.type='button';row.className='quiet small';
-   row.style.display='block';row.style.marginTop='6px';row.style.textAlign='left';
-   row.textContent=place.name+' · '+place.category;
-   row.title=place.address;
-   row.onclick=()=>selectDetected(place);
-   box.append(row);
+  for(const place of matches){
+   const button=document.createElement('button');
+   button.type='button';button.className='quiet small map-place-choice';
+   button.style.display='block';button.style.marginTop='6px';button.style.textAlign='left';
+   const distance=mapPlaceDistance(latlng,place);
+   button.textContent=place.name+(place.sourceLabel?' · '+place.sourceLabel:' · '+distance+' m away');
+   button.title=place.address||place.kind;
+   button.onclick=()=>select(place);
+   box.append(button);
   }
-  const manual=document.createElement('button');manual.type='button';manual.className='secondary small';
-  manual.style.marginTop='8px';manual.textContent='Use exact clicked location';
-  manual.onclick=()=>popup.setContent(mapMenuContent(latlng));box.append(manual);
-  popup.setContent(box);
- }catch(error){if(token===mapLookupToken&&map?.hasLayer(popup))popup.setContent(mapMenuContent(latlng));}
- finally{clearTimeout(timer);}
+  const manual=document.createElement('button');
+  manual.type='button';manual.className='secondary small';
+  manual.style.marginTop='8px';manual.textContent='Save exact clicked point instead';
+  manual.onclick=()=>popup.setContent(mapMenuContent(latlng));
+  box.append(manual);popup.setContent(box);
+ }catch{
+  showManual('Place identification timed out or failed. You can still save this exact point.');
+ }finally{clearTimeout(timer);}
 }
+
 const placeDetailCache=new Map();
 function safeExternalURL(value){
  try{const url=new URL(value);return url.protocol==='https:'||url.protocol==='http:'?url.href:null;}catch{return null;}
