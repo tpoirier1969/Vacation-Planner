@@ -225,16 +225,21 @@ async function getDiscoveryPlaceDetails(place){
  if(!place.placeId)return {};
  if(placeDetailCache.has(place.placeId))return placeDetailCache.get(place.placeId);
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),9000);
- try{
+ // Cache the in-flight request as well, so scroll enrichment and the details
+ // button never double-charge Geoapify for the same place.
+ const request=(async()=>{
   const params=new URLSearchParams({id:place.placeId,features:'details',apiKey:window.LAZY_ACRES_GEOAPIFY_KEY});
   const response=await fetch('https://api.geoapify.com/v2/place-details?'+params.toString(),{signal:controller.signal});
   if(!response.ok)throw Error('Geoapify place details returned HTTP '+response.status);
   const data=await response.json();
-  const details=(data.features||[]).find(f=>f.properties?.feature_type==='details')?.properties||(data.features||[]).find(f=>f.properties)?.properties||{};
-  if(placeDetailCache.size>=100)placeDetailCache.delete(placeDetailCache.keys().next().value);
-  placeDetailCache.set(place.placeId,details);
-  return details;
- }finally{clearTimeout(timer);}
+  return (data.features||[]).find(f=>f.properties?.feature_type==='details')?.properties||
+   (data.features||[]).find(f=>f.properties)?.properties||{};
+ })();
+ if(placeDetailCache.size>=100)placeDetailCache.delete(placeDetailCache.keys().next().value);
+ placeDetailCache.set(place.placeId,request);
+ try{const details=await request;placeDetailCache.set(place.placeId,details);return details;}
+ catch(e){placeDetailCache.delete(place.placeId);throw e;}
+ finally{clearTimeout(timer);}
 }
 function appendContactInfo(host,data){
  const phone=placePhone(data),website=placeWebsite(data);
@@ -245,6 +250,63 @@ function appendContactInfo(host,data){
  if(website){
   const row=document.createElement('p'),link=document.createElement('a');link.href=website;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Website';row.append(link);host.append(row);
  }
+}
+// Expand details only for cards approaching the viewport. This keeps the free
+// Geoapify allowance usable without sending 60 Place Details calls at once.
+let discoveryObserver=null;
+const wikiSummaryCache=new Map();
+async function discoveryWiki(data){
+ const target=Discovery.wikiTarget(data);
+ if(!target)return null;
+ if(!wikiSummaryCache.has(target.api)){
+  if(wikiSummaryCache.size>=100)wikiSummaryCache.delete(wikiSummaryCache.keys().next().value);
+  wikiSummaryCache.set(target.api,Discovery.wikipediaSummary(data));
+ }
+ return wikiSummaryCache.get(target.api);
+}
+async function enrichDiscoveryCard(place,index){
+ const container=$('#poi-card-'+index),summary=$('#poi-description-'+index),hours=$('#poi-hours-'+index);
+ if(!container||!summary||window.__tripSuggestions?.[index]!==place)return;
+ let details={};
+ try{details=await getDiscoveryPlaceDetails(place);}catch{}
+ if(window.__tripSuggestions?.[index]!==place)return;
+ const merged=Discovery.combined(place,details);
+ let text=merged.description,wiki=null;
+ if(!text){
+  wiki=await discoveryWiki(details);
+  if(!wiki)wiki=await discoveryWiki(place);
+  if(wiki)text=wiki.text;
+ }
+ if(window.__tripSuggestions?.[index]!==place)return;
+ summary.textContent=text||'No description available from open sources.';
+ if(wiki){
+  const link=document.createElement('a');link.href=wiki.url;link.target='_blank';
+  link.rel='noopener noreferrer';link.textContent=' · Wikipedia';
+  summary.append(link);
+ }
+ hours.textContent=merged.hours?'Hours: '+Discovery.hoursText(merged.hours):'Hours not listed — check before visiting';
+ const contact=$('#poi-contact-'+index);
+ if(contact){
+  contact.replaceChildren();
+  appendContactInfo(contact,details);
+ }
+}
+function observeDiscoveryCards(){
+ discoveryObserver?.disconnect();
+ const found=window.__tripSuggestions||[];
+ if(typeof IntersectionObserver==='undefined'){
+  found.slice(0,8).forEach((place,index)=>{void enrichDiscoveryCard(place,index);});
+  return;
+ }
+ discoveryObserver=new IntersectionObserver(entries=>{
+  for(const item of entries){
+   if(!item.isIntersecting)continue;
+   discoveryObserver.unobserve(item.target);
+   const index=Number(item.target.dataset.discoveryIndex),place=window.__tripSuggestions?.[index];
+   if(place)void enrichDiscoveryCard(place,index);
+  }
+ },{root:null,rootMargin:'140px 0px',threshold:0.01});
+ $('#suggestions').querySelectorAll('[data-discovery-index]').forEach(card=>discoveryObserver.observe(card));
 }
 function makeDiscoveryPopup(place){
  const wrap=document.createElement('div');wrap.className='discovery-info';
