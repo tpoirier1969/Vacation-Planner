@@ -1,12 +1,12 @@
 window.startVacationPlanner=(initialState,cloudSave)=>{'use strict';
 const PACKING_CATEGORIES=[{"key":"trip-clothing","label":"Clothing"},{"key":"trip-tents","label":"Tent(s)"},{"key":"trip-fishing-gear","label":"Fishing Gear"},{"key":"trip-boat-stuff","label":"Boat Stuff"},{"key":"trip-cooking","label":"Cooking"},{"key":"trip-food","label":"Food"},{"key":"trip-toiletries","label":"Toiletries"},{"key":"trip-bedding","label":"Bedding / Sleeping"},{"key":"trip-first-aid","label":"First Aid / Medicine"},{"key":"trip-tools","label":"Tools / Repair"},{"key":"trip-electronics","label":"Electronics / Charging"},{"key":"trip-paperwork","label":"Paperwork / Licenses"},{"key":"trip-dog-stuff","label":"Dog Stuff"},{"key":"trip-misc","label":"Misc"}];
-const Itinerary=window.VacationItinerary,Ideas=window.VacationIdeas;
-if(!Itinerary||!Ideas)throw Error('Trip planning rules failed to load.');
+const Itinerary=window.VacationItinerary,Ideas=window.VacationIdeas,Discovery=window.VacationDiscovery;
+if(!Itinerary||!Ideas||!Discovery)throw Error('Trip planning and discovery modules failed to load.');
 const SESSION='lazy-acres-active-trip',TABS=['explore','places','itinerary','notes','packing'];const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c])),uid=()=>crypto?.randomUUID?.()||Date.now()+'-'+Math.random().toString(36).slice(2);
-let state=initialState;
+let state=initialState,ideaFilter='all';
 let active=sessionStorage.getItem(SESSION),tab='explore',map,markers,discoveryMarkers,preview,selectedPoint,placeDestination='places',searchToken=0,addingPlace=false,expandedMap=false,tileLayer,tileErrors=0,baseLayers=null,mapStyle=localStorage.getItem('lazy-acres-map-style')==='satellite'?'satellite':'street',pendingActivityLocation=null;const trip=()=>state.trips.find(t=>t.id===active),persist=()=>{cloudSave(state);render()},formatDate=s=>s?new Date(s+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):'Dates flexible',forTrip=(key)=>state[key].filter(x=>x.tripId===active),geo=x=>x.lat!=null&&x.lng!=null&&Number.isFinite(Number(x.lat))&&Number.isFinite(Number(x.lng));
-function showTrip(id){if(!state.trips.some(t=>t.id===id))return;discoveryMarkers?.clearLayers();window.__tripSuggestions=[];addingPlace=false;expandedMap=false;syncMapMode();syncExpanded();active=id;sessionStorage.setItem(SESSION,id);tab='explore';render();const t=trip();if(t.lat!=null&&t.lng!=null){map?.setView([t.lat,t.lng],10)}else if(t.destination){searchLocation(t.destination,true)}}
-function exitTrip(){discoveryMarkers?.clearLayers();window.__tripSuggestions=[];active=null;addingPlace=false;expandedMap=false;syncMapMode();syncExpanded();sessionStorage.removeItem(SESSION);render()}
+function showTrip(id){if(!state.trips.some(t=>t.id===id))return;ideaFilter='all';discoveryMarkers?.clearLayers();window.__tripSuggestions=[];addingPlace=false;expandedMap=false;syncMapMode();syncExpanded();active=id;sessionStorage.setItem(SESSION,id);tab='explore';render();const t=trip();if(t.lat!=null&&t.lng!=null){map?.setView([t.lat,t.lng],10)}else if(t.destination){searchLocation(t.destination,true)}}
+function exitTrip(){ideaFilter='all';discoveryMarkers?.clearLayers();window.__tripSuggestions=[];active=null;addingPlace=false;expandedMap=false;syncMapMode();syncExpanded();sessionStorage.removeItem(SESSION);render()}
 function editAndRemove(kind,x){
  return '<span class="entry-actions"><button class="quiet small" data-edit="'+kind+':'+esc(x.id)+'">Edit</button><button class="quiet small" data-remove="'+kind+':'+esc(x.id)+'">Remove</button></span>';
 }
@@ -23,8 +23,16 @@ TABS.forEach(n=>{$('#'+n).classList.toggle('hidden',n!==tab);document.querySelec
 // entry is retained for its source/map metadata but is not listed as pending.
 const plannedIdeaIds=new Set(forTrip('activities').map(x=>x.placeId).filter(Boolean));
 const savedPlaces=forTrip('places').filter(x=>!plannedIdeaIds.has(x.id));
-$('#placeList').innerHTML=savedPlaces.length?PLACE_CATEGORIES.map(category=>{
- const items=savedPlaces.filter(x=>normalizedCategory(x.category)===category);
+const categoriesWithIdeas=PLACE_CATEGORIES.filter(c=>savedPlaces.some(x=>normalizedCategory(x.category)===c));
+if(ideaFilter!=='all'&&!categoriesWithIdeas.includes(ideaFilter))ideaFilter='all';
+const filteredIdeas=ideaFilter==='all'?savedPlaces:savedPlaces.filter(x=>normalizedCategory(x.category)===ideaFilter);
+$('#ideaCategoryFilter').innerHTML='<option value="all">All categories ('+savedPlaces.length+')</option>'+
+ categoriesWithIdeas.map(c=>'<option value="'+esc(c)+'" '+(ideaFilter===c?'selected':'')+'>'+esc(c)+' ('+savedPlaces.filter(x=>normalizedCategory(x.category)===c).length+')</option>').join('');
+$('#ideaCategoryFilter').value=ideaFilter;
+$('#ideaCategoryCount').textContent=ideaFilter==='all'?savedPlaces.length+' ideas':filteredIdeas.length+' of '+savedPlaces.length+' ideas';
+$('#placeList').innerHTML=filteredIdeas.length?PLACE_CATEGORIES.map(category=>{
+ if(ideaFilter!=='all'&&category!==ideaFilter)return '';
+ const items=filteredIdeas.filter(x=>normalizedCategory(x.category)===category);
  if(!items.length)return '';
  return '<details class="list-category" data-category="'+esc(category)+'" '+(collapsedPlaceCategories.has(category)?'':'open')+'><summary>'+esc(category)+' <span class="count">'+items.length+'</span></summary><div class="category-body">'+items.map(x=>
   '<div class="day"><div class="row entry-head"><strong>'+esc(x.name)+'</strong>'+editAndRemove('places',x)+'</div>'+(x.location?'<div class="muted small-details">'+esc(x.location)+'</div>':'')+ideaTiming(x)+(x.notes?'<p>'+esc(x.notes)+'</p>':'')+'<div class="row wrap">'+(geo(x)?'<button class="quiet small" data-locate="'+esc(x.id)+'">Show on map</button>':'')+'<button class="secondary small" data-plan="'+esc(x.id)+'">Choose for itinerary</button></div></div>'
@@ -395,6 +403,7 @@ function planPlace(id){
  fillActivity({name:x.name,category:x.category,notes:x.notes,placeId:x.id,lat:x.lat??null,lng:x.lng??null,geoapifyId:x.geoapifyId||'',hours:x.hours||'',date:x.date||'',endDate:x.endDate||'',time:x.time||'',endTime:x.endTime||'',fixedDate:!!x.fixedDate});
 }
 function form(sel,handler){$(sel).addEventListener('submit',e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.target));if(handler(d)!==false){e.target.reset();persist()}})}
+$('#ideaCategoryFilter').addEventListener('change',e=>{ideaFilter=e.target.value;render();});
 $('#newTrip').onclick=()=>$('#tripDialog').showModal();$('#cancelTrip').onclick=()=>$('#tripDialog').close();$('#exitTrip').onclick=exitTrip;$('#cancelPlace').onclick=()=>$('#placeDialog').close();$('#tabs').onclick=e=>{const b=e.target.closest('[data-tab]');if(b)setTab(b.dataset.tab)};$('#searchButton').onclick=()=>searchLocation($('#searchText').value);$('#searchText').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();searchLocation(e.target.value)}};$('#discover').onclick=discover;$('#discoverText').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();if(!$('#discover').disabled)discover();}});$('#tripCenter').onclick=()=>{const t=trip();if(t?.lat!=null&&t?.lng!=null)map?.setView([t.lat,t.lng],10);else if(t?.destination)searchLocation(t.destination,true)};
 form('#tripForm',d=>{if(d.start&&d.end&&d.end<d.start){alert('End date must be on or after start date.');return false}const t={id:uid(),...d};state.trips.push(t);$('#tripDialog').close();setTimeout(()=>showTrip(t.id),0)});
 form('#placeForm',d=>{
