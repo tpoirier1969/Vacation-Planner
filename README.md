@@ -8,8 +8,8 @@ A shared, trip-focused vacation workspace for Tod and Donna. Hosted as a static 
 
 - Create and reopen trips, with a persistent trip workspace until **Exit trip**.
 - Explore a Leaflet/OpenStreetMap map with a USGS aerial-imagery toggle, map click/right-click to save places, and colored category markers.
-- Search locations through Nominatim and discover nearby businesses/points of interest through Geoapify within the visible map bounds, with a category filter and text search.
-- **Ideas** are things under consideration (places, events, experiences, activities, etc.), grouped by category, editable, and not required to have map coordinates. An Idea may retain a possible date, local time, and fixed-event constraint.
+- Search locations through Nominatim and discover nearby businesses/points of interest through Geoapify within the visible map bounds, with a category filter and text search. Nearby listings display available short descriptions and business hours, with Geoapify Place Details fetched only as cards enter view; verified OpenStreetMap Wikipedia tags can provide an attributed Wikipedia summary. Each listing has a separate Google Maps search link for customer ratings/reviews; the app does not invent or republish customer star scores.
+- **Ideas** are things under consideration (places, events, experiences, activities, etc.), grouped by category with a selectable category filter and counts, editable, and not required to have map coordinates. An Idea may retain a possible date, local time, and fixed-event constraint.
 - **Itinerary** contains decided activities, with an unscheduled group for plans without a date. Choosing an Idea for the Itinerary hides it from consideration while preserving its map/source details; moving it back restores the Idea. Directly adding an itinerary item does not create an unwanted Idea.
 - Itinerary entries support local start/end times, must-do priority, fixed dates, lodging checkout, booking status, confirmation number, and booking link.
 - Edit research notes and manage/edit a 14-category packing checklist.
@@ -27,13 +27,13 @@ The independent household Shopping & Packing app remains separate. Trip packing 
 
 The repository maintains one `last-working-copy` branch as a rollback snapshot, updated after owner-accepted live releases. Do not accumulate backup branches or duplicate hosted apps.
 
-No build or package install is required. The entrypoint is `index.html`; `version.js` is the only canonical release-version value. `itinerary.js` and `ideas.js` own domain-level timing, validation, and consideration rules. The entrypoint uses that value to version CSS/JS resource URLs and display the version. GitHub Pages deploys from `main`/root.
+No build or package install is required. The entrypoint is `index.html`; `version.js` is the only canonical release-version value. `itinerary.js` and `ideas.js` own domain-level timing, validation, and consideration rules; `discovery-details.js` owns source-backed descriptions, Wikipedia links, opening-hours formatting, and external review-search URLs. The entrypoint uses that value to version CSS/JS resource URLs and display the version. GitHub Pages deploys from `main`/root.
 
 Dependencies: pinned Leaflet 1.9.4, pinned Supabase JS 2.97.0, Geoapify free-tier API. Map, place search, and discovery require internet access and can be rate-limited.
 
 ## Verification
 
-There is no on-repository automated test suite yet. The v0.6.15 and v0.6.16 development passes included mock-client tests for saving, remote refresh, offline retry, existing-record editing, conflict detection, grouped lists, Ideas-to-Itinerary decisions, timing constraints, and booking-information retention. A live authenticated two-browser acceptance test remains required: add/edit records on both accounts, confirm remote appearance and **Saved to Supabase**, reload, inspect the vacation tables, and verify mobile layouts and Donna's first verified sign-in.
+There is no on-repository automated test suite yet. The v0.6.17 work was checked with mocked source data for category filtering, hours formatting, description and exact Wikipedia attribution, no fabricated review scores, and nearby-result card rendering. The v0.6.15 and v0.6.16 development passes included mock-client tests for saving, remote refresh, offline retry, existing-record editing, conflict detection, grouped lists, Ideas-to-Itinerary decisions, timing constraints, and booking-information retention. A live authenticated two-browser acceptance test remains required: add/edit records on both accounts, confirm remote appearance and **Saved to Supabase**, reload, inspect the vacation tables, and verify mobile layouts and Donna's first verified sign-in.
 
 ## Project rules
 
