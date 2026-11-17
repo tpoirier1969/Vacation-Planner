@@ -75,6 +75,7 @@ async function showMapPlaceMenu(latlng,name='',notes=''){
    return {name:p.name||'',lat:Number(p.lat??coords?.[1]),lng:Number(p.lon??coords?.[0]),address:p.formatted||'',category:detectedCategory(p.categories||[])};
   }).filter(x=>x.name&&Number.isFinite(x.lat)&&Number.isFinite(x.lng)).slice(0,7);
   if(!places.length){popup.setContent(mapMenuContent(latlng));return;}
+  if(places.length===1){const place=places[0];popup.setContent(mapMenuContent({lat:place.lat,lng:place.lng},place.name,place.address,'',place.category));return;}
   const box=document.createElement('div'),heading=document.createElement('strong');
   heading.textContent='Which place did you mean?';box.append(heading);
   for(const place of places){
