@@ -105,6 +105,7 @@ const PLACE_CATEGORIES=['Lodging','Restaurants','Wineries','Shopping','Hiking','
 const collapsedPlaceCategories=new Set();
 const FLAG_COLORS={Lodging:'#845ec2',Restaurants:'#d65a44',Wineries:'#8e396f',Shopping:'#ca8422',Hiking:'#307d4d',Boating:'#187a9b',Fishing:'#2675c9',Events:'#d13f79',Attractions:'#4d8f83',Activities:'#637a94','Scenic Drives':'#a16f44',Other:'#717885'};
 const visibleCategories=new Set(PLACE_CATEGORIES);
+const mapLayerVisible={ideas:true,itinerary:true,routes:true};
 const normalizedCategory=x=>PLACE_CATEGORIES.includes(x)?x:'Other';
 function flagIcon(category,state){
  const color=FLAG_COLORS[normalizedCategory(category)];
@@ -117,6 +118,7 @@ function buildMapFilters(){
  host.innerHTML=PLACE_CATEGORIES.map(c=>'<label class="map-filter"><input type="checkbox" data-map-category="'+esc(c)+'" '+(visibleCategories.has(c)?'checked':'')+'><span class="map-filter-dot" style="background:'+FLAG_COLORS[c]+'"></span>'+esc(c)+'</label>').join('');
 }
 $('#mapCategoryFilters').addEventListener('change',e=>{const input=e.target.closest('[data-map-category]');if(!input)return;if(input.checked)visibleCategories.add(input.dataset.mapCategory);else visibleCategories.delete(input.dataset.mapCategory);refreshMarkers()});
+document.querySelectorAll('[data-map-layer]').forEach(input=>input.addEventListener('change',()=>{mapLayerVisible[input.dataset.mapLayer]=input.checked;refreshMarkers();routeUI?.render();}));
 function syncActivityCategory(){const f=$('#activityForm'),c=f.elements.category.value,lodging=c==='Lodging';$('#activityDateLabel').textContent=(lodging?'Check-in date':c==='Events'?'Event date':c==='Restaurants'?'Dining date':c==='Wineries'?'Winery visit date':c==='Shopping'?'Shopping date':c==='Hiking'?'Hiking date':c==='Boating'?'Boating date':c==='Fishing'?'Fishing date':'Visit date')+(lodging?'':' (optional)');$('#activityEndField').hidden=!lodging;f.elements.endDate.required=lodging;f.elements.date.required=lodging||f.elements.fixedDate.checked;if(!lodging)f.elements.endDate.value='';$('#activityEndTimeField').hidden=lodging;if(lodging)f.elements.endTime.value='';$('#activityHoursField').hidden=lodging||c==='Hiking'||c==='Boating'||c==='Fishing';}
 $('#activityCategory').addEventListener('change',syncActivityCategory);
 $('#activityForm').elements.fixedDate.addEventListener('change',syncActivityCategory);
@@ -502,12 +504,12 @@ function refreshMarkers(){
  const plannedIds=new Set(activities.map(x=>x.placeId).filter(Boolean));
  const savedCoords=new Set();
  for(const x of places){
-   if(!geo(x))continue;
+   if(!mapLayerVisible.ideas||!geo(x))continue;
    const key=Number(x.lat).toFixed(5)+','+Number(x.lng).toFixed(5);
    savedCoords.add(key);
    const category=normalizedCategory(x.category);
    if(!visibleCategories.has(category))continue;
-   const both=plannedIds.has(x.id)||activities.some(a=>a.lat!=null&&a.lng!=null&&Math.abs(Number(a.lat)-Number(x.lat))<0.00005&&Math.abs(Number(a.lng)-Number(x.lng))<0.00005);
+   const both=mapLayerVisible.itinerary&&(plannedIds.has(x.id)||activities.some(a=>a.lat!=null&&a.lng!=null&&Math.abs(Number(a.lat)-Number(x.lat))<0.00005&&Math.abs(Number(a.lng)-Number(x.lng))<0.00005));
    const marker=L.marker([x.lat,x.lng],{icon:flagIcon(category,both?'both':'saved')}).addTo(markers);
    if(x.geoapifyId){
     const view=makeDiscoveryPopup({name:x.name,lat:x.lat,lng:x.lng,category,kind:category,
@@ -520,9 +522,9 @@ function refreshMarkers(){
    }
  }
  for(const x of activities){
-   if(!geo(x))continue;
+   if(!mapLayerVisible.itinerary||!geo(x))continue;
    const key=Number(x.lat).toFixed(5)+','+Number(x.lng).toFixed(5);
-   if((x.placeId&&places.some(p=>p.id===x.placeId&&geo(p)))||savedCoords.has(key))continue;
+   if(mapLayerVisible.ideas&&((x.placeId&&places.some(p=>p.id===x.placeId&&geo(p)))||savedCoords.has(key)))continue;
    const category=normalizedCategory(x.category);
    if(!visibleCategories.has(category))continue;
    const el=document.createElement('div'),title=document.createElement('strong');
