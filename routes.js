@@ -115,7 +115,7 @@ function createController(config){
  }
  function draw(){
   if(!layer)return;layer.clearLayers();
-  const r=selected();if(!r||r.visible===false)return;
+  const r=selected();if(!r||r.visible===false||document.getElementById('mapShowRoutes')?.checked===false)return;
   const pieces=segmentList(r),hasSegments=pieces.some(x=>x.leg?.polyline);
   if(hasSegments){
    for(const [i,s] of pieces.entries()){
