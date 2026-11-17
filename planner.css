@@ -317,11 +317,25 @@ body{
 .route-waypoint-name small{font-size:10px;font-weight:650;color:#65716d;display:block}
 .route-waypoint-actions{display:flex;gap:3px}
 .route-waypoint-actions button{padding:4px 7px;min-width:29px;min-height:28px}
-.route-leg-breakdown{margin:7px 0 9px;border:1px solid #dfc8a6;border-radius:6px;padding:2px 7px}
-.route-leg-breakdown>summary{cursor:pointer;font-weight:750;font-size:12px;padding:5px 0}
-.route-leg-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid #eadcc5;font-size:11px}
-.route-leg-row span{overflow-wrap:anywhere;flex:1}
-.route-leg-row strong{white-space:nowrap;font-size:11px;color:var(--retro-deep)}
+.route-day-controls{align-items:end;gap:12px;border-bottom:1px solid #dfcdae;padding-bottom:7px}
+.route-day-controls>.field{min-width:120px;flex:1 1 130px}
+.route-day-order{display:flex;align-items:center;flex-wrap:wrap;gap:5px}
+.route-day-order .muted{flex-basis:100%}
+.route-day-order button{min-height:34px}
+.route-leg-heading{display:grid;gap:4px;margin:12px 0 7px;padding-top:9px;border-top:1px solid #d9c6a7}
+.route-leg-heading strong{font-size:13px;color:var(--retro-deep)}
+.route-leg-heading span{font-size:11px;line-height:1.4}
+.route-leg-item{display:flex;align-items:center;gap:5px;margin:4px 0;padding:5px;border:1px solid #dfc8a6;border-radius:6px;background:#fff9eb}
+.route-leg-item.selected{border:2px solid #287c79;background:#e6f2e7;padding:4px}
+.route-leg-item.is-gap{background:#eee9de;border-style:dashed}
+.route-leg-select{border:0;background:transparent;color:#234f52;text-align:left;flex:1 1 60%;min-width:0;padding:6px 4px;display:grid;gap:3px;cursor:pointer}
+.route-leg-select:focus-visible{outline:2px solid #287c79;outline-offset:1px}
+.route-leg-select strong{font-size:12px;line-height:1.3;overflow-wrap:anywhere}
+.route-leg-select span{font-size:11px;color:#5b615b}
+.route-leg-item.is-gap .route-leg-select strong{text-decoration:line-through}
+.route-leg-item>button:last-child{flex:0 0 auto;min-height:34px;white-space:nowrap}
+#routeFromItinerary{width:100%;min-height:37px;white-space:normal;margin:4px 0 6px}
+@media(max-width:390px){.route-leg-item{flex-wrap:wrap}.route-leg-item>button:last-child{margin-left:auto}}
 
 .route-source-row{margin:8px 0;gap:5px}
 .route-source-row select{min-width:0;flex:1 1 150px;padding:6px 7px;border:1px solid #ccb997;border-radius:5px;background:#fffdfa}
