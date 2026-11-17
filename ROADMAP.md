@@ -11,6 +11,11 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 - Converting an Idea into an Itinerary item hides it from the consideration list while retaining linked geographic/source details in its Supabase row. Returning it to Ideas restores the candidate and retains scheduling constraints. Do not automatically add a second Idea when an activity is entered directly into the Itinerary.
 - Do not introduce per-device trip-data storage: Supabase remains authoritative for trips, ideas, itinerary, notes, and trip packing.
 
+## Current implementation checkpoint
+
+- **v0.6.22 committed:** Route editor now lists adjacent driving sections with disconnect/reconnect actions while keeping stops, and supports route ordering and day/outbound/return classifications. Disconnected sections are stored in existing `vacation_routes.disconnected_legs`, and per-connected-run road geometry uses existing `route_segments`. No database migration or data reset was performed. Syntax checked; live authenticated routing and iPhone interaction still require acceptance. Map clicks select the first section of a connected run, not yet the exact tapped leg when several legs share the same polyline.
+- **iPhone launcher sign-in still unresolved:** Suite standalone Home Screen context may hold a separate Supabase session from Safari, and membership must be checked using the signed-in user ID. Do not grant membership automatically or bypass RLS to mask the issue. Verify which account appears in each context before changing authorization.
+
 ## Next priorities
 
 1. Live two-account verification: Donna's email sign-in, shared household membership, Realtime refresh between two authenticated browsers, concurrent-edit behavior, save/reload, and mobile layout. Source code and mock tests are not enough.
