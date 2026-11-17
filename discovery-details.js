@@ -17,7 +17,7 @@ function description(data){
  return '';
 }
 function wikiTarget(data){
- const ref=data?.wiki_and_media?.wikipedia||data?.datasource?.raw?.wikipedia;
+ const ref=data?.wikipedia||data?.wiki_and_media?.wikipedia||data?.datasource?.raw?.wikipedia;
  const match=typeof ref==='string'?/^en:([^?#]{2,220})$/.exec(ref.trim()):null;
  if(!match)return null;
  const title=match[1].trim().replace(/\s+/g,'_');
