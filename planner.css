@@ -262,6 +262,13 @@ header #context{
 .route-picker-row{gap:5px;align-items:end}
 .route-picker-row .route-picker{flex:1 1 160px;min-width:0;margin:0}
 .route-picker-row select{width:100%}
+.route-compare-details{border-bottom:1px solid #dfcdae;margin:7px 0}
+.route-compare-details>summary{cursor:pointer;font-size:12px;color:var(--retro-deep);font-weight:800;padding:6px 0}
+.route-compare-row{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:4px 0;border-top:1px solid #ece2cf}
+.route-compare-row button{flex:1 1 55%;min-width:0;text-align:left;overflow-wrap:anywhere;padding:5px 7px}
+.route-compare-row span{font-size:11px;flex:1 0 40%;text-align:right;white-space:nowrap;color:#56645f}
+.route-compare-row.selected button{font-weight:900;background:#d5eee8}
+
 .route-picker-row button{padding:7px 8px;min-height:36px}
 #exploreRoutePanel .field{font-size:12px;margin:6px 0}
 #exploreRoutePanel .field input,#exploreRoutePanel .field select{font-size:16px;min-height:36px;padding:5px 7px;width:100%}
