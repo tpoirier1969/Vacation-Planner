@@ -62,6 +62,11 @@ function summary(r){
  const totalMins=Math.max(1,Math.round(r.durationS/60)),hours=Math.floor(totalMins/60),mins=totalMins%60;
  return (r.distanceM/1609.344).toFixed(0)+' mi · '+(hours?hours+' hr ':'')+mins+' min driving';
 }
+function routeType(r){
+ if(r?.routeKind==='day')return 'day';
+ const direction=r?.preferences?.journeyDirection;
+ return direction==='outbound'||direction==='return'?direction:'journey';
+}
 function createController(config){
  const $=id=>document.getElementById(id);
  let currentId='',tool='discover',pick='',map=null,layer=null,undoStack=[],busy=false,status='';
@@ -256,7 +261,7 @@ function createController(config){
   const p={...DEFAULT,...r.preferences};$('routeStrategy').value=p.strategy;$('routeVehicle').value=p.mode;
   for(const [id,key] of [['routeAvoidHighways','avoidHighways'],['routeAvoidTolls','avoidTolls'],['routeAvoidFerries','avoidFerries']])$(id).checked=!!p[key];
   $('routeVisible').checked=r.visible!==false;
-  $('routeKind').value=['day','outbound','return'].includes(r.routeKind)?r.routeKind:'day';
+  $('routeKind').value=routeType(r);
   $('routeMetrics').textContent=summary(r);
   $('routeWaypointList').innerHTML=(r.waypoints||[]).map((p,i)=>'<div class="route-waypoint">'+
     '<span class="route-waypoint-name">'+(i+1)+'. '+esc(p.label)+' <small>'+esc(p.kind==='stop'?'Stop':'Road point')+'</small></span>'+
@@ -302,7 +307,16 @@ function createController(config){
   $('routeUndo').addEventListener('click',undo);
   $('routeMoveUp').addEventListener('click',()=>moveRoute(-1));
   $('routeMoveDown').addEventListener('click',()=>moveRoute(1));
-  $('routeKind').addEventListener('change',e=>{if(!['day','outbound','return'].includes(e.target.value))return;update(r=>r.routeKind=e.target.value);render();});
+  $('routeKind').addEventListener('change',e=>{
+   const type=e.target.value;
+   if(!['day','journey','outbound','return'].includes(type))return;
+   update(r=>{
+    // Database permits only 'day' and 'journey'; outbound/return are journey directions.
+    r.routeKind=type==='day'?'day':'journey';
+    r.preferences={...r.preferences,journeyDirection:type==='outbound'||type==='return'?type:''};
+   });
+   render();
+  });
   $('routeSectionList').addEventListener('click',e=>{const toggle=e.target.closest('[data-section-toggle]'),row=e.target.closest('[data-section-key]');if(row)selectedSection=row.dataset.sectionKey;if(toggle)toggleSection(toggle.dataset.sectionToggle);else render();});
   $('routeSectionList').addEventListener('focusin',e=>{const row=e.target.closest('[data-section-key]');if(row)selectedSection=row.dataset.sectionKey;});
   document.addEventListener('keydown',e=>{if(tool!=='routes'||!selectedSection||!selected()||e.key!=='Delete'||e.target.closest('input,textarea,select,[contenteditable=true],button'))return;e.preventDefault();toggleSection(selectedSection);});
