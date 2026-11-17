@@ -114,10 +114,12 @@ async function flush(){
 }
 async function start(){
  if(!client){status('Supabase library unavailable. Check your connection.');return;}
- const {data:{session}}=await client.auth.getSession();
- if(!session){$('#cloudGate').classList.remove('hidden');status('Sign in to open your shared planner');return;}
- const {data:member,error}=await client.from('vacation_members').select('household_id').eq('user_id',session.user.id).maybeSingle();
- if(error||member?.household_id!==HOUSE){$('#cloudGate').classList.remove('hidden');status('This email is signed in but has not yet been approved for the shared planner.');return;}
+ // Verify the user with Supabase rather than trusting a locally cached session.
+ const {data:{user},error:authError}=await client.auth.getUser();
+ if(authError||!user){$('#cloudGate').classList.remove('hidden');status('Sign in to open your shared planner');return;}
+ const {data:member,error}=await client.from('vacation_members').select('household_id').eq('user_id',user.id).maybeSingle();
+ if(error){$('#cloudGate').classList.remove('hidden');status('Could not verify shared-planner access: '+error.message);return;}
+ if(member?.household_id!==HOUSE){$('#cloudGate').classList.remove('hidden');$('#cloudEmail').value=user.email||'';status('Signed in as '+(user.email||'an unrecognized account')+', but this account is not a member of the shared planner. Use Sign out above to switch accounts.');return;}
  authorized=true;$('#cloudGate').classList.add('hidden');$('#cloudReady').classList.remove('hidden');
  try{
   current=await fetchAll();
