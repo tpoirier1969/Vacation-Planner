@@ -111,12 +111,61 @@ async function showMapPlaceMenu(latlng,name='',notes=''){
  }catch(error){if(token===mapLookupToken&&map?.hasLayer(popup))popup.setContent(mapMenuContent(latlng));}
  finally{clearTimeout(timer);}
 }
+const placeDetailCache=new Map();
+function safeExternalURL(value){
+ try{const url=new URL(value);return url.protocol==='https:'||url.protocol==='http:'?url.href:null;}catch{return null;}
+}
+function makeDiscoveryPopup(place){
+ const wrap=document.createElement('div');wrap.className='discovery-info';
+ const heading=document.createElement('strong');heading.textContent=place.name;wrap.append(heading);
+ const subtitle=document.createElement('div');subtitle.className='muted';subtitle.textContent=place.address||place.kind;wrap.append(subtitle);
+ const info=document.createElement('div');info.className='discovery-info-body';info.textContent='Loading available place details…';wrap.append(info);
+ const actions=mapMenuContent({lat:place.lat,lng:place.lng},place.name,'Discovered via Geoapify · '+place.kind+(place.address?' · '+place.address:''),'',detectedCategory([place.kind]));
+ actions.querySelector('strong')?.remove();wrap.append(actions);
+ let requestStarted=false;
+ async function load(){
+  if(requestStarted)return;requestStarted=true;
+  if(!place.placeId){info.textContent='No additional place information available.';return;}
+  try{
+   let details=placeDetailCache.get(place.placeId);
+   if(!details){
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),9000);
+    try{
+     const params=new URLSearchParams({id:place.placeId,features:'details',apiKey:window.LAZY_ACRES_GEOAPIFY_KEY});
+     const response=await fetch('https://api.geoapify.com/v2/place-details?'+params.toString(),{signal:controller.signal});
+     if(!response.ok)throw Error('HTTP '+response.status);
+     const data=await response.json();
+     details=(data.features||[]).find(f=>f.properties)?.properties||{};
+     if(placeDetailCache.size>=100)placeDetailCache.delete(placeDetailCache.keys().next().value);
+     placeDetailCache.set(place.placeId,details);
+    }finally{clearTimeout(timer);}
+   }
+   info.replaceChildren();
+   const description=details.description||details.description_international?.en;
+   const website=safeExternalURL(details.website||details.contact?.website||details.website_other?.[0]);
+   const hours=details.opening_hours;
+   const phone=details.contact?.phone;
+   if(description){
+    const el=document.createElement('p');el.textContent=description;info.append(el);
+   }
+   if(hours){const el=document.createElement('p');el.textContent='Hours: '+hours;info.append(el);}
+   if(phone){const el=document.createElement('p');el.textContent='Phone: '+phone;info.append(el);}
+   if(website){
+    const link=document.createElement('a');link.href=website;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Official website';info.append(link);
+   }
+   if(!info.childNodes.length){info.textContent='No description, hours or website listed for this place.';}
+  }catch(error){info.textContent='Additional details unavailable. You can still save this place or add it to your itinerary.';}
+ }
+ return {content:wrap,load};
+}
 function renderDiscoveryMarkers(found){
  if(!map||!discoveryMarkers)return;
  discoveryMarkers.clearLayers();
  found.forEach((x,i)=>{
   const icon=L.divIcon({className:'discovery-marker-icon',html:'<span class="discovery-map-pin">'+(i+1)+'</span>',iconSize:[26,30],iconAnchor:[13,29],popupAnchor:[0,-28]});
-  L.marker([x.lat,x.lng],{icon}).addTo(discoveryMarkers).bindPopup(mapMenuContent({lat:x.lat,lng:x.lng},x.name,'Discovered via Geoapify · '+x.kind+(x.address?' · '+x.address:''),'',detectedCategory([x.kind])));
+  const popup=makeDiscoveryPopup(x);
+  const marker=L.marker([x.lat,x.lng],{icon}).addTo(discoveryMarkers).bindPopup(popup.content);
+  marker.on('popupopen',()=>popup.load());
  });
 }
 function refreshMarkers(){
@@ -223,7 +272,7 @@ async function discover(){
    }
    const found=features.map(f=>{
      const p=f.properties||{},coords=f.geometry?.coordinates;
-     return {name:p.name||p.address_line1||'',lat:Number(p.lat??coords?.[1]),lng:Number(p.lon??coords?.[0]),kind:(p.categories||[]).find(x=>x!=='building')||'Point of interest',address:p.formatted||''};
+     return {name:p.name||p.address_line1||'',lat:Number(p.lat??coords?.[1]),lng:Number(p.lon??coords?.[0]),kind:(p.categories||[]).find(x=>x!=='building')||'Point of interest',address:p.formatted||'',placeId:p.place_id||''};
    }).filter(x=>x.name&&Number.isFinite(x.lat)&&Number.isFinite(x.lng)).slice(0,60);
    window.__tripSuggestions=found;
    renderDiscoveryMarkers(found);
