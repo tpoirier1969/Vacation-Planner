@@ -4,7 +4,7 @@ const URL='https://wntakzfoprthwggkidyq.supabase.co',KEY='sb_publishable_gWu_EQ1
 const types={trips:'vacation_trips',places:'vacation_places',activities:'vacation_itinerary',notes:'vacation_notes',packing:'vacation_packing'};
 const blank=()=>({trips:[],places:[],activities:[],notes:[],packing:[],ideas:[]});
 const client=window.supabase?.createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true}});
-let current=blank(),pending=[],busy=false,authorized=false;
+let current=blank(),pending=[],busy=false,authorized=false,refreshing=false,refreshAgain=false,refreshTimer=0;
 const $=s=>document.querySelector(s);
 const retry=document.createElement('button');
 retry.type='button';retry.className='quiet small hidden';retry.textContent='Retry save';$('#cloudSignOut').before(retry);
@@ -31,7 +31,61 @@ function changed(next){
  current=structuredClone(next);
  if(pending.length){status('Saving to Supabase…');flush();}
 }
-async function fetchAll(){const state=blank();for(const [kind,table] of Object.entries(types)){const {data,error}=await client.from(table).select('*').eq('household_id',HOUSE);if(error)throw error;state[kind]=(data||[]).map(r=>item(kind,r));}return state;}
+async function fetchAll(){
+ const state=blank();
+ const entries=await Promise.all(Object.entries(types).map(async ([kind,table])=>{
+  const {data,error}=await client.from(table).select('*').eq('household_id',HOUSE).order('updated_at',{ascending:false});
+  if(error)throw error;
+  return [kind,(data||[]).map(r=>item(kind,r))];
+ }));
+ for(const [kind,items] of entries)state[kind]=items;
+ return state;
+}
+function equivalent(a,b){
+ return Object.keys(types).every(kind=>{
+  const stable=items=>JSON.stringify(items.slice().sort((x,y)=>String(x.id).localeCompare(String(y.id))));
+  return stable(a[kind])===stable(b[kind]);
+ });
+}
+function requestRefresh(delay=400){
+ if(!authorized)return;
+ clearTimeout(refreshTimer);
+ refreshTimer=setTimeout(()=>{void refresh();},delay);
+}
+async function refresh(){
+ if(!authorized||document.hidden)return;
+ if(refreshing||busy||pending.length){refreshAgain=true;return;}
+ refreshing=true;
+ try{
+  const remote=await fetchAll();
+  if(busy||pending.length){refreshAgain=true;return;}
+  if(!equivalent(remote,current)){
+   current=remote;
+   window.applyVacationPlannerRemoteState?.(structuredClone(remote));
+   status('Updated from Supabase');
+  }
+ }catch(e){if(!pending.length)status('Sync check failed — retrying: '+e.message);}
+ finally{
+  refreshing=false;
+  if(refreshAgain&&!busy&&!pending.length){refreshAgain=false;requestRefresh(300);}
+ }
+}
+function beginCollaboration(){
+ // Realtime signals prompt a fresh, RLS-protected snapshot. Polling also catches lost signals.
+ let channel=client.channel('vacation-household-changes');
+ for(const table of Object.values(types)){
+  channel=channel.on('postgres_changes',{event:'*',schema:'public',table},()=>requestRefresh(250));
+ }
+ channel.subscribe(result=>{
+  if(result==='SUBSCRIBED')requestRefresh(0);
+  if(result==='CHANNEL_ERROR'||result==='TIMED_OUT'){
+   if(!pending.length)status('Live connection interrupted — checking Supabase periodically');
+  }
+ });
+ setInterval(()=>{if(!document.hidden)requestRefresh(0);},15000);
+ window.addEventListener('focus',()=>requestRefresh(0));
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)requestRefresh(0);});
+}
 async function flush(){
  if(busy||!authorized||!pending.length)return;
  if(!navigator.onLine){
@@ -50,6 +104,7 @@ async function flush(){
    pending.shift();
   }
   status('Saved to Supabase');
+  requestRefresh(350);
  }catch(e){
   status('NOT SAVED to Supabase — '+e.message+'. Retry before leaving this page.');
   retry.classList.remove('hidden');
@@ -65,13 +120,14 @@ async function start(){
  try{
   current=await fetchAll();
   status('Connected to Supabase');
-  window.startVacationPlanner(current,changed);
+  window.startVacationPlanner(structuredClone(current),changed);
+  beginCollaboration();
  }catch(e){$('#cloudReady').classList.add('hidden');status('Cannot load trips from Supabase: '+e.message);}
 }
 $('#cloudLogin').addEventListener('submit',async e=>{e.preventDefault();const email=$('#cloudEmail').value.trim();status('Sending sign-in link…');const {error}=await client.auth.signInWithOtp({email,options:{emailRedirectTo:location.origin+location.pathname}});status(error?'Sign-in failed: '+error.message:'Check your email for a sign-in link, then return here.');});
 $('#cloudSignOut').addEventListener('click',async()=>{if(pending.length&&!confirm('Changes are NOT saved to Supabase. Sign out and discard them?'))return;await client.auth.signOut();location.reload()});
 retry.addEventListener('click',flush);
-window.addEventListener('online',()=>{if(pending.length)flush();else if(authorized)status('Connected to Supabase')});
+window.addEventListener('online',()=>{if(pending.length)flush();else if(authorized)requestRefresh(0)});
 window.addEventListener('beforeunload',e=>{if(pending.length){e.preventDefault();e.returnValue='Unsaved changes';}});
 start().catch(e=>status('Sign-in error: '+e.message));
 })();
