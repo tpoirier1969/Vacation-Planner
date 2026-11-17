@@ -299,8 +299,9 @@ async function discoveryOverview(place,details={}){
   categories:place.categories||details.categories,
   datasource:place.datasource||details.datasource}),source:'OpenStreetMap category'};
 }
-function addDiscoveryExplanation(host,overview){
- const paragraph=document.createElement('p');paragraph.className='discovery-description';
+function addDiscoveryExplanation(host,overview,inline=false){
+ const paragraph=inline?host:document.createElement('p');
+ paragraph.className='discovery-description';
  paragraph.textContent=overview.text;
  if(overview.url&&/^https:\/\/(en\.wikipedia\.org|www\.wikidata\.org)\/wiki\//.test(overview.url)){
   const link=document.createElement('a');link.href=overview.url;
@@ -308,7 +309,7 @@ function addDiscoveryExplanation(host,overview){
   link.textContent=' · Read at '+(overview.source||'source');
   paragraph.append(link);
  }
- host.append(paragraph);
+ if(!inline)host.append(paragraph);
 }
 async function enrichDiscoveryCard(place,index){
  const container=$('#poi-card-'+index),summary=$('#poi-description-'+index),hours=$('#poi-hours-'+index);
@@ -323,7 +324,7 @@ async function enrichDiscoveryCard(place,index){
  const overview=await discoveryOverview(place,details);
  if(window.__tripSuggestions?.[index]!==place)return;
  summary.replaceChildren();
- addDiscoveryExplanation(summary,overview);
+ addDiscoveryExplanation(summary,overview,true);
  hours.textContent=merged.hours?'Hours: '+Discovery.hoursText(merged.hours):'Hours not listed — check before visiting';
  const contact=$('#poi-contact-'+index);
  if(contact){
@@ -351,24 +352,38 @@ function observeDiscoveryCards(){
 function makeDiscoveryPopup(place){
  const wrap=document.createElement('div');wrap.className='discovery-info';
  const heading=document.createElement('strong');heading.textContent=place.name;wrap.append(heading);
- const subtitle=document.createElement('div');subtitle.className='muted';subtitle.textContent=place.address||place.kind;wrap.append(subtitle);
- const info=document.createElement('div');info.className='discovery-info-body';info.textContent='Loading available place details…';wrap.append(info);
- const actions=mapMenuContent({lat:place.lat,lng:place.lng},place.name,'','',detectedCategory(place.categories||[place.kind],place.name,place.searchCategory));
+ const subtitle=document.createElement('div');subtitle.className='muted';
+ subtitle.textContent=place.address||place.kind||'Attraction';wrap.append(subtitle);
+ const info=document.createElement('div');info.className='discovery-info-body';
+ info.textContent='Looking up the attraction…';wrap.append(info);
+ const actions=mapMenuContent({lat:place.lat,lng:place.lng},place.name,'','',
+   detectedCategory(place.categories||[place.kind],place.name,place.searchCategory),place);
  actions.querySelector('strong')?.remove();wrap.append(actions);
  let requestStarted=false;
  async function load(){
   if(requestStarted)return;requestStarted=true;
-  if(!place.placeId){info.textContent='No additional place information available.';return;}
-  try{
-   const details=await getDiscoveryPlaceDetails(place);
-   info.replaceChildren();
-   const description=Discovery.description(details)||Discovery.description(place);
-   const hours=details.opening_hours||place.hours;
-   if(description){const el=document.createElement('p');el.textContent=description;info.append(el);}
-   if(hours){const el=document.createElement('p');el.textContent='Hours: '+Discovery.hoursText(hours);info.append(el);}
-   appendContactInfo(info,details);
-   if(!info.childNodes.length){info.textContent='No description, hours or website listed for this place.';}
-  }catch(error){info.textContent='Additional details unavailable. You can still save this place or add it to your itinerary.';}
+  let details={};
+  if(place.placeId){
+   try{details=await getDiscoveryPlaceDetails(place);}catch{}
+  }
+  const overview=await discoveryOverview(place,details);
+  const merged=Discovery.combined(place,details);
+  info.replaceChildren();
+  addDiscoveryExplanation(info,overview);
+  if(merged.hours){
+   const hours=document.createElement('p');hours.className='discovery-hours';
+   hours.textContent='Hours: '+Discovery.hoursText(merged.hours);
+   info.append(hours);
+  }
+  appendContactInfo(info,Object.assign({},place,details));
+  if(merged.hours&&!place.hours)place.hours=merged.hours;
+  const url=Discovery.reviewSearchUrl(place);
+  if(url){
+   const row=document.createElement('p'),link=document.createElement('a');
+   link.href=url;link.target='_blank';link.rel='noopener noreferrer';
+   link.textContent='See ratings and reviews';
+   row.append(link);info.append(row);
+  }
  }
  return {content:wrap,load};
 }
