@@ -120,3 +120,10 @@ header{flex-wrap:wrap}.app-version{display:inline-block;background:#f7d395;color
 
 /* Respect conditional lodging checkout field even though field labels use flex display. */
 #activityEndField[hidden]{display:none!important}
+
+/* Additional selected-place information inside discovery map popups. */
+.discovery-info{min-width:190px;max-width:285px}
+.discovery-info>strong{font-size:15px;display:block;margin-bottom:3px}
+.discovery-info-body{margin:8px 0;font-size:12px;line-height:1.4}
+.discovery-info-body p{margin:5px 0}
+.discovery-info-body a{display:inline-block;margin-top:4px;font-weight:700}
