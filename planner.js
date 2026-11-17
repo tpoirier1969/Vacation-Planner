@@ -95,7 +95,8 @@ async function showMapPlaceMenu(latlng,name='',notes=''){
 function refreshMarkers(){if(!map||!markers)return;markers.clearLayers();for(const x of forTrip('places'))if(geo(x)){const marker=L.marker([x.lat,x.lng]).addTo(markers);marker.bindPopup(mapMenuContent({lat:x.lat,lng:x.lng},x.name,x.notes||'',x.id,x.category||'Other'));}}
 function openPlace(lat,lng,name,notes,destination='places',category='Other'){
  selectedPoint={lat:Number(lat),lng:Number(lng)};placeDestination=destination;
- $('#placeName').value=name||'';$('#placeNotes').value=notes||'';\n const categories=$('#placeForm').elements.category;categories.value=PLACE_CATEGORIES.includes(category)?category:'Other';
+ $('#placeName').value=name||'';$('#placeNotes').value=notes||'';
+ const categories=$('#placeForm').elements.category;categories.value=PLACE_CATEGORIES.includes(category)?category:'Other';
  $('#coordinates').value=Number(lat).toFixed(5)+', '+Number(lng).toFixed(5);
  $('#placeDialog').querySelector('h2').textContent=destination==='itinerary'?'Add to itinerary':'Save this stop';
  $('#placeForm').querySelector('button.primary').textContent=destination==='itinerary'?'Continue to itinerary':'Save to trip';
@@ -104,14 +105,17 @@ function openPlace(lat,lng,name,notes,destination='places',category='Other'){
 async function searchLocation(q,store=false){if(!q.trim())return;if(!store&&document.activeElement instanceof HTMLElement)document.activeElement.blur();$('#searchButton').disabled=true;const token=++searchToken;try{const response=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(q),{headers:{'Accept':'application/json'}});if(!response.ok)throw Error('Search service unavailable');const results=await response.json();if(token!==searchToken)return;if(!results.length){if(!store)alert('No location found. Try a more specific place name.');return}const p=results[0],lat=Number(p.lat),lng=Number(p.lon);if(store&&trip()){trip().lat=lat;trip().lng=lng;persist()}setTab('explore');setTimeout(()=>{initMap();map?.setView([lat,lng],11)},100)}catch(e){if(!store)alert('Location search failed: '+e.message)}finally{$('#searchButton').disabled=false}}
 // Geoapify Places API: category/name search constrained to the visible map.
 const DISCOVERY_CATEGORIES={
- attractions:'tourism.attraction,tourism.sights,entertainment',
- nature:'natural,tourism.sights',
- camping:'camping',
- museums:'entertainment.museum,tourism.sights',
- food:'catering.restaurant,catering.cafe',
- activities:'leisure,sport',
+ lodging:'accommodation',
+ restaurants:'catering.restaurant,catering.cafe',
  wineries:'production.winery',
- all:'tourism,entertainment,catering,commercial,leisure,natural,camping,production.winery'
+ shopping:'commercial',
+ hiking:'leisure,natural',
+ boating:'leisure',
+ fishing:'leisure,sport',
+ events:'entertainment',
+ attractions:'tourism,entertainment,natural',
+ other:'tourism,entertainment,catering,commercial,leisure,natural,accommodation,production.winery',
+ all:'tourism,entertainment,catering,commercial,leisure,natural,accommodation,production.winery'
 };
 const DISCOVERY_TERMS=[
  {pattern:/winer(y|ies)|vineyard|wine tasting/i,categories:'production.winery'},
