@@ -25,7 +25,41 @@ function refreshMarkers(){if(!map||!markers)return;markers.clearLayers();for(con
 function openPlace(lat,lng,name,notes){selectedPoint={lat:Number(lat),lng:Number(lng)};$('#placeName').value=name||'';$('#placeNotes').value=notes||'';$('#coordinates').value=Number(lat).toFixed(5)+', '+Number(lng).toFixed(5);$('#placeDialog').showModal()}
 async function searchLocation(q,store=false){if(!q.trim())return;if(!store&&document.activeElement instanceof HTMLElement)document.activeElement.blur();$('#searchButton').disabled=true;const token=++searchToken;try{const response=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(q),{headers:{'Accept':'application/json'}});if(!response.ok)throw Error('Search service unavailable');const results=await response.json();if(token!==searchToken)return;if(!results.length){if(!store)alert('No location found. Try a more specific place name.');return}const p=results[0],lat=Number(p.lat),lng=Number(p.lon);if(store&&trip()){trip().lat=lat;trip().lng=lng;persist()}setTab('explore');setTimeout(()=>{initMap();map?.setView([lat,lng],11)},100)}catch(e){if(!store)alert('Location search failed: '+e.message)}finally{$('#searchButton').disabled=false}}
 const filters={attractions:'["tourism"~"attraction|viewpoint|artwork|zoo|theme_park"]',nature:'["natural"~"peak|waterfall|beach|cave_entrance|spring|wood|cliff"]',camping:'["tourism"~"camp_site|caravan_site|wilderness_hut"]',museums:'["tourism"~"museum|gallery"]["name"]',food:'["amenity"~"restaurant|cafe"]',activities:'["leisure"~"nature_reserve|park|marina|fishing"]'};
-async function discover(){if(!map)return;const c=map.getCenter(),category=$('#category').value;$('#discover').disabled=true;$('#discoverStatus').textContent='Searching map data near '+c.lat.toFixed(2)+', '+c.lng.toFixed(2)+'…';$('#suggestions').innerHTML='';try{const query='[out:json][timeout:20];(nwr(around:18000,'+c.lat+','+c.lng+')'+filters[category]+';);out center 60;';const r=await fetch('https://overpass.kumi.systems/api/interpreter',{method:'POST',body:new URLSearchParams({data:query})});if(!r.ok)throw Error('Discovery service is busy');const j=await r.json();const found=j.elements.filter(x=>x.tags?.name&&(x.lat!=null||x.center?.lat!=null)).slice(0,35).map(x=>({name:x.tags.name,lat:x.lat??x.center.lat,lng:x.lon??x.center.lon,kind:x.tags.tourism||x.tags.amenity||x.tags.natural||x.tags.leisure||'Point of interest'}));$('#discoverStatus').textContent=found.length+' suggestions from OpenStreetMap data. These are map listings, not editorial recommendations.';$('#suggestions').innerHTML=found.length?found.map((x,i)=>'<div class="poi"><strong>'+esc(x.name)+'</strong><p>'+esc(x.kind.replaceAll('_',' '))+'</p><div class="row"><button class="quiet small" data-preview="'+i+'">Show on map</button><button class="secondary small" data-suggest="'+i+'">Save to trip</button></div></div>').join(''):'<p class="empty">No matching places found. Try a different category or map area.</p>';window.__tripSuggestions=found}catch(e){$('#discoverStatus').textContent='Suggestions unavailable: '+e.message+'. Try again later.'}finally{$('#discover').disabled=false}}
+const DISCOVERY_ENDPOINTS=['https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter'];
+async function fetchDiscovery(query){
+  let lastError;
+  for(const endpoint of DISCOVERY_ENDPOINTS){
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),12000);
+    try{
+      const response=await fetch(endpoint,{method:'POST',body:new URLSearchParams({data:query}),signal:controller.signal,headers:{'Accept':'application/json'}});
+      if(!response.ok)throw Error('HTTP '+response.status);
+      const json=await response.json();
+      if(!Array.isArray(json.elements))throw Error('Invalid map data response');
+      return json.elements;
+    }catch(error){lastError=error;}
+    finally{clearTimeout(timer);}
+  }
+  throw Error('Map-data providers are temporarily unavailable'+(lastError?.name==='AbortError'?' (request timed out)':''));
+}
+async function discover(){
+  if(!map)return;
+  const c=map.getCenter(),category=$('#category').value;
+  const button=$('#discover'),status=$('#discoverStatus'),results=$('#suggestions');
+  button.disabled=true;
+  status.textContent='Searching map data near '+c.lat.toFixed(2)+', '+c.lng.toFixed(2)+'…';
+  results.innerHTML='';
+  window.__tripSuggestions=[];
+  try{
+    const query='[out:json][timeout:15];nwr(around:8000,'+c.lat+','+c.lng+')'+filters[category]+';out center 60;';
+    const elements=await fetchDiscovery(query);
+    const found=elements.filter(x=>x.tags?.name&&(x.lat!=null||x.center?.lat!=null)).slice(0,35).map(x=>({name:x.tags.name,lat:x.lat??x.center.lat,lng:x.lon??x.center.lon,kind:x.tags.tourism||x.tags.amenity||x.tags.natural||x.tags.leisure||'Point of interest'}));
+    status.textContent=found.length+' suggestions from OpenStreetMap data (within 8 km).';
+    results.innerHTML=found.length?found.map((x,i)=>'<div class="poi"><strong>'+esc(x.name)+'</strong><p>'+esc(x.kind.replaceAll('_',' '))+'</p><div class="row"><button class="quiet small" data-preview="'+i+'">Show on map</button><button class="secondary small" data-suggest="'+i+'">Save to trip</button></div></div>').join(''):'<p class="empty">No matching places found. Try a different category or map area.</p>';
+    window.__tripSuggestions=found;
+  }catch(error){status.textContent='Nearby suggestions could not be loaded. Both map-data services failed. Please retry shortly.';}
+  finally{button.disabled=false;}
+}
 function planPlace(id){const x=state.places.find(p=>p.id===id&&p.tripId===active);if(!x)return;setTab('itinerary');$('#activityForm').elements.title.value=x.name;$('#activityForm').elements.notes.value=[x.notes,x.location,geo(x)?x.lat+', '+x.lng:''].filter(Boolean).join(' · ');$('#activityForm').elements.date.value=trip().start||'';$('#activityForm').elements.date.focus()}
 function form(sel,handler){$(sel).addEventListener('submit',e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.target));if(handler(d)!==false){e.target.reset();persist()}})}
 $('#newTrip').onclick=()=>$('#tripDialog').showModal();$('#cancelTrip').onclick=()=>$('#tripDialog').close();$('#exitTrip').onclick=exitTrip;$('#cancelPlace').onclick=()=>$('#placeDialog').close();$('#tabs').onclick=e=>{const b=e.target.closest('[data-tab]');if(b)setTab(b.dataset.tab)};$('#searchButton').onclick=()=>searchLocation($('#searchText').value);$('#searchText').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();searchLocation(e.target.value)}};$('#discover').onclick=discover;$('#tripCenter').onclick=()=>{const t=trip();if(t?.lat!=null&&t?.lng!=null)map?.setView([t.lat,t.lng],10);else if(t?.destination)searchLocation(t.destination,true)};
