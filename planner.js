@@ -362,15 +362,15 @@ function observeDiscoveryCards(){
  },{root:null,rootMargin:'140px 0px',threshold:0.01});
  $('#suggestions').querySelectorAll('[data-discovery-index]').forEach(card=>discoveryObserver.observe(card));
 }
-function makeDiscoveryPopup(place){
+function makeDiscoveryPopup(place,savedId=''){
  const wrap=document.createElement('div');wrap.className='discovery-info';
  const heading=document.createElement('strong');heading.textContent=place.name;wrap.append(heading);
  const subtitle=document.createElement('div');subtitle.className='muted';
  subtitle.textContent=place.address||place.kind||'Attraction';wrap.append(subtitle);
  const info=document.createElement('div');info.className='discovery-info-body';
  info.textContent='Looking up the attraction…';wrap.append(info);
- const actions=mapMenuContent({lat:place.lat,lng:place.lng},place.name,'','',
-   detectedCategory(place.categories||[place.kind],place.name,place.searchCategory),place);
+ const actions=mapMenuContent({lat:place.lat,lng:place.lng},place.name,place.notes||'',savedId,
+   savedId?normalizedCategory(place.category):detectedCategory(place.categories||[place.kind],place.name,place.searchCategory),place);
  actions.querySelector('strong')?.remove();wrap.append(actions);
  let requestStarted=false;
  async function load(){
@@ -383,6 +383,7 @@ function makeDiscoveryPopup(place){
   const merged=Discovery.combined(place,details);
   info.replaceChildren();
   addDiscoveryExplanation(info,overview);
+  if(place.notes){const note=document.createElement('p');note.className='discovery-personal-note';note.textContent='Your notes: '+place.notes;info.append(note);}
   if(merged.hours){
    const hours=document.createElement('p');hours.className='discovery-hours';
    hours.textContent='Hours: '+Discovery.hoursText(merged.hours);
@@ -424,7 +425,15 @@ function refreshMarkers(){
    if(!visibleCategories.has(category))continue;
    const both=plannedIds.has(x.id)||activities.some(a=>a.lat!=null&&a.lng!=null&&Math.abs(Number(a.lat)-Number(x.lat))<0.00005&&Math.abs(Number(a.lng)-Number(x.lng))<0.00005);
    const marker=L.marker([x.lat,x.lng],{icon:flagIcon(category,both?'both':'saved')}).addTo(markers);
-   marker.bindPopup(mapMenuContent({lat:x.lat,lng:x.lng},x.name,x.notes||'',x.id,category));
+   if(x.geoapifyId){
+    const view=makeDiscoveryPopup({name:x.name,lat:x.lat,lng:x.lng,category,kind:category,
+     categories:[category],placeId:x.geoapifyId,address:x.location||'',
+     hours:x.hours||'',notes:x.notes||''},x.id);
+    marker.bindPopup(view.content);
+    marker.on('popupopen',()=>{void view.load();});
+   }else{
+    marker.bindPopup(mapMenuContent({lat:x.lat,lng:x.lng},x.name,x.notes||'',x.id,category));
+   }
  }
  for(const x of activities){
    if(!geo(x))continue;
