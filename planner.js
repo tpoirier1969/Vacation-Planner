@@ -203,8 +203,8 @@ async function showMapPlaceMenu(latlng,name='',notes=''){
     kind:(p.categories||[]).find(x=>x!=='building')||'Point of interest',
     categories:p.categories||[],address:p.formatted||'',placeId:p.place_id||'',
     hours:p.opening_hours||p.datasource?.raw?.opening_hours||'',
-    description:p.description||'',wiki_and_media:p.wiki_and_media||null,
-    datasource:p.datasource||null,website:placeWebsite(p),phone:placePhone(p),
+    description:p.description||'',wikipedia:p.wikipedia||'',wikidata:p.wikidata||'',
+    wiki_and_media:p.wiki_and_media||null,datasource:p.datasource||null,website:placeWebsite(p),phone:placePhone(p),
     category:detectedCategory(p.categories||[],p.name||'')
    };
   }).filter(x=>x.name&&Number.isFinite(x.lat)&&Number.isFinite(x.lng)).slice(0,7);
@@ -516,7 +516,7 @@ async function discover(){
    }
    const found=features.map(f=>{
      const p=f.properties||{},coords=f.geometry?.coordinates;
-     return {name:p.name||p.address_line1||'',lat:Number(p.lat??coords?.[1]),lng:Number(p.lon??coords?.[0]),kind:(p.categories||[]).find(x=>x!=='building')||'Point of interest',categories:p.categories||[],searchCategory:match?.categories?.includes('production.winery')?'wineries':category,address:p.formatted||'',placeId:p.place_id||'',hours:p.opening_hours||p.datasource?.raw?.opening_hours||'',phone:placePhone(p),website:placeWebsite(p),description:p.description||'',wiki_and_media:p.wiki_and_media||null,datasource:p.datasource||null};
+     return {name:p.name||p.address_line1||'',lat:Number(p.lat??coords?.[1]),lng:Number(p.lon??coords?.[0]),kind:(p.categories||[]).find(x=>x!=='building')||'Point of interest',categories:p.categories||[],searchCategory:match?.categories?.includes('production.winery')?'wineries':category,address:p.formatted||'',placeId:p.place_id||'',hours:p.opening_hours||p.datasource?.raw?.opening_hours||'',phone:placePhone(p),website:placeWebsite(p),description:p.description||'',wikipedia:p.wikipedia||'',wikidata:p.wikidata||'',wiki_and_media:p.wiki_and_media||null,datasource:p.datasource||null};
    }).filter(x=>x.name&&Number.isFinite(x.lat)&&Number.isFinite(x.lng)).slice(0,60);
    window.__tripSuggestions=found;
    renderDiscoveryMarkers(found);
