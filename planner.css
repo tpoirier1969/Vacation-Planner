@@ -113,3 +113,8 @@ header{flex-wrap:wrap}.app-version{display:inline-block;background:#f7d395;color
 .map-pin{display:flex;align-items:center;justify-content:center;width:27px;height:29px;border-radius:7px 7px 12px 12px;background:var(--pin-color);border:2px solid #fff;box-shadow:0 2px 6px #0008;color:#fff;font-size:19px;font-weight:bold;line-height:1}
 .map-pin-itinerary{border-radius:8px 8px 4px 4px}
 .map-pin-both{outline:2px solid #263936}
+
+/* Numbered markers from the most recent discovery search. */
+.discovery-marker-icon{background:none;border:0}
+.discovery-map-pin{display:flex;align-items:center;justify-content:center;width:26px;height:28px;border:2px solid white;border-radius:50% 50% 50% 5px;transform:rotate(-45deg);background:#344e53;color:white;font-weight:800;font-size:12px;box-shadow:0 2px 5px #0009}
+.discovery-map-pin::first-letter{transform:rotate(45deg)}
