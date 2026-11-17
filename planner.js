@@ -24,7 +24,25 @@ function initMap(){if(!trip()||tab!=='explore')return;if(typeof L==='undefined')
 function refreshMarkers(){if(!map||!markers)return;markers.clearLayers();for(const x of forTrip('places'))if(geo(x)){const marker=L.marker([x.lat,x.lng]).addTo(markers);const el=document.createElement('div');const title=document.createElement('strong');title.textContent=x.name;el.append(title,document.createElement('br'));const btn=document.createElement('button');btn.textContent='Add to itinerary';btn.className='secondary small';btn.onclick=()=>planPlace(x.id);el.append(btn);marker.bindPopup(el)}}
 function openPlace(lat,lng,name,notes){selectedPoint={lat:Number(lat),lng:Number(lng)};$('#placeName').value=name||'';$('#placeNotes').value=notes||'';$('#coordinates').value=Number(lat).toFixed(5)+', '+Number(lng).toFixed(5);$('#placeDialog').showModal()}
 async function searchLocation(q,store=false){if(!q.trim())return;if(!store&&document.activeElement instanceof HTMLElement)document.activeElement.blur();$('#searchButton').disabled=true;const token=++searchToken;try{const response=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(q),{headers:{'Accept':'application/json'}});if(!response.ok)throw Error('Search service unavailable');const results=await response.json();if(token!==searchToken)return;if(!results.length){if(!store)alert('No location found. Try a more specific place name.');return}const p=results[0],lat=Number(p.lat),lng=Number(p.lon);if(store&&trip()){trip().lat=lat;trip().lng=lng;persist()}setTab('explore');setTimeout(()=>{initMap();map?.setView([lat,lng],11)},100)}catch(e){if(!store)alert('Location search failed: '+e.message)}finally{$('#searchButton').disabled=false}}
-const filters={attractions:'["tourism"~"attraction|viewpoint|artwork|zoo|theme_park"]',nature:'["natural"~"peak|waterfall|beach|cave_entrance|spring|wood|cliff"]',camping:'["tourism"~"camp_site|caravan_site|wilderness_hut"]',museums:'["tourism"~"museum|gallery"]["name"]',food:'["amenity"~"restaurant|cafe"]',activities:'["leisure"~"nature_reserve|park|marina|fishing"]'};
+const filters={attractions:'["tourism"~"attraction|viewpoint|artwork|zoo|theme_park"]',nature:'["natural"~"peak|waterfall|beach|cave_entrance|spring|wood|cliff"]',camping:'["tourism"~"camp_site|caravan_site|wilderness_hut"]',museums:'["tourism"~"museum|gallery"]["name"]',food:'["amenity"~"restaurant|cafe"]',activities:'["leisure"~"nature_reserve|park|marina|fishing"]',wineries:'["craft"="winery"]',all:'["name"]'};
+const discoveryKeywords=[
+  {pattern:/winer(y|ies)|vineyard|wine tasting/i,filter:'["craft"="winery"]'},
+  {pattern:/antique|thrift|second.hand/i,filter:'["shop"~"antiques|second_hand"]'},
+  {pattern:/waterfall|falls/i,filter:'["waterway"="waterfall"]'},
+  {pattern:/lighthouse/i,filter:'["man_made"="lighthouse"]'},
+  {pattern:/hiking|trail/i,filter:'["highway"~"path|footway"]'},
+  {pattern:/fishing|fish access/i,filter:'["leisure"="fishing"]'},
+  {pattern:/boat launch|boat ramp|boating/i,filter:'["leisure"="slipway"]'},
+  {pattern:/restaurant|cafe|coffee/i,filter:'["amenity"~"restaurant|cafe"]'},
+  {pattern:/museum|historical/i,filter:'["tourism"="museum"]'},
+  {pattern:/shopping|shops/i,filter:'["shop"]'}
+];
+function discoveryFilter(category,term){
+  const match=discoveryKeywords.find(x=>x.pattern.test(term));
+  if(match)return match.filter;
+  if(term){const safe=term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/"/g,'\\\"');return '["name"~"'+safe+'",i]';}
+  return filters[category]||filters.all;
+}
 const DISCOVERY_ENDPOINTS=['https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter'];
 async function fetchDiscovery(query){
   let lastError;
@@ -44,18 +62,26 @@ async function fetchDiscovery(query){
 }
 async function discover(){
   if(!map)return;
-  const c=map.getCenter(),category=$('#category').value;
+  const bounds=map.getBounds(),south=bounds.getSouth(),north=bounds.getNorth(),west=bounds.getWest(),east=bounds.getEast();
+  const category=$('#category').value,term=$('#discoverText').value.trim();
   const button=$('#discover'),status=$('#discoverStatus'),results=$('#suggestions');
+  // Large public Overpass bounding-box scans are costly. Never silently search a smaller area.
+  if(north-south>2||east-west>3||west < -180||east > 180){
+    status.textContent='This map view is too large for reliable discovery. Zoom in a little and search again.';
+    results.innerHTML='';
+    return;
+  }
   button.disabled=true;
-  status.textContent='Searching map data near '+c.lat.toFixed(2)+', '+c.lng.toFixed(2)+'…';
+  status.textContent='Searching visible map area…';
   results.innerHTML='';
   window.__tripSuggestions=[];
   try{
-    const query='[out:json][timeout:15];nwr(around:8000,'+c.lat+','+c.lng+')'+filters[category]+';out center 60;';
+    const bbox=[south,west,north,east].map(n=>n.toFixed(5)).join(',');
+    const query='[out:json][timeout:15];nwr'+discoveryFilter(category,term)+'('+bbox+');out center 60;';
     const elements=await fetchDiscovery(query);
-    const found=elements.filter(x=>x.tags?.name&&(x.lat!=null||x.center?.lat!=null)).slice(0,35).map(x=>({name:x.tags.name,lat:x.lat??x.center.lat,lng:x.lon??x.center.lon,kind:x.tags.tourism||x.tags.amenity||x.tags.natural||x.tags.leisure||'Point of interest'}));
-    status.textContent=found.length+' suggestions from OpenStreetMap data (within 8 km).';
-    results.innerHTML=found.length?found.map((x,i)=>'<div class="poi"><strong>'+esc(x.name)+'</strong><p>'+esc(x.kind.replaceAll('_',' '))+'</p><div class="row"><button class="quiet small" data-preview="'+i+'">Show on map</button><button class="secondary small" data-suggest="'+i+'">Save to trip</button></div></div>').join(''):'<p class="empty">No matching places found. Try a different category or map area.</p>';
+    const found=elements.filter(x=>x.tags?.name&&(x.lat!=null||x.center?.lat!=null)).slice(0,35).map(x=>({name:x.tags.name,lat:x.lat??x.center.lat,lng:x.lon??x.center.lon,kind:x.tags.tourism||x.tags.amenity||x.tags.natural||x.tags.leisure||x.tags.craft||x.tags.shop||'Point of interest'}));
+    status.textContent=found.length+' suggestions within the visible map area.';
+    results.innerHTML=found.length?found.map((x,i)=>'<div class="poi"><strong>'+esc(x.name)+'</strong><p>'+esc(x.kind.replaceAll('_',' '))+'</p><div class="row"><button class="quiet small" data-preview="'+i+'">Show on map</button><button class="secondary small" data-suggest="'+i+'">Save to trip</button></div></div>').join(''):'<p class="empty">No matching places found in this map view. Try another term or category.</p>';
     window.__tripSuggestions=found;
   }catch(error){status.textContent='Nearby suggestions could not be loaded. Both map-data services failed. Please retry shortly.';}
   finally{button.disabled=false;}
