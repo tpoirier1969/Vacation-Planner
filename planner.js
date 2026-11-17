@@ -145,10 +145,12 @@ function detectedCategory(tags=[]){
 function mapMenuContent(latlng,name='',notes='',savedId='',category='Other'){
  const el=document.createElement('div'),title=document.createElement('strong');
  title.textContent=name||'Place on map';el.append(title,document.createElement('br'));
- const actions=savedId?[['Add to itinerary',()=>planPlace(savedId)]]:[
-  ['Save idea',()=>openPlace(latlng.lat,latlng.lng,name,notes,'places',category)],
-  ['Add to itinerary',()=>openPlace(latlng.lat,latlng.lng,name,notes,'itinerary',category)]
- ];
+ const decided=!!savedId&&state.activities.some(x=>x.tripId===active&&x.placeId===savedId);
+ const actions=savedId?
+  [[decided?'View itinerary':'Choose for itinerary',()=>decided?setTab('itinerary'):planPlace(savedId)]]:[
+   ['Save idea',()=>openPlace(latlng.lat,latlng.lng,name,notes,'places',category)],
+   ['Add to itinerary',()=>openPlace(latlng.lat,latlng.lng,name,notes,'itinerary',category)]
+  ];
  for(const [label,action] of actions){
   const btn=document.createElement('button');btn.type='button';btn.className='secondary small';btn.textContent=label;
   btn.style.margin='5px 5px 0 0';btn.onclick=()=>{map?.closePopup();action()};el.append(btn);
