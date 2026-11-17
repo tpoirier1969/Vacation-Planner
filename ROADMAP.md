@@ -27,7 +27,7 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## UI and map usability — outstanding
 
-- Rework the header following the approved concept: enlarge the roadside-sign logo to occupy the left portion of the header/trip region, relocate the compact trip title, date and Edit/Exit controls to the right; maintain compact mobile responsiveness. **The visual concept was approved but has not been implemented in code.**
+- **Completed in v0.6.21:** Rebuilt the masthead to display the enlarged roadside-sign logo at left and a compact active-trip summary with destination, dates, Edit Trip, and Exit Trip at right. Moved connection status into the same masthead, removed the redundant full-width trip hero, and added responsive desktop/tablet/phone sizing. Visual acceptance on actual devices remains pending.
 - Add independent **Ideas**, **Itinerary**, and **Route** visibility controls for map overlays. These are temporary display choices; hiding items must never delete persistent records. Existing category filtering should still work alongside them.
 - Provide **Build route from Itinerary** using selected day/date range and decided mapped activities; preserve fixed-time appointment order and clearly distinguish manual itinerary order from suggested travel order, without rewriting itinerary dates.
 - v0.6.20: direct map clicks again look up named nearby places and reverse-geocode when necessary, do not offer an immediate blank-name Save button while lookup is underway, and prefill the chosen name in Save Idea. Mocked acceptance checks passed, but verify with real map clicks after deployment.
