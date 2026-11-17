@@ -13,6 +13,9 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **v0.6.24 source changes, browser acceptance outstanding:** Fixed invalid outbound/return persistence (existing database only permits route kind `day` or `journey`), added independent Ideas/Itinerary/Routes map visibility, and added importing mapped scheduled itinerary activities for a selected route start day. Verified the route type choices with a mock controller and tested date/time order, duplicate prevention, unchanged source itinerary, and one Supabase persist callback per import. Still verify in signed-in production browser; there is no claim of confirmed live iPhone operation.
+
+
 - **v0.6.22 committed:** Route editor now lists adjacent driving sections with disconnect/reconnect actions while keeping stops, and supports route ordering and day/outbound/return classifications. Disconnected sections are stored in existing `vacation_routes.disconnected_legs`, and per-connected-run road geometry uses existing `route_segments`. No database migration or data reset was performed. Syntax checked; live authenticated routing and iPhone interaction still require acceptance. Map clicks select the first section of a connected run, not yet the exact tapped leg when several legs share the same polyline.
 - **v0.6.23 authentication diagnostics committed:** The app now verifies the logged-in Supabase user instead of trusting only the cached session, and shows the exact signed-in email on membership denial; this does not grant permission or bypass RLS. Live iPhone Home Screen testing remains required.
 - **iPhone launcher sign-in still unresolved:** Suite standalone Home Screen context may hold a separate Supabase session from Safari, and membership must be checked using the signed-in user ID. Do not grant membership automatically or bypass RLS to mask the issue. Verify which account appears in each context before changing authorization.
@@ -34,8 +37,8 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 ## UI and map usability — outstanding
 
 - **Completed in v0.6.21:** Rebuilt the masthead to display the enlarged roadside-sign logo at left and a compact active-trip summary with destination, dates, Edit Trip, and Exit Trip at right. Moved connection status into the same masthead, removed the redundant full-width trip hero, and added responsive desktop/tablet/phone sizing. Visual acceptance on actual devices remains pending.
-- Add independent **Ideas**, **Itinerary**, and **Route** visibility controls for map overlays. These are temporary display choices; hiding items must never delete persistent records. Existing category filtering should still work alongside them.
-- Provide **Build route from Itinerary** using selected day/date range and decided mapped activities; preserve fixed-time appointment order and clearly distinguish manual itinerary order from suggested travel order, without rewriting itinerary dates.
+- **Implemented in v0.6.24; awaiting live QA:** Independent **Ideas**, **Itinerary**, and **Route** visibility controls for map overlays. These are temporary display choices; hiding items does not delete persistent records. Category filtering remains supported.
+- **Partially implemented in v0.6.24:** Add mapped itinerary stops for one selected route start date, sorted by time without rewriting itinerary dates. Still outstanding: selected date ranges, fixed-time conflict handling, and suggested route order versus manual itinerary order.
 - v0.6.20: direct map clicks again look up named nearby places and reverse-geocode when necessary, do not offer an immediate blank-name Save button while lookup is underway, and prefill the chosen name in Save Idea. Mocked acceptance checks passed, but verify with real map clicks after deployment.
 
 ## Route release acceptance and limitations
