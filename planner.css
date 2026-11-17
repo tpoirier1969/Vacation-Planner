@@ -279,6 +279,11 @@ header #context{
 .category-body{padding:0 2px 6px}
 .entry-head{align-items:start;gap:8px}
 .entry-head strong{flex:1;line-height:1.35}
+/* Per-Idea category correction stays visible, compact, and touch-friendly. */
+.idea-category-inline{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:var(--retro-deep);white-space:nowrap}
+.idea-category-inline select{font-size:16px;min-height:36px;max-width:165px;border:1px solid #ccb997;background:#fffdfa;border-radius:5px;padding:4px 7px;color:var(--retro-deep)}
+@media(max-width:520px){.idea-category-inline{margin-left:auto}.idea-category-inline select{max-width:min(190px,56vw)}}
+
 .entry-actions{display:inline-flex;gap:4px;flex-wrap:wrap;flex-shrink:0}
 .entry-actions button{padding:4px 7px}
 .day p{margin:4px 0 6px;white-space:pre-wrap;overflow-wrap:anywhere}
