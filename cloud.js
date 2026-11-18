@@ -120,7 +120,7 @@ async function start(){
  const {data:member,error}=await client.from('vacation_members').select('household_id').eq('user_id',user.id).maybeSingle();
  if(error){$('#cloudGate').classList.remove('hidden');status('Could not verify shared-planner access: '+error.message);return;}
  if(member?.household_id!==HOUSE){$('#cloudGate').classList.remove('hidden');$('#cloudEmail').value=user.email||'';status('Signed in as '+(user.email||'an unrecognized account')+', but this account is not a member of the shared planner. Use Sign out above to switch accounts.');return;}
- authorized=true;$('#cloudGate').classList.add('hidden');$('#cloudReady').classList.remove('hidden');
+ authorized=true;$('#cloudGate').classList.add('hidden');$('#cloudReady').classList.remove('hidden');$('#cloudSetPassword').classList.remove('hidden');
  try{
   current=await fetchAll();
   status('Connected to Supabase');
@@ -128,7 +128,56 @@ async function start(){
   beginCollaboration();
  }catch(e){$('#cloudReady').classList.add('hidden');status('Cannot load trips from Supabase: '+e.message);}
 }
-$('#cloudLogin').addEventListener('submit',async e=>{e.preventDefault();const email=$('#cloudEmail').value.trim();status('Sending sign-in link…');const {error}=await client.auth.signInWithOtp({email,options:{emailRedirectTo:location.origin+location.pathname}});status(error?'Sign-in failed: '+error.message:'Check your email for a sign-in link, then return here.');});
+let authRequestBusy=false;
+$('#cloudPasswordLogin').addEventListener('submit',async e=>{
+ e.preventDefault();
+ if(authRequestBusy)return;
+ const email=$('#cloudEmail').value.trim(),password=$('#cloudPassword').value;
+ if(!email||!password)return;
+ authRequestBusy=true;$('#cloudPasswordSubmit').disabled=true;status('Signing in…');
+ try{
+  const {error}=await client.auth.signInWithPassword({email,password});
+  if(error)throw error;
+  $('#cloudPassword').value='';
+  await start();
+ }catch(error){status('Sign-in failed: '+error.message);}
+ finally{authRequestBusy=false;$('#cloudPasswordSubmit').disabled=false;}
+});
+$('#cloudLogin').addEventListener('submit',async e=>{
+ e.preventDefault();if(authRequestBusy)return;
+ const email=$('#cloudEmail').value.trim();if(!email){status('Enter an email address above.');return;}
+ authRequestBusy=true;$('#cloudLinkSubmit').disabled=true;status('Sending sign-in link…');
+ try{
+  const {error}=await client.auth.signInWithOtp({email,options:{shouldCreateUser:false,emailRedirectTo:location.origin+location.pathname}});
+  if(error)throw error;
+  status('Check your email for the sign-in link. To use the iPhone shortcut without email, set a password after signing in through Safari.');
+ }catch(error){status('Sign-in link failed: '+error.message);}
+ finally{authRequestBusy=false;$('#cloudLinkSubmit').disabled=false;}
+});
+function closePasswordSettings(){
+ $('#cloudPasswordSettings').classList.add('hidden');
+ $('#cloudPasswordUpdate').reset();
+}
+$('#cloudSetPassword').addEventListener('click',()=>{
+ if(!authorized){status('Sign in with your approved account first.');return;}
+ $('#cloudPasswordSettings').classList.remove('hidden');
+ $('#cloudNewPassword').focus();
+});
+$('#cloudPasswordCancel').addEventListener('click',closePasswordSettings);
+$('#cloudPasswordUpdate').addEventListener('submit',async e=>{
+ e.preventDefault();if(!authorized||authRequestBusy)return;
+ const password=$('#cloudNewPassword').value,confirmation=$('#cloudConfirmPassword').value;
+ if(password.length<12){status('Password must have at least 12 characters.');return;}
+ if(password!==confirmation){status('Passwords do not match.');return;}
+ authRequestBusy=true;$('#cloudPasswordUpdateSubmit').disabled=true;status('Saving your login password…');
+ try{
+  const {error}=await client.auth.updateUser({password});
+  if(error)throw error;
+  closePasswordSettings();
+  status('Password saved. You can now sign in with this email and password from your iPhone Home Screen shortcut.');
+ }catch(error){status('Could not save password: '+error.message);}
+ finally{authRequestBusy=false;$('#cloudPasswordUpdateSubmit').disabled=false;}
+});
 $('#cloudSignOut').addEventListener('click',async()=>{if(pending.length&&!confirm('Changes are NOT saved to Supabase. Sign out and discard them?'))return;await client.auth.signOut();location.reload()});
 retry.addEventListener('click',flush);
 window.addEventListener('online',()=>{if(pending.length)flush();else if(authorized)requestRefresh(0)});
