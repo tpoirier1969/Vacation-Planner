@@ -135,9 +135,9 @@ function initializeMobileWorkspace(){
   const adapt=()=>{if(!window.matchMedia('(max-width:760px)').matches)detail.open=true;else if(!detail.dataset.mobileVisited){detail.open=false;detail.dataset.mobileVisited='1';}};
   adapt();window.addEventListener('resize',adapt);
  }
- moveOptional('#manualPlace',['label:has(input[name=location])','label:has(textarea[name=notes])','details.activity-options']);
+ moveOptional('#manualPlace',['label:has(input[name=location])','label:has(textarea[name=notes])']);
  // Lodging dates and checkout remain visible; all other itinerary options are optional.
- moveOptional('#activityForm',['#activityHoursField','label:has(textarea[name=notes])','details.activity-options']);
+ moveOptional('#activityForm',['#activityHoursField','label:has(textarea[name=notes])']);
  moveOptional('#placeForm',['label:has(textarea[name=notes])','label:has(#coordinates)']);
  document.addEventListener('click',e=>{
   if(e.target.closest('#mobileTripMenu,.trip-summary-actions,#mobileMapOptions,.map-layer-controls,.map-category-controls'))return;
