@@ -6,6 +6,8 @@ A shared, trip-focused vacation workspace for Tod and Donna. Hosted as a static 
 
 ## Current features
 
+- **Ideas & Itinerary UX (staged, not yet released):** Searching saved Ideas across names, notes, locations, categories; filtering decided itinerary plans by scheduling/booking/must-do status with totals; preserving primary date/time and priority controls in mobile add/edit forms; larger mobile buttons. Filters never alter records or Supabase schema. Reviewed in same-origin read-only preview alongside staged route editor; authenticated browser/device acceptance remains outstanding.
+
 - **v0.6.28 password minimum:** Login password setup accepts eight or more characters (rather than twelve). Existing members and household authorization are unchanged. Adding a second member requires individually registering and approving that user's Supabase account; the existing planner does not create household memberships automatically.
 
 - **v0.6.27 iPhone-friendly account login:** Approved household users can sign in with email + password, without email OTP rate limits. A user already signed in on Safari can choose **Set login password** to attach a password to their existing Supabase account, with the same UUID and membership/RLS controls. Email magic link remains an optional fallback for first-time enrollment. Sign-in is persistent in each iOS Home Screen app context. The password itself is handled only by Supabase Auth, not stored by the app; updating it is restricted to an approved authenticated household member. No database schema or trip records changed. Real iPhone sign-in requires owner acceptance.
