@@ -13,6 +13,9 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **Ideas + Itinerary mobile UX — staged for review, 2026-11-18:** Search Ideas by name, notes, location and category while retaining the existing category filter/counts. Filter decided plans by all, unscheduled, reservations needed and must-do; show totals and day-group counts. On iPhone, date/time, must-do and fixed-date choices remain visible, booking details remain directly available, optional notes/hours collapse, edit sheets expose time, booking status and flags, and action buttons get touch-friendly sizing. Filters are transient view-only state, reset on trip switch; no schema change or authoritative data mutation. Preview includes prior route-section editor work and remains read-only. Actual authenticated iPhone approval pending.
+
+
 - **v0.6.28 (2026-11-18):** Password setup minimum reduced to 8; iPhone login continues to use each member's own Supabase account. Database check found only one existing `vacation_members` record in `tod-donna-shared`. Donna must be enrolled separately as a second approved user; cannot infer her identity from the existing member record. Avoid automatic self-approval.
 
 - **v0.6.27 password login (2026-11-18):** Primary sign-in method now Supabase `signInWithPassword`, with existing approved-account membership verification. Logged-in household members can set their password through `auth.updateUser` without a new email, then authenticate in the iPhone Home Screen shortcut. Email link retained as optional fallback. Four mocked regression tests and read-only web preview verified; real iPhone Safari/Home Screen acceptance still required. This supersedes the earlier OTP proposal, avoiding free-tier mail rate limits during normal sign-in.
