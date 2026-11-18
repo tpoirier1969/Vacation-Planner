@@ -196,8 +196,8 @@ $('#activityCategory').addEventListener('change',syncActivityCategory);
 $('#activityForm').elements.fixedDate.addEventListener('change',syncActivityCategory);
 function cleanImportedNotes(notes){return String(notes||'').replace(/^Discovered via Geoapify[^\n]*$/gmi,'').replace(/^building\.[\w.]+$/gmi,'').trim();}
 async function loadItineraryHours(geoapifyId){try{const d=await getDiscoveryPlaceDetails({placeId:geoapifyId});if(pendingActivityLocation?.geoapifyId===geoapifyId&&!$('#activityHours').value)$('#activityHours').value=d.opening_hours||d.datasource?.raw?.opening_hours||'';}catch{}}
-function fillActivity({name,category='Other',notes='',lat=null,lng=null,placeId='',geoapifyId='',hours='',date='',endDate='',time='',endTime='',fixedDate=false}){
- setTab('itinerary');if(window.matchMedia('(max-width:760px)').matches){$('#activityForm').closest('.mobile-add-card')?.classList.add('is-open');$('#mobileShowActivityForm').setAttribute('aria-expanded','true');}
+function fillActivity({name,category='Other',notes='',lat=null,lng=null,placeId='',geoapifyId='',hours='',date='',time='',endTime='',fixedDate=false}){
+ itineraryView='all';$('#itineraryView').value='all';setTab('itinerary');if(window.matchMedia('(max-width:760px)').matches){$('#activityForm').closest('.mobile-add-card')?.classList.add('is-open');$('#mobileShowActivityForm').setAttribute('aria-expanded','true');}
  const f=$('#activityForm');f.reset();
  f.elements.title.value=name;
  f.elements.category.value=normalizedCategory(category);
@@ -974,6 +974,7 @@ form('#manualPlace',d=>{
  const issue=Ideas.validateDraft(d);
  if(issue){alert(issue);return false;}
  state.places.unshift({id:uid(),tripId:active,...d,category:normalizedCategory(d.category)});
+ ideaFilter='all';ideaQuery='';$('#ideaSearch').value='';collapsedPlaceCategories.delete(normalizedCategory(d.category));
  $('#manualPlace').closest('.mobile-add-card')?.classList.remove('is-open');$('#mobileShowIdeaForm').setAttribute('aria-expanded','false');
 });form('#activityForm',d=>{
  d=Itinerary.normalizeDraft(d);
@@ -985,7 +986,7 @@ form('#manualPlace',d=>{
  const saved=loc.placeId?state.places.find(p=>p.id===loc.placeId&&p.tripId===active):null;
  state.activities.push({id:uid(),tripId:active,...d,endDate:d.category==='Lodging'?d.endDate:'',
    category:normalizedCategory(d.category),placeId:saved?.id||'',lat:loc.lat??null,lng:loc.lng??null,hours:d.hours||'',notes:cleanImportedNotes(d.notes)});
- pendingActivityLocation=null;
+ pendingActivityLocation=null;itineraryView='all';$('#itineraryView').value='all';
  $('#activityForm').closest('.mobile-add-card')?.classList.remove('is-open');$('#mobileShowActivityForm').setAttribute('aria-expanded','false');
 });form('#noteForm',d=>state.notes.unshift({id:uid(),tripId:active,...d}));form('#packForm',d=>state.packing.push({id:uid(),tripId:active,title:d.item,category:PACKING_CATEGORIES.some(c=>c.key===d.category)?d.category:'trip-misc',done:false}));
 
@@ -1155,6 +1156,7 @@ function moveBackToIdeas(id){
  if(idea)Object.assign(idea,restored);
  else state.places.unshift({id:uid(),tripId:active,location:'',geoapifyId:'',...restored});
  state.activities=state.activities.filter(x=>x.id!==item.id);
+ ideaFilter='all';ideaQuery='';$('#ideaSearch').value='';collapsedPlaceCategories.delete(normalizedCategory(restored.category));
  persist();
  setTab('places');
 }
