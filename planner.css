@@ -463,7 +463,7 @@ footer{
 
 /* Mobile trip workspace: map and results share the viewport instead of the page scroll.
    Desktop, trip-picker, and other applications retain their original layout. */
-.nav-short,#mobileTripMenu,#mobileMapOptions,.mobile-sheet-handle,#mobileShowIdeaForm,#mobileShowActivityForm{display:none}
+.nav-short,#mobileTripMenu,#mobileSignOut,#mobileMapOptions,.mobile-sheet-handle,#mobileShowIdeaForm,#mobileShowActivityForm{display:none}
 .search-matches{position:relative;z-index:750;border:1px solid #c6aa82;background:#fffdf5;padding:8px;border-radius:9px;box-shadow:0 9px 28px #132f3040;max-height:55dvh;overflow-y:auto;margin-bottom:8px}
 .search-matches h3{font-size:13px;margin:0 0 7px}
 .search-match{display:flex;align-items:center;gap:7px;border-top:1px solid #e1d7c5;padding:5px 0}
@@ -511,6 +511,7 @@ footer{
    background:#fff9ed;border:1px solid #cbaa7e;border-radius:8px;box-shadow:0 6px 26px #112e3250}
  body.mobile-workspace.mobile-trip-menu-open .trip-summary-actions{display:flex}
  body.mobile-workspace .trip-summary-actions button{min-height:42px;font-size:13px}
+ body.mobile-workspace #mobileSignOut{display:block}
  body.mobile-workspace .masthead-utility{
    display:block;position:absolute;bottom:0;left:0;right:92px;min-width:0;z-index:1
  }
