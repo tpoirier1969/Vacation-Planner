@@ -180,7 +180,7 @@ function createController(config){
  function undo(){
   const r=selected(),old=undoStack.pop();if(!r||!old)return;
   for(const k of Object.keys(r))delete r[k];
-  Object.assign(r,old);status='Last edit undone.';config.persist();
+  Object.assign(r,old);status='Last edit undone.';config.persist();render();
  }
  function addExisting(){
   const r=selected(),v=$('routeSourceStop').value;if(!r||!v)return;
