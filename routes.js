@@ -4,6 +4,8 @@
 const MAX_WAYPOINTS=16,MAX_ROUTES=40;
 const DEFAULT={strategy:'balanced',mode:'drive',avoidHighways:false,avoidTolls:false,avoidFerries:false};
 const STRATEGIES=['balanced','short','less_maneuvers'],MODES=['drive','light_truck'];
+const STRATEGY_NAMES={balanced:'Balanced',short:'Shortest',less_maneuvers:'Fewer turns'};
+const ROUTE_COLORS=['#b45237','#22769c','#8c609e'];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
 const pointOK=p=>!!p&&p.lat!=null&&p.lng!=null&&p.lat!==''&&p.lng!==''&&Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lng))&&Math.abs(Number(p.lat))<=90&&Math.abs(Number(p.lng))<=180;
 function newRoute(id,tripId,name='New route'){
@@ -52,6 +54,18 @@ function parseRoute(data){
  if(p.distance==null||p.time==null||!Number.isFinite(Number(p.distance))||!Number.isFinite(Number(p.time)))throw Error('Missing route distance or duration.');
  return {polyline,distanceM:Number(p.distance),durationS:Number(p.time),legStats:(p.legs||[]).map(x=>({distanceM:Number(x.distance)||0,durationS:Number(x.time)||0}))};
 }
+// Compare actual road geometry, not just estimated distance or strategy labels.
+function sameRoad(a,b){
+ const x=decodePolyline(a),y=decodePolyline(b);
+ if(!x.length||!y.length)return false;
+ let different=0;
+ for(let i=1;i<18;i++){
+  const t=i/18,p=x[Math.round(t*(x.length-1))],q=y[Math.round(t*(y.length-1))];
+  const dx=(p[1]-q[1])*Math.cos(p[0]*Math.PI/180),dy=p[0]-q[0];
+  if(Math.hypot(dx,dy)>0.015)different++;
+ }
+ return different<3;
+}
 function windowError(route){
  if(route.startDate&&route.endDate&&route.endDate<route.startDate)return 'End day is before start day.';
  if(route.startDate&&route.endDate&&route.endDate===route.startDate&&route.startTime&&route.endTime&&route.endTime<=route.startTime)return 'End time must follow start time on the same day.';
@@ -87,6 +101,7 @@ function routeType(r){
 function createController(config){
  const $=id=>document.getElementById(id);
  let currentId='',tool='discover',pick='',map=null,layer=null,undoStack=[],busy=false,status='';
+ let dragHandle=null,dragHandleLeg=-1,dragHandleRoute='',directDrag=null;
  const routes=()=>{const t=config.getTrip();return t?(config.getRoutes()||[]).filter(r=>r.tripId===t.id).sort((a,b)=>(a.routeOrder||0)-(b.routeOrder||0)):[];};
  const routePoints=r=>[r.start,...(r.waypoints||[]),r.end];
  const sectionKey=(points,i)=>String(i===0?'start':points[i].id||'point-'+i)+'>'+String(i===points.length-2?'end':points[i+1].id||'point-'+(i+1));
@@ -106,34 +121,112 @@ function createController(config){
   if(changedRoad){r.gaps=validGaps(r);invalidate(r);}
   config.persist();
  }
+ function comparedRoutes(){
+  const r=selected(),group=r?.preferences?.compareGroup;
+  if(!r)return [];
+  if(!group||!$('routeShowAlternatives')?.checked)return [r];
+  const options=routes().filter(x=>x.preferences?.compareGroup===group&&x.visible!==false);
+  return [...options.filter(x=>x.id!==currentId),r].slice(-3);
+ }
+ function routeGeometry(r){
+  return (r.segments||[]).length?r.segments:(r.polyline&&!validGaps(r).length?[{polyline:r.polyline,startIndex:0,endIndex:(r.waypoints||[]).length}]:[]);
+ }
+ function addViaAt(routeId,leg,latlng){
+  if(busy||!pointOK(latlng))return;
+  const route=selected();
+  if(!route||route.id!==routeId||route.waypoints.length>=MAX_WAYPOINTS){
+   report('Select a route with space for another road point.');return;
+  }
+  const rows=sectionRows(route);
+  if(!rows[leg]||rows[leg].gap)return report('Reconnect the section before reshaping it.');
+  update(r=>{r.waypoints.splice(leg,0,{id:config.uid(),lat:Number(latlng.lat),lng:Number(latlng.lng),label:'Dragged road point',kind:'via'});},true);
+  selectedSection='';dragHandle=null;
+  status='Road point added. Recalculating the selected alternative…';
+  render();void calculate();
+ }
+ function showDragHandle(latlng,leg,routeId){
+  if(busy||pick||!map||!pointOK(latlng))return;
+  if(dragHandle&&dragHandleRoute===routeId&&dragHandleLeg===leg){dragHandle.setLatLng(latlng);return;}
+  dragHandle=null;dragHandleLeg=leg;dragHandleRoute=routeId;
+  if(typeof L.marker!=='function'||typeof L.divIcon!=='function')return;
+  const icon=L.divIcon({className:'route-drag-handle-wrap',html:'<span class="route-drag-handle" aria-hidden="true">↕</span>',iconSize:[30,30],iconAnchor:[15,15]});
+  const marker=L.marker(latlng,{draggable:true,autoPan:true,icon,zIndexOffset:900}).addTo(layer);
+  marker.on('dragstart',()=>{if(map.dragging?.enabled?.())map.dragging.disable();});
+  marker.on('dragend',e=>{map.dragging?.enable?.();addViaAt(routeId,leg,e.target.getLatLng());});
+  dragHandle=marker;
+ }
  function draw(){
-  if(!layer)return;layer.clearLayers();
-  const r=selected();if(!r||r.visible===false||document.getElementById('mapShowRoutes')?.checked===false)return;
-  const geometries=(r.segments||[]).length?r.segments:(r.polyline&&!validGaps(r).length?[{polyline:r.polyline,startIndex:0}]:[]);
-  const rows=sectionRows(r),points=routePoints(r);
-  for(const segment of geometries){
-   const coords=decodePolyline(segment.polyline),start=segment.startIndex||0,end=segment.endIndex??rows.length-1;
-   if(coords.length<2||end<start)continue;
-   const parts=sectionGeometry(coords,points.slice(start,end+2))||[coords];
-   for(const [index,part] of parts.entries()){
-    if(part.length<2)continue;
-    const row=rows[start+index];if(!row)continue;
-    const active=selectedSection===row.key;
-    const line=L.polyline(part,{color:active?'#187b79':'#b45237',weight:active?8:5,opacity:active?1:.88,interactive:true}).addTo(layer);
-    line.on('click',()=>{selectedSection=row.key;render();$('routeSectionList')?.scrollIntoView({behavior:'smooth',block:'nearest'});});
+  if(!layer)return;
+  layer.clearLayers();dragHandle=null;dragHandleLeg=-1;dragHandleRoute='';
+  const r=selected();if(!r||document.getElementById('mapShowRoutes')?.checked===false)return;
+  const shown=comparedRoutes();
+  for(const [variantIndex,route] of shown.entries()){
+   if(route.visible===false)continue;
+   const active=route.id===currentId,rows=sectionRows(route),points=routePoints(route);
+   const color=ROUTE_COLORS[variantIndex%ROUTE_COLORS.length];
+   for(const segment of routeGeometry(route)){
+    const coords=decodePolyline(segment.polyline),start=segment.startIndex||0,end=segment.endIndex??rows.length-1;
+    if(coords.length<2||end<start)continue;
+    const parts=sectionGeometry(coords,points.slice(start,end+2))||[coords];
+    for(const [index,part] of parts.entries()){
+     if(part.length<2)continue;
+     const row=rows[start+index];if(!row)continue;
+     const focused=active&&selectedSection===row.key;
+     const line=L.polyline(part,{color:focused?'#187b79':color,weight:focused?9:active?7:5,opacity:active?1:.69,interactive:true}).addTo(layer);
+     line.on('click',e=>{
+      if(!active){currentId=route.id;undoStack=[];selectedSection='';pick='';status='Alternative selected. Drag its path to customize it.';render();return;}
+      selectedSection=row.key;render();showDragHandle(e.latlng||{lat:part[Math.floor(part.length/2)][0],lng:part[Math.floor(part.length/2)][1]},row.i,route.id);
+      $('routeSectionList')?.scrollIntoView({behavior:'smooth',block:'nearest'});
+     });
+     if(active&&!row.gap){
+      line.on('mouseover',e=>showDragHandle(e.latlng,row.i,route.id));
+      line.on('mousedown',e=>{
+       if(busy||pick||!pointOK(e.latlng)||!map?.on)return;
+       const origin=e.latlng;let last=origin,moved=false;
+       const move=ev=>{
+        if(!pointOK(ev.latlng))return;
+        last=ev.latlng;
+        const scale=Math.cos(origin.lat*Math.PI/180);
+        if(Math.hypot(last.lat-origin.lat,(last.lng-origin.lng)*scale)>.00008)moved=true;
+        if(moved)showDragHandle(last,row.i,route.id);
+       };
+       const finish=()=>{
+        map.off?.('mousemove',move);map.dragging?.enable?.();directDrag=null;
+        if(moved)addViaAt(route.id,row.i,last);
+       };
+       directDrag={move,finish};map.dragging?.disable?.();
+       map.on('mousemove',move);map.once('mouseup',finish);
+      });
+     }
+    }
    }
   }
-  for(const [name,p,color] of [['Start',r.start,'#28766f'],['End',r.end,'#b45237']]){
-   if(pointOK(p))L.circleMarker([p.lat,p.lng],{radius:7,color,fillColor:color,fillOpacity:0.8})
-    .bindTooltip(name+': '+p.label).addTo(layer);
+  if(r.visible===false)return;
+  for(const [role,p,color] of [['start',r.start,'#28766f'],['end',r.end,'#b45237']]){
+   if(!pointOK(p))continue;
+   if(typeof L.marker==='function'&&typeof L.divIcon==='function'){
+    const marker=L.marker([p.lat,p.lng],{draggable:true,icon:L.divIcon({className:'route-endpoint-wrap',html:'<span class="route-endpoint" style="--endpoint-color:'+color+'">'+(role==='start'?'A':'B')+'</span>',iconSize:[30,30],iconAnchor:[15,15]})}).addTo(layer);
+    marker.bindTooltip?.((role==='start'?'Start: ':'Destination: ')+p.label);
+    marker.on('dragend',e=>{
+     const where=e.target.getLatLng();update(route=>{route[role]={...route[role],lat:where.lat,lng:where.lng,label:'Moved '+(role==='start'?'start':'destination')};},true);
+     status='Endpoint moved. Recalculating…';render();void calculate();
+    });
+   }else L.circleMarker([p.lat,p.lng],{radius:7,color,fillColor:color,fillOpacity:0.8}).bindTooltip((role==='start'?'Start: ':'End: ')+p.label).addTo(layer);
   }
   for(const [i,p] of (r.waypoints||[]).entries()){
-   if(pointOK(p))L.circleMarker([p.lat,p.lng],{radius:5,color:'#b08b47',fillColor:'#edc376',fillOpacity:0.9})
-    .bindTooltip((i+1)+'. '+p.label).addTo(layer);
+   if(!pointOK(p))continue;
+   if(p.kind!=='stop'&&typeof L.marker==='function'&&typeof L.divIcon==='function'){
+    const m=L.marker([p.lat,p.lng],{draggable:true,icon:L.divIcon({className:'route-via-wrap',html:'<span class="route-via-marker">◆</span>',iconSize:[23,23],iconAnchor:[11,11]})}).addTo(layer);
+    m.bindTooltip?.('Drag road point '+(i+1));
+    m.on('dragend',e=>{
+     const q=e.target.getLatLng();update(route=>{route.waypoints[i]={...route.waypoints[i],lat:q.lat,lng:q.lng,label:'Moved road point'};},true);
+     status='Road point moved. Recalculating…';render();void calculate();
+    });
+   }else L.circleMarker([p.lat,p.lng],{radius:5,color:'#b08b47',fillColor:'#edc376',fillOpacity:.9}).bindTooltip((i+1)+'. '+p.label).addTo(layer);
   }
  }
  function attachMap(next){
-  if(next!==map){if(layer&&map)map.removeLayer(layer);map=next;layer=map?L.layerGroup().addTo(map):null;}
+  if(next!==map){if(directDrag&&map){map.off?.('mousemove',directDrag.move);map.off?.('mouseup',directDrag.finish);map.dragging?.enable?.();directDrag=null;}if(layer&&map)map.removeLayer(layer);map=next;layer=map?L.layerGroup().addTo(map):null;}
   draw();
  }
  function fitMap(){
