@@ -1,5 +1,5 @@
 # Vacation Planner — implementation backlog
-Last reviewed: 2026-11-17
+Last reviewed: 2026-11-18
 
 This is the working list to consult whenever Tod asks **what remains outstanding**. Do not infer that an unverified feature is complete solely because code was committed.
 
@@ -13,7 +13,7 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
-- **Mobile redesign feature branch + read-only preview, awaiting owner review (2026-11-18):** Compact phone navigation, two-state full-screen/collapsed map results, miles, simplified add/edit, partial business-name matching using smaller Geoapify category groups and local/global lookup, and distinct **+ Idea** / **+ Itinerary** controls in both main search and Discover Nearby. The Itinerary control opens the existing prefilled scheduling form rather than creating duplicate Ideas. Preview lives at `/Vacation-Planner/preview/` on GitHub Pages with Supabase changes disabled. Regression tests live in `tests/discovery-mobile.test.mjs`; the production root app has not yet adopted this redesign.
+- **v0.6.25 mobile interface accepted for production (2026-11-18):** Compact phone navigation; collapsed/full-screen map results; miles instead of kilometers; simplified add/edit; partial named-business searches with split Geoapify category groups and nearby/global fallback; + Idea and + Itinerary in both search result types; route editing controls wrapped/stacked for narrow screens. Real-CSS browser fixture verified visible route panels with no horizontal overflow at 320/375/390/430/720 px. Live authenticated iPhone review is still necessary; do not treat static fixture as a substitute for a genuine device session.
 
 
 - **v0.6.24 source changes, browser acceptance outstanding:** Fixed invalid outbound/return persistence (existing database only permits route kind `day` or `journey`), added independent Ideas/Itinerary/Routes map visibility, and added importing mapped scheduled itinerary activities for a selected route start day. Verified the route type choices with a mock controller and tested date/time order, duplicate prevention, unchanged source itinerary, and one Supabase persist callback per import. Still verify in signed-in production browser; there is no claim of confirmed live iPhone operation.
