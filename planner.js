@@ -5,8 +5,8 @@ if(!Itinerary||!Ideas||!Discovery)throw Error('Trip planning and discovery modul
 const SESSION='lazy-acres-active-trip',TABS=['explore','places','itinerary','notes','packing'];const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c])),uid=()=>crypto?.randomUUID?.()||Date.now()+'-'+Math.random().toString(36).slice(2);
 let state=initialState,ideaFilter='all',routeUI=null;
 let active=sessionStorage.getItem(SESSION),tab='explore',map,markers,discoveryMarkers,preview,selectedPoint,placeDestination='places',searchToken=0,addingPlace=false,expandedMap=false,tileLayer,tileErrors=0,baseLayers=null,mapStyle=localStorage.getItem('lazy-acres-map-style')==='satellite'?'satellite':'street',pendingActivityLocation=null;const trip=()=>state.trips.find(t=>t.id===active),persist=()=>{cloudSave(state);render()},formatDate=s=>s?new Date(s+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):'Dates flexible',forTrip=(key)=>state[key].filter(x=>x.tripId===active),geo=x=>x.lat!=null&&x.lng!=null&&Number.isFinite(Number(x.lat))&&Number.isFinite(Number(x.lng));
-function showTrip(id){if(!state.trips.some(t=>t.id===id))return;ideaFilter='all';discoveryMarkers?.clearLayers();window.__tripSuggestions=[];addingPlace=false;expandedMap=false;syncMapMode();syncExpanded();active=id;sessionStorage.setItem(SESSION,id);tab='explore';routeUI?.onTripChange();render();const t=trip();if(t.lat!=null&&t.lng!=null){map?.setView([t.lat,t.lng],10)}else if(t.destination){searchLocation(t.destination,true)}}
-function exitTrip(){routeUI?.cancelPick();ideaFilter='all';discoveryMarkers?.clearLayers();window.__tripSuggestions=[];active=null;addingPlace=false;expandedMap=false;syncMapMode();syncExpanded();sessionStorage.removeItem(SESSION);render()}
+function showTrip(id){if(!state.trips.some(t=>t.id===id))return;setMobileSheet('half');ideaFilter='all';discoveryMarkers?.clearLayers();window.__tripSuggestions=[];addingPlace=false;expandedMap=false;syncMapMode();syncExpanded();active=id;sessionStorage.setItem(SESSION,id);tab='explore';routeUI?.onTripChange();render();const t=trip();if(t.lat!=null&&t.lng!=null){map?.setView([t.lat,t.lng],10)}else if(t.destination){searchLocation(t.destination,true)}}
+function exitTrip(){setMobileSheet('half');routeUI?.cancelPick();ideaFilter='all';discoveryMarkers?.clearLayers();window.__tripSuggestions=[];active=null;addingPlace=false;expandedMap=false;syncMapMode();syncExpanded();sessionStorage.removeItem(SESSION);render()}
 function editAndRemove(kind,x){
  return '<span class="entry-actions"><button class="quiet small" data-edit="'+kind+':'+esc(x.id)+'">Edit</button><button class="quiet small" data-remove="'+kind+':'+esc(x.id)+'">Remove</button></span>';
 }
@@ -16,7 +16,7 @@ function ideaTiming(x){
  if(x.time)items.push(Itinerary.formatTime(x.time)+(x.endTime?' – '+Itinerary.formatTime(x.endTime):''));
  return items.length?'<div class="muted small-details">'+esc(items.join(' · '))+'</div>':'';
 }
-function render(){const t=trip();$('#home').classList.toggle('hidden',!!t);$('#workspace').classList.toggle('hidden',!t);$('#tripHero').classList.toggle('hidden',!t);$('#mastheadHome').classList.toggle('hidden',!!t);$('#context').textContent=t?'TRIP WORKSPACE':'THE OPEN ROAD IS CALLING';$('#tripCards').innerHTML=state.trips.length?state.trips.map(x=>'<button class="trip" data-open="'+esc(x.id)+'"><span class="chip">Open trip</span><strong>'+esc(x.name)+'</strong><span>'+esc(x.destination||'Destination undecided')+'</span><small>'+formatDate(x.start)+(x.end?' – '+formatDate(x.end):'')+'</small></button>').join(''):'<p class="empty">No trips yet. Create a trip to begin exploring.</p>';if(!t)return;
+function render(){const t=trip();document.body.classList.toggle('mobile-workspace',!!t);$('#home').classList.toggle('hidden',!!t);$('#workspace').classList.toggle('hidden',!t);$('#tripHero').classList.toggle('hidden',!t);$('#mastheadHome').classList.toggle('hidden',!!t);$('#context').textContent=t?'TRIP WORKSPACE':'THE OPEN ROAD IS CALLING';$('#tripCards').innerHTML=state.trips.length?state.trips.map(x=>'<button class="trip" data-open="'+esc(x.id)+'"><span class="chip">Open trip</span><strong>'+esc(x.name)+'</strong><span>'+esc(x.destination||'Destination undecided')+'</span><small>'+formatDate(x.start)+(x.end?' – '+formatDate(x.end):'')+'</small></button>').join(''):'<p class="empty">No trips yet. Create a trip to begin exploring.</p>';if(!t)return;
 $('#tripTitle').textContent=t.name;$('#tripSub').textContent=(t.destination||'Explore anywhere')+' · '+formatDate(t.start)+(t.end?' – '+formatDate(t.end):'');
 TABS.forEach(n=>{$('#'+n).classList.toggle('hidden',n!==tab);document.querySelector('[data-tab="'+n+'"]').classList.toggle('active',n===tab)});if(tab==='explore')setTimeout(initMap,0);
 // Ideas are choices under consideration. An idea linked to a decided itinerary
@@ -72,7 +72,72 @@ window.applyVacationPlannerRemoteState=next=>{
  if(active&&!trip()){active=null;sessionStorage.removeItem(SESSION);}
  render();
 };
-function setTab(n){if(!trip()||!TABS.includes(n))return;if(n!=='explore')routeUI?.cancelPick();if(n!=='explore'&&expandedMap){expandedMap=false;syncExpanded()}addingPlace=false;syncMapMode();tab=n;render()}
+
+let mobileSheet='half';
+function setMobileSheet(next){
+ mobileSheet=['peek','half','full'].includes(next)?next:'half';
+ document.body.classList.toggle('sheet-peek',mobileSheet==='peek');
+ document.body.classList.toggle('sheet-full',mobileSheet==='full');
+ const handle=document.getElementById('mobileSheetHandle');
+ if(handle){handle.setAttribute('aria-expanded',String(mobileSheet!=='peek'));
+  handle.setAttribute('aria-label',(mobileSheet==='peek'?'Expand':'Resize')+' map results');}
+}
+function initializeMobileWorkspace(){
+ const menu=$('#mobileTripMenu');
+ menu.addEventListener('click',()=>{
+  const open=document.body.classList.toggle('mobile-trip-menu-open');
+  menu.setAttribute('aria-expanded',String(open));
+ });
+ $('#mobileSignOut').addEventListener('click',()=>$('#cloudSignOut').click());
+ $('#mobileMapOptions').addEventListener('click',()=>{
+  const open=document.body.classList.toggle('mobile-map-options-open');
+  $('#mobileMapOptions').setAttribute('aria-expanded',String(open));
+ });
+ const handle=$('#mobileSheetHandle');
+ handle.addEventListener('click',()=>setMobileSheet(mobileSheet==='peek'?'half':mobileSheet==='half'?'full':'peek'));
+ let startTouch=null;
+ handle.addEventListener('touchstart',e=>{startTouch=e.touches[0]?.clientY??null;},{passive:true});
+ handle.addEventListener('touchend',e=>{
+  if(startTouch==null)return;
+  const difference=(e.changedTouches[0]?.clientY??startTouch)-startTouch;startTouch=null;
+  if(Math.abs(difference)<35)return;
+  // Touch gestures should not also trigger the following click.
+  e.preventDefault();
+  setMobileSheet(difference<0?(mobileSheet==='peek'?'half':'full'):(mobileSheet==='full'?'half':'peek'));
+ },{passive:false});
+ $('#exploreToolTabs').addEventListener('click',e=>{
+  const b=e.target.closest('[data-explore-tool]');if(!b)return;
+  $('#mobileSheetTitle').textContent=b.dataset.exploreTool==='routes'?'Route planner':'Nearby places';
+  if(mobileSheet==='peek')setMobileSheet('half');
+ });
+ for(const [button,selector] of [['mobileShowIdeaForm','#manualPlace'],['mobileShowActivityForm','#activityForm']]){
+  $( '#'+button ).addEventListener('click',()=>{
+   const card=$(selector).closest('.mobile-add-card'),show=!card.classList.contains('is-open');
+   card.classList.toggle('is-open',show);
+   if(show)requestAnimationFrame(()=>{card.scrollIntoView({behavior:'smooth',block:'start'});$(selector).querySelector('input:not([type=hidden])')?.focus({preventScroll:true});});
+  });
+ }
+ function moveOptional(formSelector,items){
+  const form=$(formSelector),detail=document.createElement('details'),summary=document.createElement('summary');
+  detail.className='mobile-advanced';summary.textContent='More options (optional)';detail.append(summary);
+  for(const sel of items){const element=form.querySelector(sel);if(element)detail.append(element);}
+  if(detail.children.length<2)return;
+  form.insertBefore(detail,form.querySelector('button.primary'));
+  const adapt=()=>{if(!window.matchMedia('(max-width:760px)').matches)detail.open=true;else if(!detail.dataset.mobileVisited){detail.open=false;detail.dataset.mobileVisited='1';}};
+  adapt();window.addEventListener('resize',adapt);
+ }
+ moveOptional('#manualPlace',['label:has(input[name=location])','label:has(textarea[name=notes])','details.activity-options']);
+ // Lodging dates and checkout remain visible; all other itinerary options are optional.
+ moveOptional('#activityForm',['.two',' .activity-checks','#activityHoursField','label:has(textarea[name=notes])','details.activity-options']);
+ moveOptional('#placeForm',['label:has(textarea[name=notes])','label:has(#coordinates)']);
+ document.addEventListener('click',e=>{
+  if(e.target.closest('#mobileTripMenu,.trip-summary-actions,#mobileMapOptions,.map-layer-controls,.map-category-controls'))return;
+  document.body.classList.remove('mobile-trip-menu-open','mobile-map-options-open');
+  menu.setAttribute('aria-expanded','false');$('#mobileMapOptions').setAttribute('aria-expanded','false');
+ });
+ setMobileSheet('half');
+}
+function setTab(n){if(!trip()||!TABS.includes(n))return;document.body.classList.remove('mobile-trip-menu-open','mobile-map-options-open');if(n!=='explore')routeUI?.cancelPick();if(n!=='explore'&&expandedMap){expandedMap=false;syncExpanded()}addingPlace=false;syncMapMode();tab=n;render()}
 function setTileStatus(message,show){const box=$('#tileStatus');if(!box)return;box.classList.toggle('hidden',!show);$('#tileStatusText').textContent=message;}
 function setMapStyle(style){
  if(!map||!baseLayers||!baseLayers[style])return;
@@ -125,7 +190,7 @@ $('#activityForm').elements.fixedDate.addEventListener('change',syncActivityCate
 function cleanImportedNotes(notes){return String(notes||'').replace(/^Discovered via Geoapify[^\n]*$/gmi,'').replace(/^building\.[\w.]+$/gmi,'').trim();}
 async function loadItineraryHours(geoapifyId){try{const d=await getDiscoveryPlaceDetails({placeId:geoapifyId});if(pendingActivityLocation?.geoapifyId===geoapifyId&&!$('#activityHours').value)$('#activityHours').value=d.opening_hours||d.datasource?.raw?.opening_hours||'';}catch{}}
 function fillActivity({name,category='Other',notes='',lat=null,lng=null,placeId='',geoapifyId='',hours='',date='',endDate='',time='',endTime='',fixedDate=false}){
- setTab('itinerary');
+ setTab('itinerary');if(window.matchMedia('(max-width:760px)').matches){$('#activityForm').closest('.mobile-add-card')?.classList.add('is-open');}
  const f=$('#activityForm');f.reset();
  f.elements.title.value=name;
  f.elements.category.value=normalizedCategory(category);
@@ -693,6 +758,7 @@ form('#manualPlace',d=>{
  const issue=Ideas.validateDraft(d);
  if(issue){alert(issue);return false;}
  state.places.unshift({id:uid(),tripId:active,...d,category:normalizedCategory(d.category)});
+ $('#manualPlace').closest('.mobile-add-card')?.classList.remove('is-open');
 });form('#activityForm',d=>{
  d=Itinerary.normalizeDraft(d);
  const issue=Itinerary.validateDraft(d);
@@ -704,6 +770,7 @@ form('#manualPlace',d=>{
  state.activities.push({id:uid(),tripId:active,...d,endDate:d.category==='Lodging'?d.endDate:'',
    category:normalizedCategory(d.category),placeId:saved?.id||'',lat:loc.lat??null,lng:loc.lng??null,hours:d.hours||'',notes:cleanImportedNotes(d.notes)});
  pendingActivityLocation=null;
+ $('#activityForm').closest('.mobile-add-card')?.classList.remove('is-open');
 });form('#noteForm',d=>state.notes.unshift({id:uid(),tripId:active,...d}));form('#packForm',d=>state.packing.push({id:uid(),tripId:active,title:d.item,category:PACKING_CATEGORIES.some(c=>c.key===d.category)?d.category:'trip-misc',done:false}));
 
 const EDIT_FORMS={
@@ -771,6 +838,10 @@ function openEdit(kind,id){
  editing={kind,id,original:JSON.stringify(record)};
  $('#editTitle').textContent=def.title;
  const host=$('#editFields');host.replaceChildren();
+ const compact=window.matchMedia('(max-width:760px)').matches&&['places','activities'].includes(kind);
+ const more=compact?document.createElement('details'):null;
+ if(more){more.className='mobile-edit-more';const caption=document.createElement('summary');
+  caption.textContent='More details (optional)';more.append(caption);}
  for(const field of def.fields){
   const label=document.createElement('label');label.className='field';
   label.append(document.createTextNode(field.label));
@@ -794,8 +865,11 @@ function openEdit(kind,id){
   if(field.type==='checkbox')control.checked=!!record[field.name];
   else if(field.type==='time')control.value=Itinerary.canonicalTime(record[field.name]);
   else control.value=record[field.name]??'';
-  label.append(control);host.append(label);
+  label.append(control);
+  const basic=kind==='places'?['name','category']:['title','category','date','endDate'];
+  if(more&&!basic.includes(field.name))more.append(label);else host.append(label);
  }
+ if(more&&more.children.length>1)host.append(more);
  if(kind==='activities'){
   $('#editForm').elements.category.addEventListener('change',syncEditCategory);
   $('#editForm').elements.fixedDate.addEventListener('change',syncEditCategory);
@@ -895,5 +969,5 @@ routeUI=window.createVacationRoutes({
  getPlaces:()=>forTrip('places'),getActivities:()=>forTrip('activities'),
  persist,uid,onPickChange:()=>{addingPlace=false;syncMapMode();}
 });
-if(!trip())active=null;render();if(active){const t=trip();if(t?.lat==null&&t?.destination)searchLocation(t.destination,true)}
+initializeMobileWorkspace();if(!trip())active=null;render();if(active){const t=trip();if(t?.lat==null&&t?.destination)searchLocation(t.destination,true)}
 };
