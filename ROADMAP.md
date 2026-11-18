@@ -13,6 +13,8 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **OTP sign-in staging (2026-11-18, not released):** Added a six-digit verification-code UI on a feature branch and same-origin read-only preview. Mocked send/verify/failure/change-account regression tests pass. Supabase shared Magic Link/OTP email template must add `{{ .Token }}` (and retain `{{ .ConfirmationURL }}` for existing links); access to this dashboard setting is not currently available through connected tools. After template confirmation, test real iPhone Home Screen sign-in, existing approved users, wrong account rejection, reload/session persistence, Suite launcher handoff, then release.
+
 - **v0.6.26 Coffee Shops category (2026-11-18):** First-class Coffee Shops option in discovery filter and all saved Idea/Itinerary/place forms, map category filters/colored pins and category counts. Geoapify café category is used for discovery. Existing saved category values remain untouched; Supabase category columns accept text. iPhone/desktop acceptance still needs a real account session.
 
 
