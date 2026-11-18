@@ -59,17 +59,28 @@ test('failed login does not open a session; successful login does',async()=>{
  assert.equal(h.calls.starts,1);
  assert.equal(h.$('#cloudPassword').value,'');
 });
-test('set password needs verified existing member and matching 12+ characters',async()=>{
+test('set password needs verified existing member and matching 8+ characters',async()=>{
  const h=createHarness();
- h.$('#cloudNewPassword').value='a strong long password';
- h.$('#cloudConfirmPassword').value='mismatch here';
+ h.$('#cloudNewPassword').value='8charPass';
+ h.$('#cloudConfirmPassword').value='mismatch';
  await h.submit('#cloudPasswordUpdate');
  assert.equal(h.calls.updates.length,0);
  assert.match(h.calls.status,/do not match/);
- h.$('#cloudConfirmPassword').value='a strong long password';
+ h.$('#cloudConfirmPassword').value='8charPass';
  await h.submit('#cloudPasswordUpdate');
  assert.equal(h.calls.updates.length,1);
  assert.equal(h.$('#cloudPasswordSettings').classList.hidden,true);
+ assert.match(h.calls.status,/Password saved/);
+});
+test('eight characters are accepted but seven are rejected',async()=>{
+ const h=createHarness();
+ h.$('#cloudNewPassword').value='1234567';h.$('#cloudConfirmPassword').value='1234567';
+ await h.submit('#cloudPasswordUpdate');
+ assert.equal(h.calls.updates.length,0);
+ assert.match(h.calls.status,/at least 8 characters/);
+ h.$('#cloudNewPassword').value='12345678';h.$('#cloudConfirmPassword').value='12345678';
+ await h.submit('#cloudPasswordUpdate');
+ assert.equal(h.calls.updates.length,1);
  assert.match(h.calls.status,/Password saved/);
 });
 test('email link remains available but is never requested during password login',async()=>{

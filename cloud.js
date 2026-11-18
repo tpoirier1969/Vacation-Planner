@@ -167,7 +167,7 @@ $('#cloudPasswordCancel').addEventListener('click',closePasswordSettings);
 $('#cloudPasswordUpdate').addEventListener('submit',async e=>{
  e.preventDefault();if(!authorized||authRequestBusy)return;
  const password=$('#cloudNewPassword').value,confirmation=$('#cloudConfirmPassword').value;
- if(password.length<12){status('Password must have at least 12 characters.');return;}
+ if(password.length<8){status('Password must have at least 8 characters.');return;}
  if(password!==confirmation){status('Passwords do not match.');return;}
  authRequestBusy=true;$('#cloudPasswordUpdateSubmit').disabled=true;status('Saving your login password…');
  try{

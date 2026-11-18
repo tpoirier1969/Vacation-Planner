@@ -6,6 +6,8 @@ A shared, trip-focused vacation workspace for Tod and Donna. Hosted as a static 
 
 ## Current features
 
+- **v0.6.28 password minimum:** Login password setup accepts eight or more characters (rather than twelve). Existing members and household authorization are unchanged. Adding a second member requires individually registering and approving that user's Supabase account; the existing planner does not create household memberships automatically.
+
 - **v0.6.27 iPhone-friendly account login:** Approved household users can sign in with email + password, without email OTP rate limits. A user already signed in on Safari can choose **Set login password** to attach a password to their existing Supabase account, with the same UUID and membership/RLS controls. Email magic link remains an optional fallback for first-time enrollment. Sign-in is persistent in each iOS Home Screen app context. The password itself is handled only by Supabase Auth, not stored by the app; updating it is restricted to an approved authenticated household member. No database schema or trip records changed. Real iPhone sign-in requires owner acceptance.
 
 - Create and reopen trips, with a persistent trip workspace until **Exit trip**.
