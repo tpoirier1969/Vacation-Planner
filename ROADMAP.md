@@ -13,6 +13,8 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **Alternate routes — preview (2026-11-18):** Geoapify preference candidates are checked for distinct road geometry, with up to three saved variations in a compare group. Colored paths can be selected on the map; drag a selected route to add a via point, or drag its editable endpoints/road points, then recalculate. Existing route section editor retained. Verified mock routing and map drag behavior. Real Geoapify/routing on iPhone and authenticated save-reload not yet accepted; no production release yet.
+
 - **Route editor upgrade — staged for owner review (2026-11-18):** Driving sections are now the first travel-order list in the route editor; each list row is a real button with selection state, independent Skip/Reconnect action, selected-section toolbar and Undo. Delete cannot reconnect an already skipped leg. Start/end points have dedicated Remove actions with Undo, preserving intermediate stops. Calculated connected polylines are split at waypoint coordinates, allowing map clicks to select the corresponding leg, not always the first leg of a group. Browser-authenticated save/reload, mobile-device usability and Geoapify routing still require live acceptance. Temporary same-origin read-only preview; no production route-code change yet.
 
 
