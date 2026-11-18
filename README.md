@@ -6,6 +6,8 @@ A shared, trip-focused vacation workspace for Tod and Donna. Hosted as a static 
 
 ## Current features
 
+- **Draggable route comparisons — review preview only:** Find up to three distinct driving alternatives, select by colored path or card, and reshape via draggable road points. Saved under existing route fields; no schema change.
+
 - **Route section editor — unreleased review preview:** Sections appear in travel order above waypoint controls; select one by clicking its row or mapped road leg, skip a driving segment, reconnect it explicitly, Undo, or remove an endpoint without dropping intermediate stops. Delete on a selected section skips the leg and never reconnects it. Existing `vacation_routes` gaps, points and road geometry fields are reused. The read-only same-origin preview can demonstrate the interaction without changing saved trips; production behavior is unchanged until review and release.
 
 - **v0.6.28 password minimum:** Login password setup accepts eight or more characters (rather than twelve). Existing members and household authorization are unchanged. Adding a second member requires individually registering and approving that user's Supabase account; the existing planner does not create household memberships automatically.
