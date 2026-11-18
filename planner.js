@@ -168,9 +168,9 @@ $('#mapAdd').addEventListener('click',()=>{routeUI?.cancelPick();addingPlace=!ad
 $('#mapFullscreen').addEventListener('click',()=>{expandedMap=!expandedMap;syncExpanded()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&expandedMap){expandedMap=false;syncExpanded()}});
 function initMap(){if(!trip()||tab!=='explore')return;if(typeof L==='undefined'){$('#map').textContent='Map could not load. Check your connection.';return}if(!map){map=L.map('map',{zoomControl:false,tap:false,scrollWheelZoom:true,wheelPxPerZoomLevel:180,wheelDebounceTime:80,zoomSnap:0.5,touchZoom:'center',bounceAtZoomLimits:false,zoomAnimation:false,fadeAnimation:false,markerZoomAnimation:false}).setView([46.55,-87.4],8);L.control.zoom({position:'bottomright'}).addTo(map);baseLayers={street:L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19,keepBuffer:6,updateWhenIdle:false,updateWhenZooming:false}),satellite:L.tileLayer('https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}',{attribution:'Imagery: USDA, USGS The National Map',maxZoom:19,maxNativeZoom:16,keepBuffer:6,updateWhenIdle:false,updateWhenZooming:false})};Object.values(baseLayers).forEach(registerBaseLayer);setMapStyle(mapStyle);map.on('moveend zoomend',()=>{if(tileErrors)setTileStatus('Some map tiles may be missing. Retry if needed.',true)});markers=L.layerGroup().addTo(map);discoveryMarkers=L.layerGroup().addTo(map);if(typeof ResizeObserver!=='undefined'){new ResizeObserver(()=>{if(map&&trip()&&tab==='explore')map.invalidateSize({pan:false,debounceMoveend:true})}).observe($('#map'))};map.on('click',e=>{if(routeUI?.consumeMapClick(e.latlng))return;if(addingPlace){addingPlace=false;syncMapMode()}showMapPlaceMenu(e.latlng)});map.on('contextmenu',e=>showMapPlaceMenu(e.latlng));const t=trip();if(t?.lat!=null&&t?.lng!=null)map.setView([t.lat,t.lng],10)}setTimeout(()=>map?.invalidateSize({pan:false,debounceMoveend:true}),100);refreshMarkers();routeUI?.attachMap(map)}
-const PLACE_CATEGORIES=['Lodging','Restaurants','Wineries','Shopping','Hiking','Boating','Fishing','Events','Attractions','Activities','Scenic Drives','Other'];
+const PLACE_CATEGORIES=['Lodging','Restaurants','Coffee Shops','Wineries','Shopping','Hiking','Boating','Fishing','Events','Attractions','Activities','Scenic Drives','Other'];
 const collapsedPlaceCategories=new Set();
-const FLAG_COLORS={Lodging:'#845ec2',Restaurants:'#d65a44',Wineries:'#8e396f',Shopping:'#ca8422',Hiking:'#307d4d',Boating:'#187a9b',Fishing:'#2675c9',Events:'#d13f79',Attractions:'#4d8f83',Activities:'#637a94','Scenic Drives':'#a16f44',Other:'#717885'};
+const FLAG_COLORS={Lodging:'#845ec2',Restaurants:'#d65a44','Coffee Shops':'#80633e',Wineries:'#8e396f',Shopping:'#ca8422',Hiking:'#307d4d',Boating:'#187a9b',Fishing:'#2675c9',Events:'#d13f79',Attractions:'#4d8f83',Activities:'#637a94','Scenic Drives':'#a16f44',Other:'#717885'};
 const visibleCategories=new Set(PLACE_CATEGORIES);
 const mapLayerVisible={ideas:true,itinerary:true,routes:true};
 const normalizedCategory=x=>PLACE_CATEGORIES.includes(x)?x:'Other';
@@ -186,7 +186,7 @@ function buildMapFilters(){
 }
 $('#mapCategoryFilters').addEventListener('change',e=>{const input=e.target.closest('[data-map-category]');if(!input)return;if(input.checked)visibleCategories.add(input.dataset.mapCategory);else visibleCategories.delete(input.dataset.mapCategory);refreshMarkers()});
 document.querySelectorAll('[data-map-layer]').forEach(input=>input.addEventListener('change',()=>{mapLayerVisible[input.dataset.mapLayer]=input.checked;refreshMarkers();routeUI?.render();}));
-function syncActivityCategory(){const f=$('#activityForm'),c=f.elements.category.value,lodging=c==='Lodging';$('#activityDateLabel').textContent=(lodging?'Check-in date':c==='Events'?'Event date':c==='Restaurants'?'Dining date':c==='Wineries'?'Winery visit date':c==='Shopping'?'Shopping date':c==='Hiking'?'Hiking date':c==='Boating'?'Boating date':c==='Fishing'?'Fishing date':'Visit date')+(lodging?'':' (optional)');$('#activityEndField').hidden=!lodging;f.elements.endDate.required=lodging;f.elements.date.required=lodging||f.elements.fixedDate.checked;if(!lodging)f.elements.endDate.value='';$('#activityEndTimeField').hidden=lodging;if(lodging)f.elements.endTime.value='';$('#activityHoursField').hidden=lodging||c==='Hiking'||c==='Boating'||c==='Fishing';}
+function syncActivityCategory(){const f=$('#activityForm'),c=f.elements.category.value,lodging=c==='Lodging';$('#activityDateLabel').textContent=(lodging?'Check-in date':c==='Events'?'Event date':c==='Restaurants'?'Dining date':c==='Coffee Shops'?'Coffee stop date':c==='Wineries'?'Winery visit date':c==='Shopping'?'Shopping date':c==='Hiking'?'Hiking date':c==='Boating'?'Boating date':c==='Fishing'?'Fishing date':'Visit date')+(lodging?'':' (optional)');$('#activityEndField').hidden=!lodging;f.elements.endDate.required=lodging;f.elements.date.required=lodging||f.elements.fixedDate.checked;if(!lodging)f.elements.endDate.value='';$('#activityEndTimeField').hidden=lodging;if(lodging)f.elements.endTime.value='';$('#activityHoursField').hidden=lodging||c==='Hiking'||c==='Boating'||c==='Fishing';}
 $('#activityCategory').addEventListener('change',syncActivityCategory);
 $('#activityForm').elements.fixedDate.addEventListener('change',syncActivityCategory);
 function cleanImportedNotes(notes){return String(notes||'').replace(/^Discovered via Geoapify[^\n]*$/gmi,'').replace(/^building\.[\w.]+$/gmi,'').trim();}
@@ -217,6 +217,12 @@ function detectedCategory(tags=[],name='',searchCategory=''){
  const label=String(name||'').toLowerCase();
  if(/winery|vineyard|wine[_ .-]?tasting/.test(c)||/\b(winery|vineyard|wine[ -]?tasting|tasting room)\b/.test(label))return 'Wineries';
  if(/accommodation|hotel|motel|guest_house|hostel/.test(c))return 'Lodging';
+ // Coffee shops and cafes form their own saved category. Prefer an explicit
+ // restaurant tag when a venue is listed as both a restaurant and a cafe.
+ const restaurantTagged=/catering\.(?:restaurant|fast_food|food_court)(?:\.|\s|$)/.test(c);
+ const cafeTagged=/catering\.cafe(?:\.|\s|$)/.test(c);
+ const coffeeNamed=/\b(?:coffee(?:\s*(?:shop|house|bar))?|espresso|roaster(?:y|ies)?|caf[eé])\b/i.test(label);
+ if(searchCategory==='coffee_shops'||(coffeeNamed||cafeTagged)&&!restaurantTagged)return 'Coffee Shops';
  if(/catering|restaurant|cafe|fast_food/.test(c))return 'Restaurants';
  if(/commercial|shop|shopping/.test(c))return 'Shopping';
  if(/hiking|trail/.test(c))return 'Hiking';
@@ -728,7 +734,8 @@ $('#searchMatches').addEventListener('click',e=>{
 // Geoapify Places API: category/name search constrained to the visible map.
 const DISCOVERY_CATEGORIES={
  lodging:'accommodation',
- restaurants:'catering.restaurant,catering.cafe,catering.fast_food,catering.food_court',
+ restaurants:'catering.restaurant,catering.fast_food,catering.food_court',
+ coffee_shops:'catering.cafe',
  wineries:'production.winery',
  shopping:'commercial',
  hiking:'leisure,natural',
@@ -741,8 +748,8 @@ const DISCOVERY_CATEGORIES={
 };
 const DISCOVERY_TERMS=[
  {pattern:/winer(y|ies)|vineyard|wine tasting/i,categories:'production.winery'},
- {pattern:/restaurant|diner|bistro|take[ -]?out|takeaway|fast[ -]?food/i,categories:'catering.restaurant,catering.cafe,catering.fast_food,catering.food_court'},
- {pattern:/cafe|coffee/i,categories:'catering.cafe'},
+ {pattern:/restaurant|diner|bistro|take[ -]?out|takeaway|fast[ -]?food/i,categories:'catering.restaurant,catering.fast_food,catering.food_court'},
+ {pattern:/caf[eé]|coffee|espresso|roaster/i,categories:'catering.cafe'},
  {pattern:/museum|historical/i,categories:'entertainment.museum,tourism.sights'},
  {pattern:/antique|thrift/i,categories:'commercial.antiques,commercial.second_hand'},
  {pattern:/shop|shopping/i,categories:'commercial'},
@@ -837,8 +844,8 @@ async function discover(loadMore=false){
   status.textContent='Nearby discovery is not configured yet.';return;
  }
  const match=DISCOVERY_TERMS.find(x=>x.pattern.test(term));
- const categories=category==='restaurants'?DISCOVERY_CATEGORIES.restaurants:(match?.categories||DISCOVERY_CATEGORIES[category]||DISCOVERY_CATEGORIES.all);
- const restaurantOnly=category==='restaurants'||(!!match&&/catering\.(restaurant|fast_food|food_court|cafe)/.test(categories));
+ const categories=category==='all'||category==='other'?(match?.categories||DISCOVERY_CATEGORIES[category]||DISCOVERY_CATEGORIES.all):(DISCOVERY_CATEGORIES[category]||DISCOVERY_CATEGORIES.all);
+ const restaurantOnly=category==='restaurants'||((category==='all'||category==='other')&&!!match&&/catering\.(restaurant|fast_food|food_court)/.test(categories));
  // A term such as "Lake View Restaurant" is a name, not merely a request for any restaurant.
  const nameFilter=term&&!genericDiscoveryTerm(term)?normalizedBusinessName(term):'';
  const centerPoint=Number(center.lng).toFixed(6)+','+Number(center.lat).toFixed(6);

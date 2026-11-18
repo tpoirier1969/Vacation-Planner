@@ -13,6 +13,9 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **v0.6.26 Coffee Shops category (2026-11-18):** First-class Coffee Shops option in discovery filter and all saved Idea/Itinerary/place forms, map category filters/colored pins and category counts. Geoapify café category is used for discovery. Existing saved category values remain untouched; Supabase category columns accept text. iPhone/desktop acceptance still needs a real account session.
+
+
 - **v0.6.25 mobile interface accepted for production (2026-11-18):** Compact phone navigation; collapsed/full-screen map results; miles instead of kilometers; simplified add/edit; partial named-business searches with split Geoapify category groups and nearby/global fallback; + Idea and + Itinerary in both search result types; route editing controls wrapped/stacked for narrow screens. Real-CSS browser fixture verified visible route panels with no horizontal overflow at 320/375/390/430/720 px. Live authenticated iPhone review is still necessary; do not treat static fixture as a substitute for a genuine device session.
 
 
