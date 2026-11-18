@@ -470,7 +470,11 @@ footer{
 .search-match>button:first-child{flex:1 1 75%;min-width:0;text-align:left;border:0;background:none;padding:7px 5px;color:var(--retro-deep)}
 .search-match strong,.search-match small{display:block;overflow-wrap:anywhere}
 .search-match small{font-size:11px;color:#5d6763}
-.search-match>button:last-child{flex:0 0 auto;min-height:38px}
+.search-match>button:first-child{flex:1 1 100%}
+.search-match{flex-wrap:wrap;align-items:flex-start}
+.search-match-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:0 0 6px 4px}
+.search-match-actions button{min-height:42px}
+.search-match>button:last-child{min-height:38px}
 #discoverMore{width:100%;margin:12px 0 4px;min-height:42px}
 .mobile-card-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .mobile-add-card.is-open{display:block}
