@@ -51,5 +51,11 @@ function outsideTrip(entry,trip){
  if(!entry?.date||!trip)return false;
  return !!((trip.start&&entry.date<trip.start)||(trip.end&&entry.date>trip.end));
 }
-root.VacationItinerary=Object.freeze({normalizeDraft,validateDraft,formatTime,compareEntries,outsideTrip,canonicalTime,RESERVATION_STATUSES:Object.freeze(RESERVATION_STATUSES)});
+function filterForView(rows,view='all'){
+ if(view==='unscheduled')return rows.filter(x=>!x.date);
+ if(view==='booking')return rows.filter(x=>x.reservationStatus==='needed');
+ if(view==='mustdo')return rows.filter(x=>!!x.mustDo);
+ return rows;
+}
+root.VacationItinerary=Object.freeze({normalizeDraft,validateDraft,formatTime,compareEntries,outsideTrip,canonicalTime,filterForView,RESERVATION_STATUSES:Object.freeze(RESERVATION_STATUSES)});
 })(window);
