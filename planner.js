@@ -569,13 +569,27 @@ function makeDiscoveryPopup(place,savedId=''){
 function renderDiscoveryMarkers(found){
  if(!map||!discoveryMarkers)return;
  discoveryMarkers.clearLayers();
- found.forEach(x=>{
-  const icon=L.divIcon({className:'discovery-marker-icon',html:'<span class="discovery-map-pin" aria-hidden="true">●</span>',iconSize:[22,28],iconAnchor:[11,26],popupAnchor:[0,-24]});
+ found.forEach((x,index)=>{
+  if(!geo(x))return;
+  const icon=L.divIcon({className:'discovery-marker-icon',html:'<span class="discovery-map-pin" aria-hidden="true">'+(index+1)+'</span>',iconSize:[28,30],iconAnchor:[14,28],popupAnchor:[0,-25]});
   const popup=makeDiscoveryPopup(x);
-  const marker=L.marker([x.lat,x.lng],{icon,title:x.name,alt:x.name}).addTo(discoveryMarkers).bindPopup(popup.content);
-  marker.bindTooltip(x.name,{direction:'top',offset:[0,-20]});
+  const marker=L.marker([x.lat,x.lng],{icon,title:(index+1)+'. '+x.name,alt:x.name}).addTo(discoveryMarkers).bindPopup(popup.content);
+  marker.bindTooltip((index+1)+'. '+x.name,{direction:'top',offset:[0,-20]});
   marker.on('popupopen',()=>popup.load());
  });
+}
+function showDiscoveryResultsOnMap(){
+ const found=(window.__tripSuggestions||[]).filter(geo);
+ if(!map||!found.length)return;
+ setTab('explore');
+ if(window.matchMedia('(max-width:760px)').matches)setMobileSheet('collapsed');
+ const bounds=L.latLngBounds(found.map(x=>[Number(x.lat),Number(x.lng)]));
+ const fit=()=>{
+  map.invalidateSize({pan:false});
+  if(found.length===1)map.setView([Number(found[0].lat),Number(found[0].lng)],13);
+  else map.fitBounds(bounds.pad(.16),{padding:[18,18],maxZoom:14,animate:false});
+ };
+ requestAnimationFrame(()=>requestAnimationFrame(fit));
 }
 function refreshMarkers(){
  if(!map||!markers)return;markers.clearLayers();
@@ -835,7 +849,7 @@ function discoveryCard(item,i){
   '<div class="row wrap poi-links">'+(review?'<a href="'+esc(review)+'" target="_blank" rel="noopener noreferrer">Find ratings & reviews on Google Maps</a>':'')+
     (item.website?'<a href="'+esc(item.website)+'" target="_blank" rel="noopener noreferrer">Website</a>':'')+'</div>'+
   '<div class="poi-extra" id="poi-extra-'+i+'"></div>'+
-  '<div class="row wrap poi-actions"><button class="quiet small" data-preview="'+i+'">Map</button>'+
+  '<div class="row wrap poi-actions"><button class="quiet small" data-preview="'+i+'">Map #'+(i+1)+'</button>'+
   '<button class="quiet small" data-place-details="'+i+'">Details</button>'+
   '<button class="secondary small" data-suggest="'+i+'" '+(saved?'disabled':'')+'>'+(saved?'Saved':'+ Save idea')+'</button>'+
   '<button class="primary small" data-suggest-plan="'+i+'">+ Itinerary</button></div></article>';
@@ -882,6 +896,7 @@ async function discover(loadMore=false){
  if(!loadMore){
   results.innerHTML='';window.__tripSuggestions=[];
   discoveryMarkers?.clearLayers();
+  $('#discoverShowOnMap').classList.add('hidden');
  }
  const scope=radius==='view'?'the visible map':Number(radius)+' mi of map center';
  status.textContent='Searching '+scope+(nameFilter?' for "'+nameFilter+'"':'')+'…';
@@ -925,11 +940,15 @@ async function discover(loadMore=false){
    '<p class="empty">No matching businesses in this source. Try a broader category, larger radius, or the place-name search above the map.</p>';
   if(loadMore&&scroller)scroller.scrollTop=oldScroll;
   renderDiscoveryMarkers(found);observeDiscoveryCards();
+  const mapButton=$('#discoverShowOnMap');
+  mapButton.classList.toggle('hidden',!found.length);
+  mapButton.textContent='Show all '+found.length+' on map';
   moreButton.classList.toggle('hidden',!hasMore);
   status.textContent=found.length+' matching places in '+scope+
    (hasMore?' · more results may be available':'')+
    (nameFilter?' · name: '+nameFilter:'')+'.';
-  if(window.matchMedia('(max-width:760px)').matches)setMobileSheet('expanded');
+  if(found.length)showDiscoveryResultsOnMap();
+  else if(window.matchMedia('(max-width:760px)').matches)setMobileSheet('expanded');
  }catch(error){
   if(token!==discoveryRequest)return;
   status.textContent=error.name==='AbortError'?'Business search timed out. Try again.':'Business search failed: '+error.message;
@@ -957,7 +976,7 @@ $('#placeList').addEventListener('change',e=>{
  if(ideaFilter!=='all'&&ideaFilter!==select.value)ideaFilter=select.value;
  persist();
 });
-$('#newTrip').onclick=()=>$('#tripDialog').showModal();$('#cancelTrip').onclick=()=>$('#tripDialog').close();$('#exitTrip').onclick=exitTrip;$('#cancelPlace').onclick=()=>$('#placeDialog').close();$('#tabs').onclick=e=>{const b=e.target.closest('[data-tab]');if(b)setTab(b.dataset.tab)};$('#searchButton').onclick=()=>searchLocation($('#searchText').value);$('#searchText').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();searchLocation(e.target.value)}};$('#discover').onclick=()=>discover(false);$('#discoverMore').onclick=()=>discover(true);$('#discoverText').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();if(!$('#discover').disabled)discover();}});$('#tripCenter').onclick=()=>{const t=trip();if(t?.lat!=null&&t?.lng!=null)map?.setView([t.lat,t.lng],10);else if(t?.destination)searchLocation(t.destination,true)};
+$('#newTrip').onclick=()=>$('#tripDialog').showModal();$('#cancelTrip').onclick=()=>$('#tripDialog').close();$('#exitTrip').onclick=exitTrip;$('#cancelPlace').onclick=()=>$('#placeDialog').close();$('#tabs').onclick=e=>{const b=e.target.closest('[data-tab]');if(b)setTab(b.dataset.tab)};$('#searchButton').onclick=()=>searchLocation($('#searchText').value);$('#searchText').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();searchLocation(e.target.value)}};$('#discover').onclick=()=>discover(false);$('#discoverMore').onclick=()=>discover(true);$('#discoverShowOnMap').onclick=showDiscoveryResultsOnMap;$('#discoverText').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();if(!$('#discover').disabled)discover();}});$('#tripCenter').onclick=()=>{const t=trip();if(t?.lat!=null&&t?.lng!=null)map?.setView([t.lat,t.lng],10);else if(t?.destination)searchLocation(t.destination,true)};
 form('#tripForm',d=>{if(d.start&&d.end&&d.end<d.start){alert('End date must be on or after start date.');return false}const t={id:uid(),...d};state.trips.push(t);$('#tripDialog').close();setTimeout(()=>showTrip(t.id),0)});
 form('#placeForm',d=>{
  if(!selectedPoint)return false;
