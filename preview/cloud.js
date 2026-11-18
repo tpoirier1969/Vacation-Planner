@@ -119,10 +119,20 @@ async function start(){
  authorized=true;$('#cloudGate').classList.add('hidden');$('#cloudReady').classList.remove('hidden');
  try{
   current=await fetchAll();
+ }catch(e){
+  $('#cloudReady').classList.add('hidden');
+  status('Could not fetch trip records from Supabase: '+e.message);
+  return;
+ }
+ try{
   status('READ-ONLY PREVIEW — no data will be saved');
   window.startVacationPlanner(structuredClone(current),changed);
   // No realtime subscription: this preview never overwrites staged local changes.
- }catch(e){$('#cloudReady').classList.add('hidden');status('Cannot load trips from Supabase: '+e.message);}
+ }catch(e){
+  $('#cloudReady').classList.add('hidden');
+  status('Preview interface could not start: '+e.message);
+  console.error('Vacation Planner preview UI startup error:',e);
+ }
 }
 $('#cloudLogin').addEventListener('submit',async e=>{e.preventDefault();const email=$('#cloudEmail').value.trim();status('Sending sign-in link…');const {error}=await client.auth.signInWithOtp({email,options:{emailRedirectTo:location.origin+'/Vacation-Planner/'}});status(error?'Sign-in failed: '+error.message:'Check your email for a sign-in link, then return here.');});
 $('#cloudSignOut').addEventListener('click',async()=>{if(pending.length&&!confirm('Changes are NOT saved to Supabase. Sign out and discard them?'))return;await client.auth.signOut();location.reload()});
