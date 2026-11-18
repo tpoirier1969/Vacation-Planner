@@ -25,9 +25,7 @@ const plannedIdeaIds=new Set(forTrip('activities').map(x=>x.placeId).filter(Bool
 const savedPlaces=forTrip('places').filter(x=>!plannedIdeaIds.has(x.id));
 const categoriesWithIdeas=PLACE_CATEGORIES.filter(c=>savedPlaces.some(x=>normalizedCategory(x.category)===c));
 if(ideaFilter!=='all'&&!categoriesWithIdeas.includes(ideaFilter))ideaFilter='all';
-const categoryIdeas=ideaFilter==='all'?savedPlaces:savedPlaces.filter(x=>normalizedCategory(x.category)===ideaFilter);
-const filterText=ideaQuery.trim().toLocaleLowerCase();
-const filteredIdeas=filterText?categoryIdeas.filter(x=>[x.name,x.notes,x.location,x.category].some(v=>String(v||'').toLocaleLowerCase().includes(filterText))):categoryIdeas;
+const filteredIdeas=Ideas.filterForList(savedPlaces.map(x=>({...x,category:normalizedCategory(x.category)})),ideaFilter,ideaQuery);
 $('#ideaCategoryFilter').innerHTML='<option value="all">All categories ('+savedPlaces.length+')</option>'+
  categoriesWithIdeas.map(c=>'<option value="'+esc(c)+'" '+(ideaFilter===c?'selected':'')+'>'+esc(c)+' ('+savedPlaces.filter(x=>normalizedCategory(x.category)===c).length+')</option>').join('');
 $('#ideaCategoryFilter').value=ideaFilter;
@@ -47,7 +45,7 @@ const allActivities=forTrip('activities').slice().sort(Itinerary.compareEntries)
 const bookingCount=allActivities.filter(x=>x.reservationStatus==='needed').length;
 const unscheduledCount=allActivities.filter(x=>!x.date).length;
 $('#itineraryViewCount').textContent=allActivities.length+' plans · '+unscheduledCount+' unscheduled'+(bookingCount?' · '+bookingCount+' need booking':'');
-const activities=allActivities.filter(x=>itineraryView==='all'||(itineraryView==='unscheduled'&&!x.date)||(itineraryView==='booking'&&x.reservationStatus==='needed')||(itineraryView==='mustdo'&&x.mustDo));
+const activities=Itinerary.filterForView(allActivities,itineraryView);
 const activityDays=[...new Set(activities.map(x=>x.date||''))];
 $('#activityList').innerHTML=activities.length?activityDays.map(day=>
  '<section class="itinerary-group"><h3>'+esc(day?formatDate(day):'To schedule')+' <span class="count">'+activities.filter(x=>(x.date||'')===day).length+'</span></h3>'+
