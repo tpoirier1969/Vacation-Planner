@@ -6,6 +6,8 @@ A shared, trip-focused vacation workspace for Tod and Donna. Hosted as a static 
 
 ## Current features
 
+- **Discover Nearby results on map — review preview only:** All loaded results show numbered map markers, with Show all N on map and automatic fit/collapse of iPhone results sheet. Additional Load more pages join the displayed set.
+
 - **Ideas & Itinerary UX (staged, not yet released):** Searching saved Ideas across names, notes, locations, categories; filtering decided itinerary plans by scheduling/booking/must-do status with totals; preserving primary date/time and priority controls in mobile add/edit forms; larger mobile buttons. Filters never alter records or Supabase schema. Reviewed in same-origin read-only preview alongside staged route editor; authenticated browser/device acceptance remains outstanding.
 
 - **v0.6.28 password minimum:** Login password setup accepts eight or more characters (rather than twelve). Existing members and household authorization are unchanged. Adding a second member requires individually registering and approving that user's Supabase account; the existing planner does not create household memberships automatically.
