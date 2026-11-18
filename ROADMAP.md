@@ -13,6 +13,9 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **Route editor upgrade — staged for owner review (2026-11-18):** Driving sections are now the first travel-order list in the route editor; each list row is a real button with selection state, independent Skip/Reconnect action, selected-section toolbar and Undo. Delete cannot reconnect an already skipped leg. Start/end points have dedicated Remove actions with Undo, preserving intermediate stops. Calculated connected polylines are split at waypoint coordinates, allowing map clicks to select the corresponding leg, not always the first leg of a group. Browser-authenticated save/reload, mobile-device usability and Geoapify routing still require live acceptance. Temporary same-origin read-only preview; no production route-code change yet.
+
+
 - **v0.6.28 (2026-11-18):** Password setup minimum reduced to 8; iPhone login continues to use each member's own Supabase account. Database check found only one existing `vacation_members` record in `tod-donna-shared`. Donna must be enrolled separately as a second approved user; cannot infer her identity from the existing member record. Avoid automatic self-approval.
 
 - **v0.6.27 password login (2026-11-18):** Primary sign-in method now Supabase `signInWithPassword`, with existing approved-account membership verification. Logged-in household members can set their password through `auth.updateUser` without a new email, then authenticate in the iPhone Home Screen shortcut. Email link retained as optional fallback. Four mocked regression tests and read-only web preview verified; real iPhone Safari/Home Screen acceptance still required. This supersedes the earlier OTP proposal, avoiding free-tier mail rate limits during normal sign-in.
@@ -32,7 +35,7 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Next priorities
 
-1. Live two-account verification: Donna's email sign-in, shared household membership, Realtime refresh between two authenticated browsers, concurrent-edit behavior, save/reload, and mobile layout. Source code and mock tests are not enough.
+1. **Deferred by owner:** Donna's account enrollment and two-account verification. Revisit only when requested; verify sharing, realtime and concurrent saves then. Source code and mock tests are not enough.
 2. Itinerary and Ideas UX acceptance: category balance, compact layout, promotion/return flows, date/time and fixed-event constraints, booking details, and visual checks in actual browsers.
 3. **Completed:** Added Vacation Planner to `tpoirier1969/Lazy-Acres-Suite` household launcher in Suite v0.1.84; verified deployed module registry and live Suite version. Its card opens `https://tpoirier1969.github.io/Vacation-Planner/` and uses the original Vacation Planner sign artwork.
 4. Trip-specific sharing/access beyond current household model, if needed.
