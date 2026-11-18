@@ -30,5 +30,10 @@ function fromItinerary(activity){
  date:activity.date||'',endDate:activity.endDate||'',time:activity.time||'',endTime:activity.endTime||'',
  fixedDate:!!activity.fixedDate,lat:activity.lat??null,lng:activity.lng??null};
 }
-root.VacationIdeas=Object.freeze({normalizeDraft,validateDraft,fromItinerary});
+function filterForList(rows,category='all',query=''){
+ const needle=String(query||'').trim().toLocaleLowerCase();
+ return rows.filter(x=>(category==='all'||x.category===category)&&(!needle||
+  [x.name,x.notes,x.location,x.category].some(v=>String(v||'').toLocaleLowerCase().includes(needle))));
+}
+root.VacationIdeas=Object.freeze({normalizeDraft,validateDraft,fromItinerary,filterForList});
 })(window);
