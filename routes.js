@@ -55,14 +55,35 @@ function parseRoute(data){
  return {polyline,distanceM:Number(p.distance),durationS:Number(p.time),legStats:(p.legs||[]).map(x=>({distanceM:Number(x.distance)||0,durationS:Number(x.time)||0}))};
 }
 // Compare actual road geometry, not just estimated distance or strategy labels.
+// Resample by travelled distance so matching roads aren't treated as different
+// merely because one response contains a denser polyline.
+function samplesByDistance(polyline,count=18){
+ const coords=decodePolyline(polyline);
+ if(coords.length<2)return [];
+ const accumulated=[0];
+ for(let i=1;i<coords.length;i++){
+  const p=coords[i-1],q=coords[i],scale=Math.cos((p[0]+q[0])/2*Math.PI/180);
+  accumulated.push(accumulated[i-1]+Math.hypot(q[0]-p[0],(q[1]-p[1])*scale));
+ }
+ const total=accumulated[accumulated.length-1];
+ if(total<=0)return [];
+ const out=[];let cursor=1;
+ for(let i=0;i<=count;i++){
+  const target=total*i/count;
+  while(cursor<accumulated.length-1&&accumulated[cursor]<target)cursor++;
+  const a=accumulated[cursor-1],b=accumulated[cursor],t=b>a?(target-a)/(b-a):0;
+  const p=coords[cursor-1],q=coords[cursor];
+  out.push([p[0]+(q[0]-p[0])*t,p[1]+(q[1]-p[1])*t]);
+ }
+ return out;
+}
 function sameRoad(a,b){
- const x=decodePolyline(a),y=decodePolyline(b);
- if(!x.length||!y.length)return false;
+ const x=samplesByDistance(a),y=samplesByDistance(b);
+ if(!x.length||x.length!==y.length)return false;
  let different=0;
- for(let i=1;i<18;i++){
-  const t=i/18,p=x[Math.round(t*(x.length-1))],q=y[Math.round(t*(y.length-1))];
-  const dx=(p[1]-q[1])*Math.cos(p[0]*Math.PI/180),dy=p[0]-q[0];
-  if(Math.hypot(dx,dy)>0.015)different++;
+ for(let i=1;i<x.length-1;i++){
+  const p=x[i],q=y[i],scale=Math.cos(p[0]*Math.PI/180);
+  if(Math.hypot(p[0]-q[0],(p[1]-q[1])*scale)>0.015)different++;
  }
  return different<3;
 }
@@ -126,7 +147,7 @@ function createController(config){
   if(!r)return [];
   if(!group||!$('routeShowAlternatives')?.checked)return [r];
   const options=routes().filter(x=>x.preferences?.compareGroup===group&&x.visible!==false);
-  return [...options.filter(x=>x.id!==currentId),r].slice(-3);
+  return options.slice(0,3);
  }
  function routeGeometry(r){
   return (r.segments||[]).length?r.segments:(r.polyline&&!validGaps(r).length?[{polyline:r.polyline,startIndex:0,endIndex:(r.waypoints||[]).length}]:[]);
@@ -160,7 +181,9 @@ function createController(config){
   layer.clearLayers();dragHandle=null;dragHandleLeg=-1;dragHandleRoute='';
   const r=selected();if(!r||document.getElementById('mapShowRoutes')?.checked===false)return;
   const shown=comparedRoutes();
-  for(const [variantIndex,route] of shown.entries()){
+  const ordered=[...shown.filter(x=>x.id!==currentId),...shown.filter(x=>x.id===currentId)];
+  for(const route of ordered){
+   const variantIndex=shown.findIndex(x=>x.id===route.id);
    if(route.visible===false)continue;
    const active=route.id===currentId,rows=sectionRows(route),points=routePoints(route);
    const color=ROUTE_COLORS[variantIndex%ROUTE_COLORS.length];
@@ -231,7 +254,8 @@ function createController(config){
  }
  function fitMap(){
   const r=selected();if(!map||!r)return;
-  const coords=(r.segments||[]).length?r.segments.flatMap(x=>decodePolyline(x.polyline)):(r.polyline&&!validGaps(r).length?decodePolyline(r.polyline):[r.start,...(r.waypoints||[]),r.end].filter(pointOK).map(p=>[p.lat,p.lng]));
+  const shown=comparedRoutes(),combined=shown.flatMap(x=>routeGeometry(x).flatMap(seg=>decodePolyline(seg.polyline)));
+  const coords=combined.length?combined:[r.start,...(r.waypoints||[]),r.end].filter(pointOK).map(p=>[p.lat,p.lng]);
   if(coords.length>1)map.fitBounds(L.latLngBounds(coords).pad(0.12),{maxZoom:14});
   else if(coords.length===1)map.setView(coords[0],13);
  }
