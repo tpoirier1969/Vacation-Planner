@@ -342,6 +342,48 @@ body{
  .route-picker-row button{flex:1}
 }
 
+/* Idea and itinerary browsing: in-page filters, readable counts and focused mobile actions. */
+.idea-search-row{display:flex;align-items:stretch;gap:6px;margin:7px 0 13px;min-width:0}
+.idea-search-row input{min-width:0;flex:1 1 auto;width:100%;font:inherit;font-size:16px;min-height:42px;border:1px solid #cdb999;border-radius:6px;padding:8px 10px;background:#fffdfa;color:var(--retro-deep)}
+.idea-search-row button{flex:0 0 auto;min-height:42px}
+.itinerary-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:9px 0 11px;border-bottom:1px solid #dfccb0}
+.itinerary-toolbar label{font-size:13px;font-weight:750;color:var(--retro-deep)}
+.itinerary-toolbar select{min-width:140px;flex:0 1 185px;min-height:41px;padding:6px 8px;font-size:16px;border:1px solid #cdb999;border-radius:6px;background:#fffdfa;color:var(--retro-deep)}
+.itinerary-toolbar>span{font-size:12px;flex:1 1 170px;min-width:0;text-align:right;overflow-wrap:anywhere}
+.itinerary-group h3{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.itinerary-group h3 .count{font-size:12px;font-weight:700;color:#536f68}
+@media(max-width:760px){
+ body.mobile-workspace #places .grid>.card:first-child,
+ body.mobile-workspace #itinerary .grid>.card:first-child{padding:11px}
+ body.mobile-workspace .idea-search-row{margin:9px 0 11px}
+ body.mobile-workspace .itinerary-toolbar{gap:6px}
+ body.mobile-workspace .itinerary-toolbar label{flex:0 0 auto}
+ body.mobile-workspace .itinerary-toolbar select{flex:1 1 155px;max-width:100%}
+ body.mobile-workspace .itinerary-toolbar>span{flex:1 1 100%;text-align:left}
+ body.mobile-workspace #placeList .day,
+ body.mobile-workspace #activityList .day{padding:10px;margin:8px 0;border-radius:0 8px 8px 0}
+ body.mobile-workspace #placeList .entry-head,
+ body.mobile-workspace #activityList .entry-head{display:flex;flex-wrap:wrap;align-items:flex-start}
+ body.mobile-workspace #placeList .entry-head>strong,
+ body.mobile-workspace #activityList .entry-head>strong{flex:1 1 100%;font-size:14px}
+ body.mobile-workspace #placeList .entry-actions,
+ body.mobile-workspace #activityList .entry-actions{flex:1 1 100%;gap:6px}
+ body.mobile-workspace #placeList .entry-actions button,
+ body.mobile-workspace #activityList .entry-actions button{flex:1 1 auto;min-height:39px}
+ body.mobile-workspace #placeList .idea-category-inline{margin-left:0;flex:1 1 auto;justify-content:flex-start}
+ body.mobile-workspace #placeList .day>.row:last-child button,
+ body.mobile-workspace #activityList .day>.row:last-child button{min-height:42px}
+ body.mobile-workspace #manualPlace .activity-options,
+ body.mobile-workspace #activityForm .activity-options{margin-top:8px}
+ body.mobile-workspace #activityForm .activity-checks{margin:7px 0}
+ body.mobile-workspace #manualPlace button.primary,
+ body.mobile-workspace #activityForm button.primary{min-height:46px;width:100%}
+}
+@media(max-width:380px){
+ body.mobile-workspace .mobile-card-heading h2{font-size:17px}
+ body.mobile-workspace .itinerary-toolbar label{flex:1 1 100%}
+ body.mobile-workspace .itinerary-toolbar select{flex:1 1 100%;width:100%}
+}
 /* Compact Ideas category filtering; the filter is a view, not a database field. */
 .ideas-filter{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 8px;padding:5px 0 8px;border-bottom:1px solid #e2d2b7}
 .ideas-filter label{font-size:13px;font-weight:750;color:var(--retro-deep)}
