@@ -6,7 +6,7 @@
 <table id="results"><thead><tr><th>Viewport</th><th>Document</th><th>Route panel</th><th>Overflow</th></tr></thead><tbody></tbody></table><div id="frames"></div>
 <script>
 const sizes=[320,375,390,430,720];
-const content=String.raw\`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="./planner.css?route-width-qa=20261118"></head>
+const content=String.raw`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="./planner.css?route-width-qa=20261118"></head>
 <body class="mobile-workspace sheet-expanded"><header class="planner-masthead"><div class="masthead-inner"><div class="masthead-content"><div class="trip-summary"><h1>A trip with an exceptionally long title</h1></div></div></div></header>
 <div id="cloudReady"><main class="shell"><div id="workspace"><nav class="tabs" id="tabs"><button>Explore</button></nav><section id="explore" class="panel"><div class="toolbar"><label class="field"><input placeholder="Search"></label><button>Search</button></div><div class="map-layout"><div><div class="map-frame"><div class="map"></div></div></div><aside><div class="card explore-side">
 <button class="mobile-sheet-handle"><span>Route planner</span> Collapse</button>
@@ -33,7 +33,7 @@ const content=String.raw\`<!doctype html><html><head><meta name="viewport" conte
 <div class="row wrap route-source-row"><select><option>Itinerary: A very long option for an attraction that might expand the route editor offscreen</option></select><button>Add stop</button></div>
 <button>Add this day's itinerary stops</button><label class="route-show"><input type="checkbox"> Show route on map</label><div class="route-metrics">1125 mi · 1,125 hr 30 minutes driving</div>
 <div class="row wrap route-calc-buttons"><button class="primary">Suggest route</button><button class="quiet">Fit map to route</button></div>
-</div></div></div></aside></div></section></div></main></div></body></html>\`;
+</div></div></div></aside></div></section></div></main></div></body></html>`;
 const tbl=document.querySelector('#results tbody'),area=document.getElementById('frames');
 let done=0;
 for(const w of sizes){
