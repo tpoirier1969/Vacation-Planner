@@ -600,9 +600,6 @@ footer{
    min-height:59px;background:#fff7e5;color:var(--retro-deep);
    border:0;border-bottom:1px solid #debf90;border-radius:14px 14px 0 0;font-weight:800
  }
- body.mobile-workspace .sheet-grip{
-   width:37px;height:5px;background:#b7a58a;border-radius:9px;position:absolute;left:50%;top:5px;transform:translateX(-50%)
- }
  body.mobile-workspace #mobileSheetTitle{flex:1;text-align:left;font-size:13px}
  body.mobile-workspace #mobileSheetAction{font-size:12px;font-weight:800;padding:6px 8px;border:1px solid #bba37e;border-radius:7px;background:#fffdf8}
  body.mobile-workspace .sheet-indicator{font-size:20px}
