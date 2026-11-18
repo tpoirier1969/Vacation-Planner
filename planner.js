@@ -609,7 +609,88 @@ function openPlace(lat,lng,name,notes,destination='places',category='Other',sour
  $('#placeForm').querySelector('button.primary').textContent=destination==='itinerary'?'Continue to itinerary':'Save idea';
  $('#placeDialog').showModal();
 }
-async function searchLocation(q,store=false){if(!q.trim())return;if(!store&&document.activeElement instanceof HTMLElement)document.activeElement.blur();$('#searchButton').disabled=true;const token=++searchToken;try{const response=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(q),{headers:{'Accept':'application/json'}});if(!response.ok)throw Error('Search service unavailable');const results=await response.json();if(token!==searchToken)return;if(!results.length){if(!store)alert('No location found. Try a more specific place name.');return}const p=results[0],lat=Number(p.lat),lng=Number(p.lon);if(store&&trip()){trip().lat=lat;trip().lng=lng;persist()}setTab('explore');setTimeout(()=>{initMap();map?.setView([lat,lng],11)},100)}catch(e){if(!store)alert('Location search failed: '+e.message)}finally{$('#searchButton').disabled=false}}
+
+let searchMatches=[];
+async function searchLocation(query,store=false){
+ const term=String(query||'').trim();if(!term)return;
+ const token=++searchToken,key=window.LAZY_ACRES_GEOAPIFY_KEY,center=map?.getCenter()||{lat:trip()?.lat??46.55,lng:trip()?.lng??-87.4};
+ const canUseGeoapify=!!key&&key!=='PASTE_YOUR_GEOAPIFY_BROWSER_KEY_HERE';
+ if(!store&&document.activeElement instanceof HTMLElement)document.activeElement.blur();
+ $('#searchButton').disabled=true;
+ const box=$('#searchMatches');
+ if(!store){box.innerHTML='<p class="muted">Finding businesses and places…</p>';box.classList.remove('hidden');}
+ try{
+  let geo=[],places=[];
+  if(canUseGeoapify){
+   const bias='proximity:'+Number(center.lng).toFixed(6)+','+Number(center.lat).toFixed(6);
+   const geocode=new URLSearchParams({text:term,limit:store?'1':'8',lang:'en',bias,apiKey:key});
+   const searches=[fetch('https://api.geoapify.com/v1/geocode/search?'+geocode).then(async r=>{if(!r.ok)throw Error('Geocoding HTTP '+r.status);return r.json();})];
+   if(!store){
+    const nearby=new URLSearchParams({categories:DISCOVERY_CATEGORIES.all,name:term,
+     filter:'circle:'+Number(center.lng).toFixed(6)+','+Number(center.lat).toFixed(6)+',80000',
+     bias,limit:'20',apiKey:key});
+    searches.push(fetch('https://api.geoapify.com/v2/places?'+nearby).then(async r=>{if(!r.ok)throw Error('Places HTTP '+r.status);return r.json();}));
+   }
+   const responses=await Promise.allSettled(searches);
+   if(responses.every(r=>r.status==='rejected'))throw responses[0].reason;
+   geo=responses[0].status==='fulfilled'?responses[0].value.features||[]:[];
+   places=responses[1]?.status==='fulfilled'?responses[1].value.features||[]:[];
+  }else{
+   const response=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit='+(store?'1':'8')+'&q='+encodeURIComponent(term),{headers:{Accept:'application/json'}});
+   if(!response.ok)throw Error('Location search HTTP '+response.status);
+   geo=(await response.json()).map(p=>({properties:{name:p.name||p.display_name?.split(',')[0],
+    formatted:p.display_name,lat:Number(p.lat),lon:Number(p.lon)},geometry:{coordinates:[Number(p.lon),Number(p.lat)]}}));
+  }
+  if(token!==searchToken)return;
+  const results=[],seen=new Set();
+  const append=(feature,kind)=>{
+   const item=mapPlaceFromFeature(feature),p=feature.properties||{};
+   if(!item)return;
+   const identity=item.placeId||[item.name.toLowerCase(),item.lat.toFixed(4),item.lng.toFixed(4)].join('|');
+   if(seen.has(identity))return;seen.add(identity);
+   results.push({...item,address:item.address||p.formatted||'',searchCategory:detectedCategory(item.categories,item.name),
+    sourceKind:kind});
+  };
+  for(const feature of places)append(feature,'Business');
+  for(const feature of geo)append(feature,'Location');
+  if(store){
+   const first=results[0];if(!first)return;
+   if(trip()){trip().lat=first.lat;trip().lng=first.lng;persist();}
+   setTab('explore');setTimeout(()=>{initMap();map?.setView([first.lat,first.lng],11);},100);
+   return;
+  }
+  searchMatches=results;
+  box.innerHTML='<div class="row"><h3>'+results.length+' matching places / locations</h3><button type="button" class="quiet small" data-search-close>Close</button></div>'+
+   (results.length?results.map((x,i)=>'<div class="search-match">'+
+    '<button type="button" data-search-choice="'+i+'"><strong>'+esc(x.name)+'</strong>'+
+    '<small>'+esc(x.sourceKind)+(x.address?' · '+esc(x.address):'')+'</small></button>'+
+    '<button type="button" class="secondary small" data-search-save="'+i+'">+ Idea</button></div>').join(''):
+    '<p>No matches in these sources. Try a shorter name, nearby town, or add a map pin manually.</p>');
+  if(window.matchMedia('(max-width:760px)').matches)setMobileSheet('peek');
+ }catch(error){
+  if(token!==searchToken)return;
+  if(!store)box.innerHTML='<p>Search unavailable: '+esc(error.message||'Request failed')+'</p><button type="button" class="quiet small" data-search-close>Close</button>';
+  else console.warn('Trip destination lookup failed:',error);
+ }finally{if(token===searchToken)$('#searchButton').disabled=false;}
+}
+$('#searchMatches').addEventListener('click',e=>{
+ if(e.target.closest('[data-search-close]')){$('#searchMatches').classList.add('hidden');return;}
+ const chosen=e.target.closest('[data-search-choice]'),saved=e.target.closest('[data-search-save]');
+ const index=Number((chosen||saved)?.dataset.searchChoice??saved?.dataset.searchSave);
+ const item=searchMatches[index];if(!item)return;
+ if(saved){const existing=saveDiscoveredIdea(item);if(existing){saved.disabled=true;saved.textContent='Saved';}return;}
+ if(chosen){
+  $('#searchMatches').classList.add('hidden');
+  setTab('explore');setMobileSheet('peek');
+  setTimeout(()=>{
+   initMap();map?.setView([item.lat,item.lng],14);
+   if(map&&typeof L!=='undefined'){
+    const point={lat:item.lat,lng:item.lng};
+    L.popup().setLatLng(point).setContent(mapMenuContent(point,item.name,'','',detectedCategory(item.categories,item.name),item)).openOn(map);
+   }
+  },110);
+ }
+});
 // Geoapify Places API: category/name search constrained to the visible map.
 const DISCOVERY_CATEGORIES={
  lodging:'accommodation',
