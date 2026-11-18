@@ -633,26 +633,30 @@ async function searchLocation(query,store=false){
    const bias='proximity:'+Number(center.lng).toFixed(6)+','+Number(center.lat).toFixed(6);
    const geocode=new URLSearchParams({text:term,limit:store?'1':'8',lang:'en',bias,apiKey:key});
    const searches=[fetch('https://api.geoapify.com/v1/geocode/search?'+geocode).then(async r=>{if(!r.ok)throw Error('Geocoding HTTP '+r.status);return r.json();})];
-   if(!store){
-    const name=normalizedBusinessName(term);
-    const base={categories:DISCOVERY_CATEGORIES.all,name,bias,limit:'50',apiKey:key};
-    const point=Number(center.lng).toFixed(6)+','+Number(center.lat).toFixed(6);
-    // A local Places query finds partial-name matches such as "Old Post Office"
-    // near the area being explored; the broader query finds distant matches.
-    // Both results are deduplicated below. The local filter is NOT the only scope.
-    for(const filter of ['circle:'+point+',80467',null]){
-     const args=new URLSearchParams(filter?{...base,filter}:base);
-     searches.push(fetch('https://api.geoapify.com/v2/places?'+args).then(async r=>{
-      if(!r.ok)throw Error('Places HTTP '+r.status);
-      return r.json();
-     }));
-    }
-   }
+   const name=normalizedBusinessName(term);
+   const centerPoint=Number(center.lng).toFixed(6)+','+Number(center.lat).toFixed(6);
+   const categories=['catering','commercial,accommodation','tourism,entertainment,leisure,natural,production.winery'];
+   const searchGroup=(group,filter)=>{
+    const params=new URLSearchParams({categories:group,name,bias,limit:'50',apiKey:key});
+    if(filter)params.set('filter',filter);
+    return fetch('https://api.geoapify.com/v2/places?'+params).then(async response=>{
+     if(!response.ok)throw Error('Places HTTP '+response.status);
+     return response.json();
+    });
+   };
+   if(!store)for(const group of categories)searches.push(searchGroup(group,'circle:'+centerPoint+',80467'));
    const responses=await Promise.allSettled(searches);
    if(responses.every(r=>r.status==='rejected'))throw responses[0].reason;
    geo=responses[0].status==='fulfilled'?responses[0].value.features||[]:[];
    places=responses.slice(1).filter(r=>r.status==='fulfilled')
     .flatMap(r=>Array.isArray(r.value.features)?r.value.features:[]);
+   // Some named businesses are far from the current map. If no local match
+   // exists, retry by category without any geographic restriction.
+   if(!store&&!places.length){
+    const global=await Promise.allSettled(categories.map(group=>searchGroup(group,null)));
+    places=global.filter(r=>r.status==='fulfilled')
+     .flatMap(r=>Array.isArray(r.value.features)?r.value.features:[]);
+   }
   }else{
    const response=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit='+(store?'1':'8')+'&q='+encodeURIComponent(term),{headers:{Accept:'application/json'}});
    if(!response.ok)throw Error('Location search HTTP '+response.status);
