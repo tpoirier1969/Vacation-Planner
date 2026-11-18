@@ -122,7 +122,12 @@ function initializeMobileWorkspace(){
   detail.className='mobile-advanced';summary.textContent='More options (optional)';detail.append(summary);
   for(const sel of items){const element=form.querySelector(sel);if(element)detail.append(element);}
   if(detail.children.length<2)return;
-  form.insertBefore(detail,form.querySelector('button.primary'));
+  // insertBefore needs a DIRECT child of the form. In the map save dialog
+  // the primary button lives inside the form's .row, not directly in the form.
+  let insertionPoint=form.querySelector('button.primary');
+  while(insertionPoint&&insertionPoint.parentElement!==form)insertionPoint=insertionPoint.parentElement;
+  if(!insertionPoint)throw Error('Cannot find the form action row for '+formSelector);
+  form.insertBefore(detail,insertionPoint);
   const adapt=()=>{if(!window.matchMedia('(max-width:760px)').matches)detail.open=true;else if(!detail.dataset.mobileVisited){detail.open=false;detail.dataset.mobileVisited='1';}};
   adapt();window.addEventListener('resize',adapt);
  }
