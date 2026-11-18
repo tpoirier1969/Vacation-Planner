@@ -13,6 +13,8 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **Discover Nearby mapped results — preview (2026-11-18):** Every currently loaded discovery result is given a numbered map marker. After a search, fit all returned results on the map; on iPhone collapse the map sheet so the markers are visible. A Show all N on map button is available above the results; Load more pages append both cards and pins. Tests verified three paginated-result markers, map bounds and phone sheet behavior. Note API pagination means results not yet loaded are not displayed. Real authenticated iPhone acceptance remains.
+
 - **Ideas + Itinerary mobile UX — staged for review, 2026-11-18:** Search Ideas by name, notes, location and category while retaining the existing category filter/counts. Filter decided plans by all, unscheduled, reservations needed and must-do; show totals and day-group counts. On iPhone, date/time, must-do and fixed-date choices remain visible, booking details remain directly available, optional notes/hours collapse, edit sheets expose time, booking status and flags, and action buttons get touch-friendly sizing. Filters are transient view-only state, reset on trip switch; no schema change or authoritative data mutation. Preview includes prior route-section editor work and remains read-only. Actual authenticated iPhone approval pending.
 
 
