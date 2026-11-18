@@ -6,7 +6,7 @@ import {runInNewContext} from 'node:vm';
 function fixture(){
  const controls=new Map(),documentHandlers={},lines=[];let saves=0;
  class Control{
-  constructor(){this.value='';this.innerHTML='';this.textContent='';this.checked=false;this.disabled=false;this.dataset={};this.handlers={};this.classList={toggle(){},add(){},remove(){}};}
+  constructor(){this.value='';this.innerHTML='';this.textContent='';this.checked=true;this.disabled=false;this.dataset={};this.handlers={};this.classList={toggle(){},add(){},remove(){}};}
   addEventListener(event,callback){this.handlers[event]=callback;}
   setAttribute(){}
   scrollIntoView(){}
