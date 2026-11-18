@@ -580,14 +580,14 @@ footer{
  body.mobile-workspace .map-flag-legend,
  body.mobile-workspace .map-layout>div:first-child>p.muted{display:none}
  body.mobile-workspace .map-layout>aside{
-   position:fixed;left:0;right:0;bottom:var(--phone-nav);width:100%;height:45dvh;
+   position:fixed;left:0;right:0;bottom:var(--phone-nav);width:100%;height:64px;
    min-height:70px;max-height:calc(100dvh - var(--phone-header) - var(--phone-nav) - 4px);
    z-index:690;overflow:hidden;background:#fff9ec;
    border-top:2px solid #b88457;border-radius:14px 14px 0 0;
    box-shadow:0 -6px 24px #0c303044;transition:height .18s ease
  }
- body.mobile-workspace.sheet-peek .map-layout>aside{height:64px}
- body.mobile-workspace.sheet-full .map-layout>aside{
+ body.mobile-workspace.sheet-collapsed .map-layout>aside{height:64px}
+ body.mobile-workspace.sheet-expanded .map-layout>aside{
    height:calc(100dvh - var(--phone-header) - var(--phone-nav) - 4px)
  }
  body.mobile-workspace .map-layout>aside .explore-side{
@@ -600,14 +600,12 @@ footer{
    min-height:59px;background:#fff7e5;color:var(--retro-deep);
    border:0;border-bottom:1px solid #debf90;border-radius:14px 14px 0 0;font-weight:800
  }
- body.mobile-workspace .sheet-grip{
-   width:37px;height:5px;background:#b7a58a;border-radius:9px;position:absolute;left:50%;top:5px;transform:translateX(-50%)
- }
  body.mobile-workspace #mobileSheetTitle{flex:1;text-align:left;font-size:13px}
+ body.mobile-workspace #mobileSheetAction{font-size:12px;font-weight:800;padding:6px 8px;border:1px solid #bba37e;border-radius:7px;background:#fffdf8}
  body.mobile-workspace .sheet-indicator{font-size:20px}
- body.mobile-workspace.sheet-peek .explore-tool-tabs,
- body.mobile-workspace.sheet-peek #exploreDiscoverPanel,
- body.mobile-workspace.sheet-peek #exploreRoutePanel{display:none!important}
+ body.mobile-workspace.sheet-collapsed .explore-tool-tabs,
+ body.mobile-workspace.sheet-collapsed #exploreDiscoverPanel,
+ body.mobile-workspace.sheet-collapsed #exploreRoutePanel{display:none!important}
  body.mobile-workspace .explore-tool-tabs{position:sticky;top:59px;z-index:24;background:#fff9ec;padding:4px 0 7px}
  body.mobile-workspace .explore-tool-tabs button{min-height:42px}
  body.mobile-workspace .explore-side .field{margin:5px 0}
