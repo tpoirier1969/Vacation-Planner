@@ -644,7 +644,15 @@ async function searchLocation(query,store=false){
   if(token!==searchToken)return;
   const results=[],seen=new Set();
   const append=(feature,kind)=>{
-   const item=mapPlaceFromFeature(feature),p=feature.properties||{};
+   const p=feature.properties||{},coords=feature.geometry?.coordinates;
+   let item=mapPlaceFromFeature(feature);
+   // Street addresses and towns can have formatted addresses but no OSM "name".
+   if(!item&&kind==='Location'){
+    const lat=Number(p.lat??coords?.[1]),lng=Number(p.lon??coords?.[0]);
+    const name=String(p.name||p.address_line1||p.formatted||'').trim();
+    if(name&&Number.isFinite(lat)&&Number.isFinite(lng)&&Math.abs(lat)<=90&&Math.abs(lng)<=180)
+     item={name,lat,lng,address:p.formatted||'',categories:[],placeId:p.place_id||'',kind:p.result_type||'Location'};
+   }
    if(!item)return;
    const identity=item.placeId||[item.name.toLowerCase(),item.lat.toFixed(4),item.lng.toFixed(4)].join('|');
    if(seen.has(identity))return;seen.add(identity);
