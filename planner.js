@@ -612,6 +612,12 @@ function openPlace(lat,lng,name,notes,destination='places',category='Other',sour
  $('#placeDialog').showModal();
 }
 
+function normalizedBusinessName(term){
+ // Geoapify's name filter matches substrings, but cannot match a leading
+ // "The" when the OSM listing does not contain that word.
+ // OSM: "Old Post Office Restaurant"; visitor: "The Old Post Office Restaurant".
+ return String(term||'').trim().replace(/^(?:the|an|a)\s+/i,'').replace(/\s+/g,' ');
+}
 let searchMatches=[];
 async function searchLocation(query,store=false){
  const term=String(query||'').trim();if(!term)return;
@@ -628,8 +634,10 @@ async function searchLocation(query,store=false){
    const geocode=new URLSearchParams({text:term,limit:store?'1':'8',lang:'en',bias,apiKey:key});
    const searches=[fetch('https://api.geoapify.com/v1/geocode/search?'+geocode).then(async r=>{if(!r.ok)throw Error('Geocoding HTTP '+r.status);return r.json();})];
    if(!store){
-    const nearby=new URLSearchParams({categories:DISCOVERY_CATEGORIES.all,name:term,
-     filter:'circle:'+Number(center.lng).toFixed(6)+','+Number(center.lat).toFixed(6)+',80000',
+    const nearby=new URLSearchParams({categories:DISCOVERY_CATEGORIES.all,
+     name:normalizedBusinessName(term),
+     // A named-place search must not be geographically excluded by map location.
+     // Geoapify supports proximity bias without a filter.
      bias,limit:'20',apiKey:key});
     searches.push(fetch('https://api.geoapify.com/v2/places?'+nearby).then(async r=>{if(!r.ok)throw Error('Places HTTP '+r.status);return r.json();}));
    }
@@ -806,7 +814,7 @@ async function discover(loadMore=false){
  const categories=category==='restaurants'?DISCOVERY_CATEGORIES.restaurants:(match?.categories||DISCOVERY_CATEGORIES[category]||DISCOVERY_CATEGORIES.all);
  const restaurantOnly=category==='restaurants'||(!!match&&/catering\.(restaurant|fast_food|food_court|cafe)/.test(categories));
  // A term such as "Lake View Restaurant" is a name, not merely a request for any restaurant.
- const nameFilter=term&&!genericDiscoveryTerm(term)?term:'';
+ const nameFilter=term&&!genericDiscoveryTerm(term)?normalizedBusinessName(term):'';
  const centerPoint=Number(center.lng).toFixed(6)+','+Number(center.lat).toFixed(6);
  const area=radius==='view'?
   'rect:'+bounds.getWest().toFixed(5)+','+bounds.getSouth().toFixed(5)+','+
