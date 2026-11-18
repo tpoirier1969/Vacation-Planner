@@ -62,6 +62,23 @@ function summary(r){
  const totalMins=Math.max(1,Math.round(r.durationS/60)),hours=Math.floor(totalMins/60),mins=totalMins%60;
  return (r.distanceM/1609.344).toFixed(0)+' mi · '+(hours?hours+' hr ':'')+mins+' min driving';
 }
+// Separate a calculated road line at its ordered waypoints for precise map selection.
+function sectionGeometry(coords,points){
+ if(!Array.isArray(coords)||coords.length<points.length||points.length<2)return null;
+ const cuts=[0];let previous=0;
+ for(let j=1;j<points.length-1;j++){
+  const p=points[j],last=coords.length-(points.length-j);
+  if(!pointOK(p)||last<=previous)return null;
+  let best=previous+1,distance=Infinity,scale=Math.cos(Number(p.lat)*Math.PI/180);
+  for(let k=previous+1;k<=last;k++){
+   const dy=coords[k][0]-Number(p.lat),dx=(coords[k][1]-Number(p.lng))*scale,d=dy*dy+dx*dx;
+   if(d<distance){distance=d;best=k;}
+  }
+  cuts.push(best);previous=best;
+ }
+ cuts.push(coords.length-1);
+ return points.slice(0,-1).map((_,i)=>coords.slice(cuts[i],cuts[i+1]+1));
+}
 function routeType(r){
  if(r?.routeKind==='day')return 'day';
  const direction=r?.preferences?.journeyDirection;
@@ -78,7 +95,7 @@ function createController(config){
  let selectedSection='';
  const selected=()=>routes().find(r=>r.id===currentId)||null;
  const report=msg=>{status=msg;if($('routeStatus'))$('routeStatus').textContent=msg;};
- function selectDefault(){if(!routes().some(r=>r.id===currentId)){currentId=routes()[0]?.id||'';undoStack=[];}}
+ function selectDefault(){if(!routes().some(r=>r.id===currentId)){currentId=routes()[0]?.id||'';undoStack=[];selectedSection='';}}
  function invalidate(r){r.polyline='';r.distanceM=null;r.durationS=null;r.legStats=[];r.segments=[];}
  function update(fn,changedRoad=false){
   const r=selected();if(!r)return;
@@ -93,9 +110,18 @@ function createController(config){
   if(!layer)return;layer.clearLayers();
   const r=selected();if(!r||r.visible===false||document.getElementById('mapShowRoutes')?.checked===false)return;
   const geometries=(r.segments||[]).length?r.segments:(r.polyline&&!validGaps(r).length?[{polyline:r.polyline,startIndex:0}]:[]);
-  for(const segment of geometries){const coords=decodePolyline(segment.polyline);
-   if(coords.length>1){const line=L.polyline(coords,{color:'#b45237',weight:5,opacity:.88,interactive:true}).addTo(layer);
-    line.on('click',()=>{selectedSection=sectionRows(r)[segment.startIndex||0]?.key||'';render();$('routeSectionList')?.scrollIntoView({behavior:'smooth',block:'nearest'});});}
+  const rows=sectionRows(r),points=routePoints(r);
+  for(const segment of geometries){
+   const coords=decodePolyline(segment.polyline),start=segment.startIndex||0,end=segment.endIndex??rows.length-1;
+   if(coords.length<2||end<start)continue;
+   const parts=sectionGeometry(coords,points.slice(start,end+2))||[coords];
+   for(const [index,part] of parts.entries()){
+    if(part.length<2)continue;
+    const row=rows[start+index];if(!row)continue;
+    const active=selectedSection===row.key;
+    const line=L.polyline(part,{color:active?'#187b79':'#b45237',weight:active?8:5,opacity:active?1:.88,interactive:true}).addTo(layer);
+    line.on('click',()=>{selectedSection=row.key;render();$('routeSectionList')?.scrollIntoView({behavior:'smooth',block:'nearest'});});
+   }
   }
   for(const [name,p,color] of [['Start',r.start,'#28766f'],['End',r.end,'#b45237']]){
    if(pointOK(p))L.circleMarker([p.lat,p.lng],{radius:7,color,fillColor:color,fillOpacity:0.8})
@@ -143,13 +169,13 @@ function createController(config){
   const r=copy&&base?{...JSON.parse(JSON.stringify(base)),id:config.uid(),name:(base.name+' — alternative').slice(0,160)}:
    newRoute(config.uid(),t.id,n?'Route '+(n+1):'Outbound route');
   r.routeOrder=Math.max(-1,...routes().map(x=>x.routeOrder||0))+1;
-  config.getRoutes().push(r);currentId=r.id;undoStack=[];pick='';status=copy?'Saved separate alternative. Recalculate to compare.':'Add start and end points to begin.';
+  config.getRoutes().push(r);currentId=r.id;undoStack=[];selectedSection='';pick='';status=copy?'Saved separate alternative. Recalculate to compare.':'Add start and end points to begin.';
   config.persist();
  }
  function removeRoute(){
   const r=selected();if(!r||!confirm('Delete the saved route "'+r.name+'"?'))return;
   const list=config.getRoutes(),i=list.findIndex(x=>x.id===r.id);if(i>=0)list.splice(i,1);
-  currentId='';undoStack=[];pick='';config.persist();
+  currentId='';undoStack=[];selectedSection='';pick='';config.persist();
  }
  function undo(){
   const r=selected(),old=undoStack.pop();if(!r||!old)return;
@@ -182,10 +208,24 @@ function createController(config){
    status='Found '+(p.formatted||text)+'. Check the marker on the map.';render();fitMap();
   }catch(e){report('Location lookup failed: '+e.message);}
  }
- function toggleSection(key){
-  const r=selected(),row=r&&sectionRows(r).find(x=>x.key===key);if(!row)return;
-  update(route=>{const gaps=new Set(validGaps(route));if(gaps.has(key))gaps.delete(key);else gaps.add(key);route.gaps=[...gaps];},true);
-  selectedSection=key;status=row.gap?'Driving section reconnected. Recalculate roads.':'Driving section removed; its endpoints are retained. Recalculate remaining roads.';render();
+ function setSectionConnection(key,connected){
+  const r=selected(),row=r&&sectionRows(r).find(x=>x.key===key);
+  if(!row||row.gap===!connected)return;
+  update(route=>{
+   const gaps=new Set(validGaps(route));
+   if(connected)gaps.delete(key);else gaps.add(key);
+   route.gaps=[...gaps];
+  },true);
+  selectedSection=key;
+  status=connected?'Driving section reconnected. Recalculate roads.':'Driving section skipped. Endpoints are retained; Undo restores it.';
+  render();
+ }
+ function clearEndpoint(role){
+  const r=selected();if(!r||!['start','end'].includes(role)||!r[role])return;
+  update(route=>{route[role]=null;},true);
+  selectedSection='';
+  status=(role==='start'?'Starting point':'Destination')+' removed. Stops remain. Undo restores it.';
+  render();
  }
  function moveRoute(direction){
   const list=routes(),index=list.findIndex(r=>r.id===currentId),other=index+direction;
@@ -269,9 +309,16 @@ function createController(config){
     '<button type="button" class="quiet small" data-route-move="'+i+':down" '+(i===r.waypoints.length-1?'disabled':'')+'>↓</button>'+
     '<button type="button" class="quiet small" data-route-remove="'+i+'" aria-label="Remove waypoint">×</button></div></div>').join('')||
     '<p class="muted small-details">No road points or stops yet.</p>';
-  $('routeSectionList').innerHTML=sectionRows(r).map(({i,key,from,to,gap})=>'<div class="route-leg-row route-section '+(gap?'route-section-gap ':'')+(selectedSection===key?'route-section-selected':'')+'" data-section-key="'+esc(key)+'" tabindex="0" role="group" aria-label="Driving section '+(i+1)+'">'+
-    '<span><strong>'+esc((i+1)+'. '+(from?.label||'Unmapped start')+' → '+(to?.label||'Unmapped destination'))+'</strong><small>'+esc(gap?'Not driving this section':(r.legStats?.[i]?summary(r.legStats[i]):'Recalculate for road estimate'))+'</small></span>'+
-    '<button type="button" class="quiet small" data-section-toggle="'+esc(key)+'">'+(gap?'Reconnect':'Remove section')+'</button></div>').join('');
+  const sectionList=sectionRows(r),skipped=sectionList.filter(x=>x.gap).length;
+  if(selectedSection&&!sectionList.some(x=>x.key===selectedSection))selectedSection='';
+  const activeRow=sectionList.find(x=>x.key===selectedSection);
+  $('routeSectionSummary').textContent=sectionList.length+' section'+(sectionList.length===1?'':'s')+(skipped?' · '+skipped+' skipped':'');
+  $('routeSectionRemove').disabled=!activeRow||activeRow.gap;
+  $('routeSectionRestore').disabled=!activeRow||!activeRow.gap;
+  $('routeSectionList').innerHTML=sectionList.map(({i,key,from,to,gap})=>'<div class="route-section '+(gap?'route-section-gap ':'')+(selectedSection===key?'route-section-selected':'')+'" data-section-key="'+esc(key)+'">'+
+   '<button type="button" class="route-section-select" data-section-select="'+esc(key)+'" aria-pressed="'+(selectedSection===key)+'" aria-label="Select driving section '+(i+1)+'">'+
+   '<strong>'+esc((i+1)+'. '+(from?.label||'Unmapped start')+' → '+(to?.label||'Unmapped destination'))+'</strong><small>'+esc(gap?'Skipped — not driven':(r.legStats?.[i]?summary(r.legStats[i]):'Driving section · recalculate for estimate'))+'</small></button>'+
+   '<button type="button" class="quiet small route-section-action" data-section-toggle="'+esc(key)+'">'+(gap?'Reconnect':'Skip section')+'</button></div>').join('');
   $('routeLegMetrics').innerHTML=Array.isArray(r.legStats)&&r.legStats.length===r.waypoints.length+1?
     '<details class="route-leg-breakdown"><summary>Driving distance & time between points</summary>'+
     r.legStats.map((leg,i)=>{
@@ -317,13 +364,27 @@ function createController(config){
    });
    render();
   });
-  $('routeSectionList').addEventListener('click',e=>{const toggle=e.target.closest('[data-section-toggle]'),row=e.target.closest('[data-section-key]');if(row)selectedSection=row.dataset.sectionKey;if(toggle)toggleSection(toggle.dataset.sectionToggle);else render();});
-  $('routeSectionList').addEventListener('focusin',e=>{const row=e.target.closest('[data-section-key]');if(row)selectedSection=row.dataset.sectionKey;});
-  document.addEventListener('keydown',e=>{if(tool!=='routes'||!selectedSection||!selected()||e.key!=='Delete'||e.target.closest('input,textarea,select,[contenteditable=true],button'))return;e.preventDefault();toggleSection(selectedSection);});
+  $('routeSectionList').addEventListener('click',e=>{
+   const toggle=e.target.closest('[data-section-toggle]'),row=e.target.closest('[data-section-key]');
+   if(!row)return;
+   selectedSection=row.dataset.sectionKey;
+   if(toggle)setSectionConnection(toggle.dataset.sectionToggle,toggle.textContent.trim()==='Reconnect');
+   else render();
+  });
+  $('routeSectionRemove').addEventListener('click',()=>{if(selectedSection)setSectionConnection(selectedSection,false);});
+  $('routeSectionRestore').addEventListener('click',()=>{if(selectedSection)setSectionConnection(selectedSection,true);});
+  document.addEventListener('keydown',e=>{
+   if(tool!=='routes'||!selectedSection||!selected()||!(e.key==='Delete'||e.key==='Backspace'))return;
+   const focusSection=e.target.closest?.('[data-section-select]');
+   if(e.target.closest?.('input,textarea,select,[contenteditable=true]'))return;
+   if(e.target.closest?.('button')&&!focusSection)return;
+   if(e.key==='Backspace'&&!focusSection)return;
+   e.preventDefault();setSectionConnection(selectedSection,false);
+  });
   $('routePicker').addEventListener('change',e=>{currentId=e.target.value;undoStack=[];pick='';selectedSection='';status='';render();});
   $('routeComparison').addEventListener('click',e=>{
    const b=e.target.closest('[data-route-select]');if(!b)return;
-   currentId=b.dataset.routeSelect;undoStack=[];pick='';status='';render();
+   currentId=b.dataset.routeSelect;undoStack=[];selectedSection='';pick='';status='';render();
   });
   $('routeName').addEventListener('change',e=>{const name=e.target.value.trim().slice(0,160);if(!name)return report('Route name required.');
    update(r=>r.name=name);status='Route renamed.';render();});
@@ -371,9 +432,10 @@ function createController(config){
    render();
   });
   $('routeControls').addEventListener('click',e=>{
-   const picker=e.target.closest('[data-route-pick]'),lookup=e.target.closest('[data-route-geocode]');
+   const picker=e.target.closest('[data-route-pick]'),lookup=e.target.closest('[data-route-geocode]'),clear=e.target.closest('[data-route-clear]');
    if(picker)setPick(picker.dataset.routePick);
    else if(lookup)void geocode(lookup.dataset.routeGeocode);
+   else if(clear)clearEndpoint(clear.dataset.routeClear);
   });
   $('routeWaypointList').addEventListener('click',e=>{
    const move=e.target.closest('[data-route-move]'),rm=e.target.closest('[data-route-remove]');
@@ -389,6 +451,6 @@ function createController(config){
  bind();
  return {attachMap,render,onTripChange,consumeMapClick,cancelPick,isPicking:()=>!!pick,getPick:()=>pick,setTool};
 }
-root.VacationRouteDomain=Object.freeze({newRoute,decodePolyline,routeURL,parseRoute,windowError,summary,pointOK});
+root.VacationRouteDomain=Object.freeze({newRoute,decodePolyline,routeURL,parseRoute,windowError,summary,pointOK,sectionGeometry});
 root.createVacationRoutes=createController;
 })(window);
