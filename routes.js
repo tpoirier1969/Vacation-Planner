@@ -394,7 +394,8 @@ function createController(config){
    if(!latest||latest.id!==originalId||JSON.stringify({start:latest.start,end:latest.end,waypoints:latest.waypoints,preferences:latest.preferences,gaps:validGaps(latest)})!==signature)return report('Route changed during search. No alternatives saved.');
    if(!choices.length)return report('No drivable routes returned. The original remains unchanged.');
    const group=config.uid(),original=JSON.parse(JSON.stringify(r)),first=choices[0];
-   undoStack.push(original);if(undoStack.length>25)undoStack.shift();
+   // Generating several routes cannot be undone with a single-route Undo.
+   undoStack=[];
    r.preferences={...r.preferences,compareGroup:group,strategy:first.candidate.strategy,avoidHighways:first.candidate.avoidHighways};
    applyRouteResult(r,first.result);
    const order=Math.max(-1,...routes().map(x=>x.routeOrder||0));
