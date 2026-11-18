@@ -327,6 +327,66 @@ function createController(config){
   list.forEach((r,i)=>r.routeOrder=i);
   config.persist();status='Route order saved.';render();
  }
+ function applyRouteResult(route,result){
+  route.polyline=result.polyline;route.distanceM=result.distanceM;route.durationS=result.durationS;
+  route.legStats=result.legStats||[];
+  route.segments=[{startIndex:0,endIndex:(route.waypoints||[]).length,polyline:result.polyline,distanceM:result.distanceM,durationS:result.durationS}];
+ }
+ async function generateAlternatives(){
+  const r=selected(),key=root.LAZY_ACRES_GEOAPIFY_KEY;
+  if(!r||busy)return;
+  if(!key)return report('Geoapify routing is not configured.');
+  if(!pointOK(r.start)||!pointOK(r.end)||(r.waypoints||[]).some(p=>!pointOK(p)))return report('Map the start, destination and each stop first.');
+  if(validGaps(r).length)return report('Reconnect skipped driving sections to compare full routes.');
+  if(routes().length>=MAX_ROUTES)return report('Maximum '+MAX_ROUTES+' saved routes per trip.');
+  const originalId=r.id,signature=JSON.stringify({start:r.start,end:r.end,waypoints:r.waypoints,preferences:r.preferences,gaps:validGaps(r)});
+  const prefs={...DEFAULT,...r.preferences},available=MAX_ROUTES-routes().length;
+  const strategies=[prefs.strategy,...STRATEGIES.filter(x=>x!==prefs.strategy)];
+  const candidates=strategies.map(strategy=>({strategy,avoidHighways:prefs.avoidHighways,label:STRATEGY_NAMES[strategy]}));
+  if(!prefs.avoidHighways)candidates.push({strategy:'balanced',avoidHighways:true,label:'Avoid highways'});
+  const choices=[];busy=true;status='Checking for genuinely different driving routes…';render();
+  try{
+   for(const candidate of candidates){
+    if(choices.length>=Math.min(3,available+1))break;
+    let result;
+    if(candidate.strategy===prefs.strategy&&candidate.avoidHighways===prefs.avoidHighways&&r.polyline&&r.distanceM!=null&&r.durationS!=null){
+     result={polyline:r.polyline,distanceM:r.distanceM,durationS:r.durationS,legStats:r.legStats||[]};
+    }else{
+     try{
+      const request={...r,preferences:{...prefs,strategy:candidate.strategy,avoidHighways:candidate.avoidHighways}};
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),18000);
+      let response;try{response=await fetch(routeURL(request,key),{signal:controller.signal});}finally{clearTimeout(timer);}
+      if(!response.ok)throw Error(response.status===429?'Routing quota reached':'Routing HTTP '+response.status);
+      result=parseRoute(await response.json());
+     }catch(error){
+      status='One routing preference was unavailable: '+error.message+'. Trying others…';render();continue;
+     }
+    }
+    if(choices.some(x=>sameRoad(x.result.polyline,result.polyline)))continue;
+    choices.push({candidate,result});
+    status='Found '+choices.length+' distinct route'+(choices.length===1?'':'s')+'…';render();
+   }
+   const latest=selected();
+   if(!latest||latest.id!==originalId||JSON.stringify({start:latest.start,end:latest.end,waypoints:latest.waypoints,preferences:latest.preferences,gaps:validGaps(latest)})!==signature)return report('Route changed during search. No alternatives saved.');
+   if(!choices.length)return report('No drivable routes returned. The original remains unchanged.');
+   const group=config.uid(),original=JSON.parse(JSON.stringify(r)),first=choices[0];
+   undoStack.push(original);if(undoStack.length>25)undoStack.shift();
+   r.preferences={...r.preferences,compareGroup:group,strategy:first.candidate.strategy,avoidHighways:first.candidate.avoidHighways};
+   applyRouteResult(r,first.result);
+   const order=Math.max(-1,...routes().map(x=>x.routeOrder||0));
+   for(const [index,item] of choices.slice(1).entries()){
+    const variant=JSON.parse(JSON.stringify(r));
+    variant.id=config.uid();variant.routeOrder=order+index+1;
+    variant.name=(original.name+' — '+item.candidate.label).slice(0,160);
+    variant.preferences={...variant.preferences,compareGroup:group,strategy:item.candidate.strategy,avoidHighways:item.candidate.avoidHighways};
+    applyRouteResult(variant,item.result);
+    config.getRoutes().push(variant);
+   }
+   config.persist();selectedSection='';
+   status=choices.length+' distinct route'+(choices.length===1?'':'s')+' ready. Select one, then drag its path to customize it.';
+   render();fitMap();
+  }finally{busy=false;render();}
+ }
  async function calculate(){
   const r=selected(),key=root.LAZY_ACRES_GEOAPIFY_KEY;if(!r)return;
   if(!key)return report('Geoapify key is missing.');
@@ -382,6 +442,14 @@ function createController(config){
   $('routeComparison').innerHTML=list.length>1?'<details class="route-compare-details"><summary>Compare saved routes ('+list.length+')</summary>'+
    list.map(x=>'<div class="route-compare-row '+(x.id===currentId?'selected':'')+'"><button type="button" class="quiet small" data-route-select="'+esc(x.id)+'">'+esc(x.name)+'</button>'+
     '<span>'+esc(summary(x))+'</span></div>').join('')+'</details>':'';
+  const group=r?.preferences?.compareGroup;
+  const variants=group?list.filter(x=>x.preferences?.compareGroup===group):[];
+  $('routeAlternativeChoices').innerHTML=variants.length?
+   '<div class="route-variant-title"><strong>Route choices</strong><span>Select a route; its path remains editable.</span></div>'+
+   variants.map((x,index)=>'<button type="button" class="route-variant-choice '+(x.id===currentId?'is-selected':'')+'" data-route-variant="'+esc(x.id)+'" aria-pressed="'+(x.id===currentId)+'">'+
+   '<span class="route-variant-color" style="background:'+ROUTE_COLORS[index%ROUTE_COLORS.length]+'"></span><span><strong>'+esc(x.name)+'</strong><small>'+esc(summary(x))+'</small></span></button>').join(''):'';
+  $('routeShowAlternatives').disabled=!r||variants.length<2;
+  $('routeGenerateAlternatives').disabled=busy||!r||!pointOK(r.start)||!pointOK(r.end)||list.length>=MAX_ROUTES;
   $('routeEmpty').classList.toggle('hidden',!!r);
   $('routeControls').classList.toggle('hidden',!r);
   $('routeDelete').disabled=!r;
@@ -443,6 +511,13 @@ function createController(config){
   $('exploreToolTabs').addEventListener('click',e=>{const b=e.target.closest('[data-explore-tool]');if(b)setTool(b.dataset.exploreTool);});
   $('routeNew').addEventListener('click',()=>addRoute());
   $('routeAlternative').addEventListener('click',()=>addRoute(true));
+  $('routeGenerateAlternatives').addEventListener('click',()=>void generateAlternatives());
+  $('routeShowAlternatives').addEventListener('change',render);
+  $('routeAlternativeChoices').addEventListener('click',e=>{
+   const button=e.target.closest('[data-route-variant]');if(!button)return;
+   currentId=button.dataset.routeVariant;undoStack=[];selectedSection='';pick='';
+   status='Alternative selected. Drag its highlighted road path to customize it.';render();
+  });
   $('routeDelete').addEventListener('click',removeRoute);
   $('routeUndo').addEventListener('click',undo);
   $('routeMoveUp').addEventListener('click',()=>moveRoute(-1));
