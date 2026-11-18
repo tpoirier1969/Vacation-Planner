@@ -612,6 +612,83 @@ footer{
  body.mobile-workspace.sheet-collapsed #exploreRoutePanel{display:none!important}
  body.mobile-workspace .explore-tool-tabs{position:sticky;top:59px;z-index:24;background:#fff9ec;padding:4px 0 7px}
  body.mobile-workspace .explore-tool-tabs button{min-height:42px}
+ /* Route panel is a narrow phone workspace, not a 310px desktop sidebar.
+    Intrinsic widths of date inputs, long saved names and metric strings must
+    never enlarge the panel beyond the device width. */
+ body.mobile-workspace #exploreRoutePanel,
+ body.mobile-workspace #routeControls,
+ body.mobile-workspace #routeComparison,
+ body.mobile-workspace #routeWaypointList,
+ body.mobile-workspace #routeSectionList,
+ body.mobile-workspace #routeLegMetrics,
+ body.mobile-workspace .route-time-range,
+ body.mobile-workspace .route-leg-breakdown,
+ body.mobile-workspace .route-compare-details{
+   width:100%;max-width:100%;min-width:0;
+ }
+ body.mobile-workspace #exploreRoutePanel .two,
+ body.mobile-workspace #exploreRoutePanel .route-time-range .two{
+   display:grid;grid-template-columns:minmax(0,1fr);gap:5px;
+ }
+ body.mobile-workspace #exploreRoutePanel .field,
+ body.mobile-workspace #exploreRoutePanel .field input,
+ body.mobile-workspace #exploreRoutePanel .field select,
+ body.mobile-workspace #exploreRoutePanel select,
+ body.mobile-workspace #exploreRoutePanel input{
+   min-width:0;max-width:100%;
+ }
+ body.mobile-workspace #exploreRoutePanel .row,
+ body.mobile-workspace #exploreRoutePanel .route-picker-row,
+ body.mobile-workspace #exploreRoutePanel .route-order-row,
+ body.mobile-workspace #exploreRoutePanel .route-source-row,
+ body.mobile-workspace #exploreRoutePanel .route-waypoint{
+   min-width:0;max-width:100%;flex-wrap:wrap;
+ }
+ body.mobile-workspace #exploreRoutePanel .route-picker,
+ body.mobile-workspace #exploreRoutePanel .route-order-row .field,
+ body.mobile-workspace #exploreRoutePanel .route-source-row select{
+   flex:1 1 100%;min-width:0;max-width:100%;
+ }
+ body.mobile-workspace #exploreRoutePanel .route-compare-row,
+ body.mobile-workspace #exploreRoutePanel .route-leg-row{
+   display:flex;flex-wrap:wrap;min-width:0;max-width:100%;
+   align-items:flex-start;gap:3px 7px;
+ }
+ body.mobile-workspace #exploreRoutePanel .route-compare-row button,
+ body.mobile-workspace #exploreRoutePanel .route-compare-row span,
+ body.mobile-workspace #exploreRoutePanel .route-leg-row span,
+ body.mobile-workspace #exploreRoutePanel .route-leg-row strong{
+   flex:1 1 100%;min-width:0;max-width:100%;
+   overflow-wrap:anywhere;white-space:normal;text-align:left;
+ }
+ body.mobile-workspace #exploreRoutePanel .route-waypoint-name{
+   flex:1 1 100%;min-width:0;overflow-wrap:anywhere;
+ }
+ body.mobile-workspace #exploreRoutePanel .route-waypoint-actions{
+   flex:0 1 100%;min-width:0;max-width:100%;flex-wrap:wrap;
+ }
+ body.mobile-workspace #exploreRoutePanel .route-waypoint-actions button{
+   flex:0 0 42px;min-height:40px;
+ }
+ body.mobile-workspace #exploreRoutePanel .route-section{
+   min-width:0;max-width:100%;flex-wrap:wrap;
+ }
+ body.mobile-workspace #exploreRoutePanel .route-section span{
+   flex:1 1 100%;min-width:0;max-width:100%;
+ }
+ body.mobile-workspace #exploreRoutePanel .route-section button{
+   margin-left:0;min-height:40px;max-width:100%;white-space:normal;
+ }
+ body.mobile-workspace #exploreRoutePanel .route-checks label,
+ body.mobile-workspace #exploreRoutePanel .route-show{
+   white-space:normal;min-width:0;overflow-wrap:anywhere;
+ }
+ body.mobile-workspace #exploreRoutePanel .route-metrics,
+ body.mobile-workspace #exploreRoutePanel #routeStatus,
+ body.mobile-workspace #exploreRoutePanel .route-compare-details summary,
+ body.mobile-workspace #exploreRoutePanel .route-leg-breakdown summary{
+   max-width:100%;min-width:0;overflow-wrap:anywhere;
+ }
  body.mobile-workspace .explore-side .field{margin:5px 0}
  body.mobile-workspace #exploreDiscoverPanel>label.field{font-size:12px}
  body.mobile-workspace #discover{min-height:44px;width:100%}
