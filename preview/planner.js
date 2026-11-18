@@ -633,18 +633,30 @@ async function searchLocation(query,store=false){
    const bias='proximity:'+Number(center.lng).toFixed(6)+','+Number(center.lat).toFixed(6);
    const geocode=new URLSearchParams({text:term,limit:store?'1':'8',lang:'en',bias,apiKey:key});
    const searches=[fetch('https://api.geoapify.com/v1/geocode/search?'+geocode).then(async r=>{if(!r.ok)throw Error('Geocoding HTTP '+r.status);return r.json();})];
-   if(!store){
-    const nearby=new URLSearchParams({categories:DISCOVERY_CATEGORIES.all,
-     name:normalizedBusinessName(term),
-     // A named-place search must not be geographically excluded by map location.
-     // Geoapify supports proximity bias without a filter.
-     bias,limit:'20',apiKey:key});
-    searches.push(fetch('https://api.geoapify.com/v2/places?'+nearby).then(async r=>{if(!r.ok)throw Error('Places HTTP '+r.status);return r.json();}));
-   }
+   const name=normalizedBusinessName(term);
+   const centerPoint=Number(center.lng).toFixed(6)+','+Number(center.lat).toFixed(6);
+   const categories=['catering','commercial,accommodation','tourism,entertainment,leisure,natural,production.winery'];
+   const searchGroup=(group,filter)=>{
+    const params=new URLSearchParams({categories:group,name,bias,limit:'50',apiKey:key});
+    if(filter)params.set('filter',filter);
+    return fetch('https://api.geoapify.com/v2/places?'+params).then(async response=>{
+     if(!response.ok)throw Error('Places HTTP '+response.status);
+     return response.json();
+    });
+   };
+   if(!store)for(const group of categories)searches.push(searchGroup(group,'circle:'+centerPoint+',80467'));
    const responses=await Promise.allSettled(searches);
    if(responses.every(r=>r.status==='rejected'))throw responses[0].reason;
    geo=responses[0].status==='fulfilled'?responses[0].value.features||[]:[];
-   places=responses[1]?.status==='fulfilled'?responses[1].value.features||[]:[];
+   places=responses.slice(1).filter(r=>r.status==='fulfilled')
+    .flatMap(r=>Array.isArray(r.value.features)?r.value.features:[]);
+   // Some named businesses are far from the current map. If no local match
+   // exists, retry by category without any geographic restriction.
+   if(!store&&!places.length){
+    const global=await Promise.allSettled(categories.map(group=>searchGroup(group,null)));
+    places=global.filter(r=>r.status==='fulfilled')
+     .flatMap(r=>Array.isArray(r.value.features)?r.value.features:[]);
+   }
   }else{
    const response=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit='+(store?'1':'8')+'&q='+encodeURIComponent(term),{headers:{Accept:'application/json'}});
    if(!response.ok)throw Error('Location search HTTP '+response.status);
@@ -682,7 +694,8 @@ async function searchLocation(query,store=false){
    (results.length?results.map((x,i)=>'<div class="search-match">'+
     '<button type="button" data-search-choice="'+i+'"><strong>'+esc(x.name)+'</strong>'+
     '<small>'+esc(x.sourceKind)+(x.address?' · '+esc(x.address):'')+'</small></button>'+
-    '<button type="button" class="secondary small" data-search-save="'+i+'">+ Idea</button></div>').join(''):
+    '<div class="search-match-actions"><button type="button" class="secondary small" data-search-save="'+i+'">+ Idea</button>'+
+    '<button type="button" class="primary small" data-search-plan="'+i+'">+ Itinerary</button></div></div>').join(''):
     '<p>No matches in these sources. Try a shorter name, nearby town, or add a map pin manually.</p>');
   if(window.matchMedia('(max-width:760px)').matches)setMobileSheet('collapsed');
  }catch(error){
@@ -693,10 +706,13 @@ async function searchLocation(query,store=false){
 }
 $('#searchMatches').addEventListener('click',e=>{
  if(e.target.closest('[data-search-close]')){$('#searchMatches').classList.add('hidden');return;}
- const chosen=e.target.closest('[data-search-choice]'),saved=e.target.closest('[data-search-save]');
- const index=Number((chosen||saved)?.dataset.searchChoice??saved?.dataset.searchSave);
+ const chosen=e.target.closest('[data-search-choice]'),saved=e.target.closest('[data-search-save]'),
+  planned=e.target.closest('[data-search-plan]');
+ const index=Number(chosen?.dataset.searchChoice??saved?.dataset.searchSave??planned?.dataset.searchPlan);
+ if(!Number.isInteger(index)||index<0)return;
  const item=searchMatches[index];if(!item)return;
  if(saved){const existing=saveDiscoveredIdea(item);if(existing){saved.disabled=true;saved.textContent='Saved';}return;}
+ if(planned){$('#searchMatches').classList.add('hidden');planDiscoveredPlace(item);return;}
  if(chosen){
   $('#searchMatches').classList.add('hidden');
   setTab('explore');setMobileSheet('collapsed');
@@ -773,6 +789,15 @@ function placeAlreadySaved(item){
    (x.name?.trim().toLowerCase()===item.name?.trim().toLowerCase()&&
     x.lat!=null&&x.lng!=null&&Math.abs(Number(x.lat)-item.lat)<0.00005&&Math.abs(Number(x.lng)-item.lng)<0.00005)));
 }
+function planDiscoveredPlace(item){
+ if(!trip()||!item?.name)return;
+ const saved=placeAlreadySaved(item);
+ fillActivity({name:item.name,category:detectedCategory(item.categories,item.name,item.searchCategory||''),
+  notes:saved?.notes||'',placeId:saved?.id||'',lat:Number(item.lat),lng:Number(item.lng),
+  geoapifyId:item.placeId||saved?.geoapifyId||'',hours:item.hours||saved?.hours||'',
+  date:saved?.date||'',endDate:saved?.endDate||'',time:saved?.time||'',endTime:saved?.endTime||'',
+  fixedDate:!!saved?.fixedDate});
+}
 function saveDiscoveredIdea(item){
  if(!trip()||!item?.name||!Number.isFinite(Number(item.lat))||!Number.isFinite(Number(item.lng)))return false;
  const old=placeAlreadySaved(item);
@@ -799,7 +824,8 @@ function discoveryCard(item,i){
   '<div class="poi-extra" id="poi-extra-'+i+'"></div>'+
   '<div class="row wrap poi-actions"><button class="quiet small" data-preview="'+i+'">Map</button>'+
   '<button class="quiet small" data-place-details="'+i+'">Details</button>'+
-  '<button class="secondary small" data-suggest="'+i+'" '+(saved?'disabled':'')+'>'+(saved?'Saved':'+ Save idea')+'</button></div></article>';
+  '<button class="secondary small" data-suggest="'+i+'" '+(saved?'disabled':'')+'>'+(saved?'Saved':'+ Save idea')+'</button>'+
+  '<button class="primary small" data-suggest-plan="'+i+'">+ Itinerary</button></div></article>';
 }
 async function discover(loadMore=false){
  if(!map)return;
@@ -827,10 +853,17 @@ async function discover(loadMore=false){
  if(!loadMore||signature!==discoverySignature){
   loadMore=false;discoveryOffset=0;discoverySignature=signature;
  }
- const params=new URLSearchParams({categories,filter:area,bias:'proximity:'+centerPoint,
-  limit:String(DISCOVERY_PAGE_SIZE),offset:String(discoveryOffset),apiKey:key});
- if(nameFilter)params.set('name',nameFilter);
- const cacheKey=params.toString();
+ // Geoapify can miss a named business when too many unrelated categories
+ // are combined. Small groups keep partial-name searches reliable.
+ const groups=nameFilter&&['all','other'].includes(category)?
+  ['catering','commercial,accommodation','tourism,entertainment,leisure,natural,production.winery']:[categories];
+ const queries=groups.map(group=>{
+  const params=new URLSearchParams({categories:group,filter:area,bias:'proximity:'+centerPoint,
+   limit:String(DISCOVERY_PAGE_SIZE),offset:String(discoveryOffset),apiKey:key});
+  if(nameFilter)params.set('name',nameFilter);
+  return params;
+ });
+ const cacheKey='grouped|'+queries.map(x=>x.toString()).join('|');
  const token=++discoveryRequest;
  button.disabled=true;moreButton.disabled=true;
  if(!loadMore){
@@ -840,23 +873,29 @@ async function discover(loadMore=false){
  const scope=radius==='view'?'the visible map':Number(radius)+' mi of map center';
  status.textContent='Searching '+scope+(nameFilter?' for "'+nameFilter+'"':'')+'…';
  try{
-  let features=discoveryCache.get(cacheKey);
-  if(!features){
+  let cached=discoveryCache.get(cacheKey);
+  if(!cached){
    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
    try{
-    const response=await fetch('https://api.geoapify.com/v2/places?'+params.toString(),{signal:controller.signal});
-    if(!response.ok){
-     if(response.status===401||response.status===403)throw Error('Geoapify access denied (HTTP '+response.status+').');
-     if(response.status===429)throw Error('Geoapify rate limit reached. Try again later.');
-     throw Error('Geoapify HTTP '+response.status+'.');
-    }
-    const data=await response.json();
-    if(!Array.isArray(data.features))throw Error('Unexpected place search response.');
-    features=data.features;
+    const batches=await Promise.allSettled(queries.map(async params=>{
+     const response=await fetch('https://api.geoapify.com/v2/places?'+params,{signal:controller.signal});
+     if(!response.ok){
+      if(response.status===401||response.status===403)throw Error('Geoapify access denied (HTTP '+response.status+').');
+      if(response.status===429)throw Error('Geoapify rate limit reached. Try again later.');
+      throw Error('Geoapify HTTP '+response.status+'.');
+     }
+     const data=await response.json();
+     if(!Array.isArray(data.features))throw Error('Unexpected place search response.');
+     return data.features;
+    }));
+    const valid=batches.filter(r=>r.status==='fulfilled').map(r=>r.value);
+    if(!valid.length)throw batches[0].reason;
+    cached={features:valid.flat(),more:valid.some(batch=>batch.length===DISCOVERY_PAGE_SIZE)};
     if(discoveryCache.size>=30)discoveryCache.delete(discoveryCache.keys().next().value);
-    discoveryCache.set(cacheKey,features);
+    discoveryCache.set(cacheKey,cached);
    }finally{clearTimeout(timer);}
   }
+  const {features,more:hasMore}=cached;
   if(token!==discoveryRequest)return;
   const previous=loadMore?(window.__tripSuggestions||[]):[];
   const known=new Set(previous.map(x=>x.placeId||[x.name.toLowerCase(),x.lat.toFixed(4),x.lng.toFixed(4)].join('|')));
@@ -873,9 +912,9 @@ async function discover(loadMore=false){
    '<p class="empty">No matching businesses in this source. Try a broader category, larger radius, or the place-name search above the map.</p>';
   if(loadMore&&scroller)scroller.scrollTop=oldScroll;
   renderDiscoveryMarkers(found);observeDiscoveryCards();
-  moreButton.classList.toggle('hidden',features.length<DISCOVERY_PAGE_SIZE);
+  moreButton.classList.toggle('hidden',!hasMore);
   status.textContent=found.length+' matching places in '+scope+
-   (features.length===DISCOVERY_PAGE_SIZE?' · more results may be available':'')+
+   (hasMore?' · more results may be available':'')+
    (nameFilter?' · name: '+nameFilter:'')+'.';
   if(window.matchMedia('(max-width:760px)').matches)setMobileSheet('expanded');
  }catch(error){
@@ -1123,7 +1162,10 @@ document.addEventListener('click',async e=>{
   return;
  }
  const editButton=e.target.closest('[data-edit]');if(editButton){const [kind,id]=editButton.dataset.edit.split(':');openEdit(kind,id);return;}
- const open=e.target.closest('[data-open]');if(open)showTrip(open.dataset.open);const rm=e.target.closest('[data-remove]');if(rm){const [key,id]=rm.dataset.remove.split(':');if(confirm('Remove this item from the trip?')){state[key]=state[key].filter(x=>x.id!==id);persist()}}const unschedule=e.target.closest('[data-unschedule]');if(unschedule){moveBackToIdeas(unschedule.dataset.unschedule);return;}const loc=e.target.closest('[data-locate]');if(loc){const x=state.places.find(p=>p.id===loc.dataset.locate);if(x&&geo(x)){setTab('explore');setTimeout(()=>map?.setView([x.lat,x.lng],14),100)}}const plan=e.target.closest('[data-plan]');if(plan)planPlace(plan.dataset.plan);const preview=e.target.closest('[data-preview]');if(preview){const x=window.__tripSuggestions?.[Number(preview.dataset.preview)];if(x){setMobileSheet('collapsed');map?.setView([x.lat,x.lng],15);const discovered=discoveryMarkers?.getLayers().find(m=>{const q=m.getLatLng();return Math.abs(q.lat-x.lat)<0.000001&&Math.abs(q.lng-x.lng)<0.000001});if(discovered)discovered.openPopup();else L.popup().setLatLng([x.lat,x.lng]).setContent(mapMenuContent({lat:x.lat,lng:x.lng},x.name,'','',detectedCategory(x.categories||[x.kind],x.name,x.searchCategory))).openOn(map)}}const suggest=e.target.closest('[data-suggest]');if(suggest){const x=window.__tripSuggestions?.[Number(suggest.dataset.suggest)];if(x){const saved=saveDiscoveredIdea(x);if(saved){suggest.disabled=true;suggest.textContent='Saved';}}}});
+ const open=e.target.closest('[data-open]');if(open)showTrip(open.dataset.open);const rm=e.target.closest('[data-remove]');if(rm){const [key,id]=rm.dataset.remove.split(':');if(confirm('Remove this item from the trip?')){state[key]=state[key].filter(x=>x.id!==id);persist()}}const unschedule=e.target.closest('[data-unschedule]');if(unschedule){moveBackToIdeas(unschedule.dataset.unschedule);return;}const loc=e.target.closest('[data-locate]');if(loc){const x=state.places.find(p=>p.id===loc.dataset.locate);if(x&&geo(x)){setTab('explore');setTimeout(()=>map?.setView([x.lat,x.lng],14),100)}}const plan=e.target.closest('[data-plan]');if(plan)planPlace(plan.dataset.plan);const preview=e.target.closest('[data-preview]');if(preview){const x=window.__tripSuggestions?.[Number(preview.dataset.preview)];if(x){setMobileSheet('collapsed');map?.setView([x.lat,x.lng],15);const discovered=discoveryMarkers?.getLayers().find(m=>{const q=m.getLatLng();return Math.abs(q.lat-x.lat)<0.000001&&Math.abs(q.lng-x.lng)<0.000001});if(discovered)discovered.openPopup();else L.popup().setLatLng([x.lat,x.lng]).setContent(mapMenuContent({lat:x.lat,lng:x.lng},x.name,'','',detectedCategory(x.categories||[x.kind],x.name,x.searchCategory))).openOn(map)}}const suggest=e.target.closest('[data-suggest]');if(suggest){const x=window.__tripSuggestions?.[Number(suggest.dataset.suggest)];if(x){const saved=saveDiscoveredIdea(x);if(saved){suggest.disabled=true;suggest.textContent='Saved';}}return;}
+ const planSuggestion=e.target.closest('[data-suggest-plan]');
+ if(planSuggestion){const x=window.__tripSuggestions?.[Number(planSuggestion.dataset.suggestPlan)];if(x)planDiscoveredPlace(x);return;}
+});
 $('#packList').addEventListener('change',e=>{if(e.target.dataset.pack){const x=state.packing.find(p=>p.id===e.target.dataset.pack&&p.tripId===active);if(x){x.done=e.target.checked;persist()}}});
 routeUI=window.createVacationRoutes({
  getTrip:()=>trip(),getRoutes:()=>state.routes||[],
