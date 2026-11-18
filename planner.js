@@ -853,10 +853,17 @@ async function discover(loadMore=false){
  if(!loadMore||signature!==discoverySignature){
   loadMore=false;discoveryOffset=0;discoverySignature=signature;
  }
- const params=new URLSearchParams({categories,filter:area,bias:'proximity:'+centerPoint,
-  limit:String(DISCOVERY_PAGE_SIZE),offset:String(discoveryOffset),apiKey:key});
- if(nameFilter)params.set('name',nameFilter);
- const cacheKey=params.toString();
+ // Geoapify can miss a named business when too many unrelated categories
+ // are combined. Small groups keep partial-name searches reliable.
+ const groups=nameFilter&&['all','other'].includes(category)?
+  ['catering','commercial,accommodation','tourism,entertainment,leisure,natural,production.winery']:[categories];
+ const queries=groups.map(group=>{
+  const params=new URLSearchParams({categories:group,filter:area,bias:'proximity:'+centerPoint,
+   limit:String(DISCOVERY_PAGE_SIZE),offset:String(discoveryOffset),apiKey:key});
+  if(nameFilter)params.set('name',nameFilter);
+  return params;
+ });
+ const cacheKey='grouped|'+queries.map(x=>x.toString()).join('|');
  const token=++discoveryRequest;
  button.disabled=true;moreButton.disabled=true;
  if(!loadMore){
@@ -866,23 +873,29 @@ async function discover(loadMore=false){
  const scope=radius==='view'?'the visible map':Number(radius)+' mi of map center';
  status.textContent='Searching '+scope+(nameFilter?' for "'+nameFilter+'"':'')+'…';
  try{
-  let features=discoveryCache.get(cacheKey);
-  if(!features){
+  let cached=discoveryCache.get(cacheKey);
+  if(!cached){
    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
    try{
-    const response=await fetch('https://api.geoapify.com/v2/places?'+params.toString(),{signal:controller.signal});
-    if(!response.ok){
-     if(response.status===401||response.status===403)throw Error('Geoapify access denied (HTTP '+response.status+').');
-     if(response.status===429)throw Error('Geoapify rate limit reached. Try again later.');
-     throw Error('Geoapify HTTP '+response.status+'.');
-    }
-    const data=await response.json();
-    if(!Array.isArray(data.features))throw Error('Unexpected place search response.');
-    features=data.features;
+    const batches=await Promise.allSettled(queries.map(async params=>{
+     const response=await fetch('https://api.geoapify.com/v2/places?'+params,{signal:controller.signal});
+     if(!response.ok){
+      if(response.status===401||response.status===403)throw Error('Geoapify access denied (HTTP '+response.status+').');
+      if(response.status===429)throw Error('Geoapify rate limit reached. Try again later.');
+      throw Error('Geoapify HTTP '+response.status+'.');
+     }
+     const data=await response.json();
+     if(!Array.isArray(data.features))throw Error('Unexpected place search response.');
+     return data.features;
+    }));
+    const valid=batches.filter(r=>r.status==='fulfilled').map(r=>r.value);
+    if(!valid.length)throw batches[0].reason;
+    cached={features:valid.flat(),more:valid.some(batch=>batch.length===DISCOVERY_PAGE_SIZE)};
     if(discoveryCache.size>=30)discoveryCache.delete(discoveryCache.keys().next().value);
-    discoveryCache.set(cacheKey,features);
+    discoveryCache.set(cacheKey,cached);
    }finally{clearTimeout(timer);}
   }
+  const {features,more:hasMore}=cached;
   if(token!==discoveryRequest)return;
   const previous=loadMore?(window.__tripSuggestions||[]):[];
   const known=new Set(previous.map(x=>x.placeId||[x.name.toLowerCase(),x.lat.toFixed(4),x.lng.toFixed(4)].join('|')));
@@ -899,9 +912,9 @@ async function discover(loadMore=false){
    '<p class="empty">No matching businesses in this source. Try a broader category, larger radius, or the place-name search above the map.</p>';
   if(loadMore&&scroller)scroller.scrollTop=oldScroll;
   renderDiscoveryMarkers(found);observeDiscoveryCards();
-  moreButton.classList.toggle('hidden',features.length<DISCOVERY_PAGE_SIZE);
+  moreButton.classList.toggle('hidden',!hasMore);
   status.textContent=found.length+' matching places in '+scope+
-   (features.length===DISCOVERY_PAGE_SIZE?' · more results may be available':'')+
+   (hasMore?' · more results may be available':'')+
    (nameFilter?' · name: '+nameFilter:'')+'.';
   if(window.matchMedia('(max-width:760px)').matches)setMobileSheet('expanded');
  }catch(error){
