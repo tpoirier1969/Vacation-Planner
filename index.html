@@ -15,6 +15,8 @@
 <div id="exploreRoutePanel" class="hidden" role="tabpanel">
  <div class="row wrap route-picker-row"><label class="field route-picker">Saved route<select id="routePicker" aria-label="Choose saved route"></select></label><button id="routeNew" class="secondary small" type="button">New route</button><button id="routeAlternative" class="quiet small" type="button">Save alternative</button><button id="routeDelete" class="quiet small" type="button" title="Remove selected route">Delete</button></div>
  <div class="row wrap route-order-row"><button id="routeMoveUp" class="quiet small" type="button" title="Move route earlier">↑ Earlier</button><button id="routeMoveDown" class="quiet small" type="button" title="Move route later">↓ Later</button><label class="field">Route type<select id="routeKind"><option value="day">Day route</option><option value="journey">Journey / multi-day</option><option value="outbound">Outbound</option><option value="return">Return</option></select></label></div><div id="routeComparison" class="route-comparison"></div><div id="routeAlternativeChoices" class="route-variant-choices" aria-label="Available route alternatives"></div>
+ <div class="route-alternatives-controls"><button type="button" id="routeGenerateAlternatives" class="secondary">Find 2–3 route choices</button><label class="route-show"><input type="checkbox" id="routeShowAlternatives" checked> Show alternatives together</label></div>
+ <p class="muted small-details route-drag-help">Select a colored route, then drag its line to reshape it. You can also tap the line and drag its handle.</p>
  <p id="routeEmpty" class="muted small-details">Create your first route.</p>
  <div id="routeControls" class="hidden">
  <label class="field">Route name<input id="routeName" maxlength="160" placeholder="Outbound, scenic drive, return…"></label>
@@ -32,8 +34,6 @@
  <div id="routeWaypointList"></div>
  <div class="row wrap route-source-row"><select id="routeSourceStop" aria-label="Choose a saved Idea or itinerary entry to add"><option value="">Ideas / itinerary stops…</option></select><button type="button" id="routeSourceAdd" class="quiet small">Add stop</button></div>
  <button type="button" id="routeFromItinerary" class="secondary small">Add this day’s itinerary stops</button>
- <div class="route-alternatives-controls"><button type="button" id="routeGenerateAlternatives" class="secondary">Find 2–3 route choices</button><label class="route-show"><input type="checkbox" id="routeShowAlternatives" checked> Show alternatives together</label></div>
- <p class="muted small-details route-drag-help">Select a colored route. Drag its line to reshape it, or tap it to show a draggable handle. Road points and endpoints can be dragged too.</p>
  <label class="route-show"><input type="checkbox" id="routeVisible" checked> Show selected route on map</label>
  <div class="route-metrics" id="routeMetrics">Not calculated yet</div>
  <div class="row wrap route-calc-buttons"><button type="button" id="routeSuggest" class="primary">Suggest route</button><button type="button" id="routeZoom" class="quiet">Fit map to route</button></div>
