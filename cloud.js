@@ -128,7 +128,63 @@ async function start(){
   beginCollaboration();
  }catch(e){$('#cloudReady').classList.add('hidden');status('Cannot load trips from Supabase: '+e.message);}
 }
-$('#cloudLogin').addEventListener('submit',async e=>{e.preventDefault();const email=$('#cloudEmail').value.trim();status('Sending sign-in link…');const {error}=await client.auth.signInWithOtp({email,options:{emailRedirectTo:location.origin+location.pathname}});status(error?'Sign-in failed: '+error.message:'Check your email for a sign-in link, then return here.');});
+// OTP verifies inside this browser/PWA storage context. A link opened in Safari
+// cannot reliably sign in a separate iOS Home Screen app context.
+let pendingLoginEmail='',loginRequestPending=false;
+async function requestEmailCode(email){
+ if(loginRequestPending||!client)return;
+ const send=$('#cloudSendCode'),resend=$('#cloudResendCode');
+ loginRequestPending=true;send.disabled=true;resend.disabled=true;
+ status('Sending six-digit sign-in code…');
+ try{
+  const {error}=await client.auth.signInWithOtp({
+   email,options:{shouldCreateUser:false,emailRedirectTo:location.origin+'/Vacation-Planner/'}
+  });
+  if(error)throw error;
+  pendingLoginEmail=email;
+  $('#cloudLogin').classList.add('hidden');
+  $('#cloudCodeEmail').textContent='Code sent to '+email;
+  $('#cloudVerify').classList.remove('hidden');
+  $('#cloudCode').value='';
+  $('#cloudCode').focus();
+  status('Check your email for the code, then enter it here in the Planner.');
+ }catch(error){status('Could not send sign-in code: '+error.message);}
+ finally{loginRequestPending=false;send.disabled=false;resend.disabled=false;}
+}
+$('#cloudLogin').addEventListener('submit',e=>{
+ e.preventDefault();
+ const email=$('#cloudEmail').value.trim();
+ if(email)void requestEmailCode(email);
+});
+$('#cloudVerify').addEventListener('submit',async e=>{
+ e.preventDefault();
+ const token=$('#cloudCode').value.trim(),button=$('#cloudVerifyButton');
+ if(!pendingLoginEmail||!/^[0-9]{6}$/.test(token)){
+  status('Enter the six-digit code from your email.');return;
+ }
+ button.disabled=true;status('Verifying sign-in code…');
+ try{
+  const {error}=await client.auth.verifyOtp({email:pendingLoginEmail,token,type:'email'});
+  if(error)throw error;
+  $('#cloudVerify').classList.add('hidden');
+  await start();
+ }catch(error){
+  status('Could not verify code: '+error.message+'. Check the code or request another one.');
+ }finally{button.disabled=false;}
+});
+$('#cloudResendCode').addEventListener('click',()=>{if(pendingLoginEmail)void requestEmailCode(pendingLoginEmail);});
+$('#cloudChangeEmail').addEventListener('click',()=>{
+ pendingLoginEmail='';$('#cloudCode').value='';$('#cloudVerify').classList.add('hidden');
+ $('#cloudLogin').classList.remove('hidden');$('#cloudEmail').focus();
+ status('Enter your approved household email to request a new code.');
+});
+$('#cloudSwitchAccount').addEventListener('click',async()=>{
+ const {error}=await client.auth.signOut();
+ if(error){status('Could not sign out: '+error.message);return;}
+ pendingLoginEmail='';$('#cloudVerify').classList.add('hidden');
+ $('#cloudLogin').classList.remove('hidden');$('#cloudEmail').value='';
+ status('Signed out. Sign in with your approved household email.');
+});
 $('#cloudSignOut').addEventListener('click',async()=>{if(pending.length&&!confirm('Changes are NOT saved to Supabase. Sign out and discard them?'))return;await client.auth.signOut();location.reload()});
 retry.addEventListener('click',flush);
 window.addEventListener('online',()=>{if(pending.length)flush();else if(authorized)requestRefresh(0)});
