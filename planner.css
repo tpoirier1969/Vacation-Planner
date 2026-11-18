@@ -445,6 +445,27 @@ footer{
  .masthead-home-note span{display:none}
 }
 
+/* Alternatives remain visible and selectable, while the active road path is draggable. */
+.route-alternatives-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:9px 0 7px}
+.route-alternatives-controls>button{min-height:41px;flex:1 1 170px}
+.route-alternatives-controls .route-show{margin:0;flex:1 1 170px}
+.route-variant-choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(175px,100%),1fr));gap:7px;margin:9px 0}
+.route-variant-title{grid-column:1/-1;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-size:12px}
+.route-variant-title span{color:#58716e}
+.route-variant-choice{display:flex;align-items:center;gap:9px;text-align:left;padding:9px;min-width:0;min-height:52px;border:1px solid #ccb999;border-radius:8px;background:#fffaf0;color:var(--retro-deep);cursor:pointer}
+.route-variant-choice.is-selected{outline:2px solid #197c78;background:#e2f2eb}
+.route-variant-choice>span:last-child{flex:1 1 auto;min-width:0}
+.route-variant-choice strong,.route-variant-choice small{display:block;overflow-wrap:anywhere}
+.route-variant-choice strong{font-size:12px;line-height:1.3}
+.route-variant-choice small{margin-top:3px;font-size:11px;opacity:.75}
+.route-variant-color{width:8px;min-width:8px;align-self:stretch;border-radius:5px}
+.route-drag-help{line-height:1.4}
+.route-drag-handle-wrap,.route-endpoint-wrap,.route-via-wrap{background:transparent;border:0}
+.route-drag-handle{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:#fff8df;border:3px solid #187b79;color:#187b79;box-shadow:0 2px 8px #0005;cursor:grab;font-size:20px;font-weight:900}
+.route-drag-handle:active{cursor:grabbing}
+.route-endpoint{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;border:3px solid #fff4dc;background:var(--endpoint-color,#276c64);color:#fff;font:900 15px system-ui;box-shadow:0 2px 8px #0006;cursor:grab}
+.route-via-marker{display:grid;place-items:center;width:23px;height:23px;border-radius:50%;background:#fff7d7;border:2px solid #9d6934;color:#9d6934;box-shadow:0 1px 6px #0005;cursor:grab}
+@media(max-width:760px){body.mobile-workspace .route-variant-choices{grid-template-columns:1fr}body.mobile-workspace .route-variant-choice{min-height:50px}body.mobile-workspace .route-alternatives-controls>button{min-height:44px}}
 /* Route section editor: each driving leg has explicit, keyboard-selectable actions. */
 .route-order-row{display:flex;align-items:end;gap:8px;margin:9px 0 13px;flex-wrap:wrap}
 .route-order-row .field{min-width:135px;flex:1 1 135px;margin:0}
