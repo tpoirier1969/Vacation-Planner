@@ -3,7 +3,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>body{font:14px system-ui;background:#f7f7f7;color:#253b39;padding:16px}table{border-collapse:collapse;background:white}td,th{border:1px solid #888;padding:6px}iframe{border:2px solid #456;display:block;margin:10px 0} .bad{color:#a32120;font-weight:bold}.good{color:#11631e;font-weight:bold}</style>
 </head><body><h1>Vacation Planner route width QA</h1><p>Real preview CSS, representative route editor content, five viewport widths. Reports elements whose right edge exceeds their phone viewport.</p>
-<table id="results"><thead><tr><th>Viewport</th><th>Document</th><th>Route panel</th><th>Overflow</th></tr></thead><tbody></tbody></table><div id="frames"></div>
+<table id="results"><thead><tr><th>Viewport</th><th>Document</th><th>Route panel</th><th>Visibility / ancestor</th><th>Overflow</th></tr></thead><tbody></tbody></table><div id="frames"></div>
 <script>
 const sizes=[320,375,390,430,720];
 const content=String.raw`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="./planner.css?route-width-qa=20261118"></head>
@@ -42,8 +42,11 @@ for(const w of sizes){
   const doc=frame.contentDocument,win=frame.contentWindow,root=doc.documentElement,panel=doc.querySelector('#exploreRoutePanel'),
   nodes=[...doc.querySelectorAll('#exploreRoutePanel *')].filter(el=>{const box=el.getBoundingClientRect();return box.right>win.innerWidth+2 || box.left < -2;}),
   bad=nodes.map(el=>el.tagName.toLowerCase()+'.'+String(el.className).replace(/\s+/g,'.')).slice(0,8);
-  const docBad=root.scrollWidth>win.innerWidth+2, panelBad=panel.scrollWidth>panel.clientWidth+2;
-  const tr=document.createElement('tr');tr.innerHTML='<td>'+w+'px</td><td class="'+(docBad?'bad':'good')+'">'+root.scrollWidth+'/'+win.innerWidth+'</td><td class="'+(panelBad?'bad':'good')+'">'+panel.scrollWidth+'/'+panel.clientWidth+'</td><td class="'+(bad.length?'bad':'good')+'">'+(bad.join(', ')||'None')+'</td>';
+  const styles=win.getComputedStyle(panel),parent=panel.parentElement,routeControls=doc.querySelector('#routeControls');
+  const visible=panel.clientWidth>200&&styles.display!=='none'&&routeControls.clientWidth>200;
+  const docBad=root.scrollWidth>win.innerWidth+2, panelBad=!visible||panel.scrollWidth>panel.clientWidth+2;
+  const visibility=styles.display+'; parent '+parent?.className+' ('+parent?.clientWidth+'px); controls '+routeControls.clientWidth+'px; viewport '+win.innerWidth+'px';
+  const tr=document.createElement('tr');tr.innerHTML='<td>'+w+'px</td><td class="'+(docBad?'bad':'good')+'">'+root.scrollWidth+'/'+win.innerWidth+'</td><td class="'+(panelBad?'bad':'good')+'">'+panel.scrollWidth+'/'+panel.clientWidth+'</td><td class="'+(visible?'good':'bad')+'">'+visibility+'</td><td class="'+(bad.length?'bad':'good')+'">'+(bad.join(', ')||'None')+'</td>';
   tbl.append(tr);
   done++;if(done===sizes.length){const title=document.createElement('h2');title.textContent=[...tbl.rows].every(row=>!row.querySelector('.bad'))?'ALL WIDTH CHECKS PASS':'OVERFLOW FOUND';document.body.insertBefore(title,document.getElementById('frames'));}
  },130));
