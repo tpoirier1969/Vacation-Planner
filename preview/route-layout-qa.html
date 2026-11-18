@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Route layout width QA (temporary)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{font:14px system-ui;background:#f7f7f7;color:#253b39;padding:16px}table{border-collapse:collapse;background:white}td,th{border:1px solid #888;padding:6px}iframe{border:2px solid #456;display:block;margin:10px 0} .bad{color:#a32120;font-weight:bold}.good{color:#11631e;font-weight:bold}</style>
+</head><body><h1>Vacation Planner route width QA</h1><p>Real preview CSS, representative route editor content, five viewport widths. Reports elements whose right edge exceeds their phone viewport.</p>
+<table id="results"><thead><tr><th>Viewport</th><th>Document</th><th>Route panel</th><th>Overflow</th></tr></thead><tbody></tbody></table><div id="frames"></div>
+<script>
+const sizes=[320,375,390,430,720];
+const content=String.raw\`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="./planner.css?route-width-qa=20261118"></head>
+<body class="mobile-workspace sheet-expanded"><header class="planner-masthead"><div class="masthead-inner"><div class="masthead-content"><div class="trip-summary"><h1>A trip with an exceptionally long title</h1></div></div></div></header>
+<div id="cloudReady"><main class="shell"><div id="workspace"><nav class="tabs" id="tabs"><button>Explore</button></nav><section id="explore" class="panel"><div class="toolbar"><label class="field"><input placeholder="Search"></label><button>Search</button></div><div class="map-layout"><div><div class="map-frame"><div class="map"></div></div></div><aside><div class="card explore-side">
+<button class="mobile-sheet-handle"><span>Route planner</span> Collapse</button>
+<div class="explore-tool-tabs"><button>Discover Nearby</button><button class="active">Route</button></div>
+<div id="exploreRoutePanel"><div class="row wrap route-picker-row"><label class="field route-picker">Saved route
+<select><option>A very lengthy saved route name in the Upper Peninsula to Door County, Wisconsin and onward</option></select></label>
+<button class="secondary small">New route</button><button class="quiet small">Save alternative</button><button class="quiet small">Delete</button></div>
+<div class="row wrap route-order-row"><button class="quiet small">↑ Earlier</button><button class="quiet small">↓ Later</button><label class="field">Route type<select><option>Journey / multi-day</option></select></label></div>
+<div class="route-comparison"><details class="route-compare-details" open><summary>Compare saved routes</summary>
+<div class="route-compare-row"><button class="quiet small">The Longest Saved Route Name With Multiple Places In A Single Line And Several Stops</button><span>1,800 mi · 21 hr 30 min driving</span></div></details></div>
+<div id="routeControls">
+<label class="field">Route name<input value="The Longest Route Name Ever Seen All The Way Through Michigan"></label>
+<div class="route-point"><label class="field">Starting point<input value="A Very Long UnbrokenRoadNameWithoutAnySpacesAndTheLongestStreetAddressEverExpected"></label><div class="row wrap"><button>Find</button><button>Pick on map</button></div></div>
+<div class="route-point"><label class="field">Destination<input value="Old Post Office Restaurant — 10042 State Highway 42, Ephraim, Wisconsin 54211"></label><div class="row wrap"><button>Find</button><button>Pick on map</button></div></div>
+<div class="route-time-range"><div class="two"><label class="field">Start day<input type="date" value="2026-11-18"></label><label class="field">Start time<input type="time" value="10:30"></label></div><div class="two"><label class="field">End day<input type="date" value="2026-11-22"></label><label class="field">End time<input type="time" value="12:30"></label></div></div>
+<div class="two"><label class="field">Route preference<select><option>Balanced</option></select></label><label class="field">Vehicle<select><option>Light truck / camper</option></select></label></div>
+<div class="route-checks"><label><input type="checkbox"> Avoid highways</label><label><input type="checkbox"> Avoid tolls</label><label><input type="checkbox"> Avoid ferries</label></div>
+<div class="route-waypoints-header"><strong>Road points &amp; stops</strong><button class="quiet small">Undo</button></div>
+<div class="row wrap route-action-row"><button>＋ Road point on map</button><button>＋ Stop on map</button></div>
+<div id="routeWaypointList"><div class="route-waypoint"><span class="route-waypoint-name">1. A very very very very very long waypoint name going from the upper peninsula to a busy place <small>Stop</small></span><div class="route-waypoint-actions"><button>↑</button><button>↓</button><button>×</button></div></div></div>
+<div class="route-waypoints-header"><strong>Driving sections (in travel order)</strong></div>
+<div id="routeSectionList" class="route-section-list"><div class="route-leg-row route-section"><span><strong>1. SomeLongPlaceNameWithNoSpacesThatCouldOtherwiseOverflowTheRightEdge → Old Post Office Restaurant Ephraim Wisconsin</strong><small>1000 mi · 14 hr driving</small></span><button class="quiet small">Remove section</button></div></div>
+<div id="routeLegMetrics"><details class="route-leg-breakdown" open><summary>Driving distance &amp; time between points</summary><div class="route-leg-row"><span>A very long starting point to a very very long ending point of the route</span><strong>1,025 mi · 20 hr 20 min driving</strong></div></details></div>
+<div class="row wrap route-source-row"><select><option>Itinerary: A very long option for an attraction that might expand the route editor offscreen</option></select><button>Add stop</button></div>
+<button>Add this day's itinerary stops</button><label class="route-show"><input type="checkbox"> Show route on map</label><div class="route-metrics">1125 mi · 1,125 hr 30 minutes driving</div>
+<div class="row wrap route-calc-buttons"><button class="primary">Suggest route</button><button class="quiet">Fit map to route</button></div>
+</div></div></div></aside></div></section></div></main></div></body></html>\`;
+const tbl=document.querySelector('#results tbody'),area=document.getElementById('frames');
+let done=0;
+for(const w of sizes){
+ const frame=document.createElement('iframe');frame.width=w;frame.height=750;frame.setAttribute('aria-label',w+'px route preview');frame.srcdoc=content;area.append(frame);
+ frame.addEventListener('load',()=>setTimeout(()=>{
+  const doc=frame.contentDocument,win=frame.contentWindow,root=doc.documentElement,panel=doc.querySelector('#exploreRoutePanel'),
+  nodes=[...doc.querySelectorAll('#exploreRoutePanel *')].filter(el=>{const box=el.getBoundingClientRect();return box.right>win.innerWidth+2 || box.left < -2;}),
+  bad=nodes.map(el=>el.tagName.toLowerCase()+'.'+String(el.className).replace(/\s+/g,'.')).slice(0,8);
+  const docBad=root.scrollWidth>win.innerWidth+2, panelBad=panel.scrollWidth>panel.clientWidth+2;
+  const tr=document.createElement('tr');tr.innerHTML='<td>'+w+'px</td><td class="'+(docBad?'bad':'good')+'">'+root.scrollWidth+'/'+win.innerWidth+'</td><td class="'+(panelBad?'bad':'good')+'">'+panel.scrollWidth+'/'+panel.clientWidth+'</td><td class="'+(bad.length?'bad':'good')+'">'+(bad.join(', ')||'None')+'</td>';
+  tbl.append(tr);
+  done++;if(done===sizes.length){const title=document.createElement('h2');title.textContent=[...tbl.rows].every(row=>!row.querySelector('.bad'))?'ALL WIDTH CHECKS PASS':'OVERFLOW FOUND';document.body.insertBefore(title,document.getElementById('frames'));}
+ },130));
+}
+</script></body></html>
