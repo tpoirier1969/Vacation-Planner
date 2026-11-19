@@ -142,6 +142,43 @@ function nearestSequence(items,start){
  }
  return ordered;
 }
+// Propose geographically sensible insertions without moving dated appointments.
+// Use direct-distance as a ranking heuristic only: the real road lookup and
+// visit/opening-hour constraints are evaluated separately and remain provisional.
+function insertFlexibleBetweenAppointments(timed,flexible){
+ if(!timed.length)return nearestSequence(flexible);
+ let ordered=timed.slice();
+ for(const stop of flexible){
+  let best=null;
+  for(let index=1;index<=ordered.length;index++){
+   const proposal=[...ordered.slice(0,index),stop,...ordered.slice(index)];
+   const prev=ordered[index-1],next=ordered[index]||null;
+   // Exclude only inter-appointment insertions that are impossible even at
+   // an optimistic 70 mph straight-line speed, with zero visit time.
+   // This is a lower bound, NEVER a drive-time or hours-of-business estimate.
+   if(next){
+    const before=proposal.slice(0,index).reverse().find(x=>minutesOfDay(x.time)!==null);
+    const after=proposal.slice(index+1).find(x=>minutesOfDay(x.time)!==null);
+    if(before&&after){
+     const depart=minutesOfDay(before.endTime)??minutesOfDay(before.time);
+     const arrive=minutesOfDay(after.time);
+     if(depart!==null&&arrive!==null){
+      const from=proposal.indexOf(before),to=proposal.indexOf(after);
+      const directMinutes=candidateDistance(proposal.slice(from,to+1))/70*60;
+      if(arrive<depart||depart+directMinutes>arrive)continue;
+     }
+    }
+   }
+   const extra=straightLineMiles(prev,stop)+
+    (next?straightLineMiles(stop,next)-straightLineMiles(prev,next):0);
+   if(!best||extra<best.extra-1e-8||
+      (Math.abs(extra-best.extra)<1e-8&&index<best.index))best={index,extra,proposal};
+  }
+  if(best)ordered=best.proposal;
+  else ordered.push(stop);
+ }
+ return ordered;
+}
 function suggestItineraryRoutes(activities,day){
  const all=(activities||[]).filter(x=>x.date===day);
  const eligible=all.filter(pointOK);
@@ -151,7 +188,12 @@ function suggestItineraryRoutes(activities,day){
  const timed=eligible.filter(x=>/^\d{2}:\d{2}/.test(x.time||'')).sort(byTime);
  const flexible=eligible.filter(x=>!/^\d{2}:\d{2}/.test(x.time||'')).sort((a,b)=>String(a.title).localeCompare(String(b.title)));
  const schedules=[{label:'Scheduled order',stops:[...timed,...flexible]}];
- if(flexible.length>1){
+ if(flexible.length&&timed.length>1){
+  const interleaved=insertFlexibleBetweenAppointments(timed,flexible);
+  if(interleaved.map(x=>x.id).join('|')!==schedules[0].stops.map(x=>x.id).join('|'))
+   schedules.push({label:'Flexible stops between appointments (tentative)',stops:interleaved});
+ }
+ if(schedules.length===1&&flexible.length>1){
   const nearby=nearestSequence(flexible,timed[timed.length-1]);
   const alternate=[...timed,...nearby];
   if(alternate.map(x=>x.id).join('|')!==schedules[0].stops.map(x=>x.id).join('|'))
@@ -173,21 +215,32 @@ function itineraryDrivingAssessment(stops,legs){
  const valid=Array.isArray(legs)&&legs.length===stops.length-1&&
   legs.every(x=>x&&Number.isFinite(Number(x.durationS))&&Number(x.durationS)>=0);
  if(!valid)return {checked:false,issues:[],message:'Road mileage is available, but stop-by-stop driving times were not provided. Schedule conflicts could not be checked.'};
- const issues=[];
- for(let i=1;i<stops.length;i++){
-  const from=stops[i-1],to=stops[i];
-  const end=minutesOfDay(from.endTime);
-  const begin=end===null?minutesOfDay(from.time):end;
-  const appointment=minutesOfDay(to.time);
-  if(begin===null||appointment===null)continue;
-  const travel=Math.ceil(Number(legs[i-1].durationS)/60);
-  const arrival=begin+travel;
-  if(arrival>appointment){
-   const late=arrival-appointment;
-   issues.push('Driving from '+from.title+' to '+to.title+' would arrive at least '+late+' min after '+to.time+'.');
+ const issues=[],uncertainIntervals=[];
+ let previousTimed=-1;
+ for(let i=0;i<stops.length;i++){
+  const appointment=minutesOfDay(stops[i].time);
+  if(appointment===null)continue;
+  if(previousTimed>=0){
+   const from=stops[previousTimed],to=stops[i];
+   const departure=minutesOfDay(from.endTime)??minutesOfDay(from.time);
+   const travel=legs.slice(previousTimed,i).reduce((sum,leg)=>sum+Math.ceil(Number(leg.durationS)/60),0);
+   const via=i-previousTimed-1;
+   if(via>0)uncertainIntervals.push(via);
+   if(departure!==null&&departure+travel>appointment){
+    const late=departure+travel-appointment;
+    issues.push('Driving from '+from.title+' to '+to.title+
+     (via?' via '+via+' flexible stop(s)':'')+
+     ' would arrive at least '+late+' min after '+to.time+'.');
+   }
   }
+  previousTimed=i;
  }
- return {checked:true,issues,message:issues.length?issues.length+' possible scheduling conflict(s).':'No travel-time conflicts detected between consecutive timed stops. Activity duration, parking and traffic are not included.'};
+ let message=issues.length?issues.length+' possible scheduling conflict(s).':
+  'No driving-only travel-time conflicts detected between timed appointments.';
+ if(uncertainIntervals.length)message+=' '+uncertainIntervals.length+
+  ' interval(s) include flexible stops; their visit durations are unknown.';
+ message+=' Activity duration, parking, traffic and opening hours are not included.';
+ return {checked:true,issues,uncertainIntervals,message};
 }
 function itinerarySnapshot(activities,day){
  return JSON.stringify((activities||[]).filter(x=>x.date===day)
@@ -631,7 +684,7 @@ function createController(config){
      '<p class="muted">'+esc(itinerarySuggestions.reason)+'</p>')+
    (itinerarySuggestions.routeNote?'<p class="muted small-details">'+esc(itinerarySuggestions.routeNote)+'</p>':'')+
    (itinerarySuggestions.excluded?'<p class="muted small-details">'+itinerarySuggestions.excluded+' activity/activities have no mapped location and were excluded.</p>':'')+
-   '<p class="muted small-details">Timed stops keep their chronological order. Arrival warnings use provided road-leg times only; actual visits, parking, traffic and opening hours must still be checked.</p>':'';
+   '<p class="muted small-details">Timed stops keep their chronological order. Flexible insertions are tentative; direct-line placement is not a driving-time estimate. Road-leg checks include driving through flexible stops, but visit durations, parking, traffic and business hours still require review.</p>':'';
   $('routePicker').innerHTML=list.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+
    (x.distanceM!=null?' · '+(x.distanceM/1609.344).toFixed(0)+' mi':'')+'</option>').join('');
   $('routePicker').value=currentId;

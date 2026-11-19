@@ -13,7 +13,7 @@ test('Timed appointments stay chronologically ordered, flexible stops remain opt
  const result=domain.suggestItineraryRoutes(data,'2026-12-22');
  assert.ok(result.options.length>=1);
  assert.deepEqual(result.options[0].ids.slice(0,2),['museum','dinner']);
- assert.ok(result.options.every(x=>x.ids.slice(0,2).join('|')==='museum|dinner'));
+ assert.ok(result.options.every(x=>x.ids.indexOf('museum')<x.ids.indexOf('dinner')));
  assert.ok(result.options.every(x=>Number.isFinite(x.directMiles)));
 });
 test('Missing locations do not create invented points, and old trip days are excluded',()=>{
@@ -35,4 +35,32 @@ test('Review is separate from accepting/saving and does not overwrite itinerary'
  assert.ok(js.includes('config.getRoutes().push(r)'));
  assert.ok(js.includes('config.persist()'));
  assert.ok(js.includes("sourceType:'activities'"));
+});
+test('Flexible stops can be inserted geographically between fixed appointments',()=>{
+ const data=[
+  item('museum',45,-87,'10:00'),
+  item('dinner',45,-87.2,'18:00'),
+  item('coffee',45,-87.07),
+  item('gallery',45,-87.14)
+ ];
+ const result=domain.suggestItineraryRoutes(data,'2026-12-22');
+ assert.equal(result.options.length,2);
+ assert.deepEqual(result.options[0].ids,['museum','dinner','coffee','gallery']);
+ const inserted=result.options[1];
+ assert.equal(inserted.label,'Flexible stops between appointments (tentative)');
+ assert.equal(inserted.ids[0],'museum');
+ assert.equal(inserted.ids.at(-1),'dinner');
+ assert.ok(inserted.ids.indexOf('coffee')<inserted.ids.indexOf('dinner'));
+ assert.ok(inserted.ids.indexOf('gallery')<inserted.ids.indexOf('dinner'));
+ assert.ok(inserted.directMiles<result.options[0].directMiles);
+});
+test('Very tight scheduled appointments do not receive physically impossible insertions',()=>{
+ const data=[
+  item('appointment-1',45,-87,'10:00'),
+  {...item('appointment-2',45,-88,'10:05'),endTime:''},
+  item('coffee-near-middle',45,-87.5)
+ ];
+ const result=domain.suggestItineraryRoutes(data,'2026-12-22');
+ assert.equal(result.options.length,1);
+ assert.deepEqual(result.options[0].ids,['appointment-1','appointment-2','coffee-near-middle']);
 });

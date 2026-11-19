@@ -6,6 +6,8 @@ A shared, trip-focused vacation workspace for Tod and Donna. Hosted as a static 
 
 ## Current features
 
+- **v0.6.46 (2026-11-19):** First itinerary-planning improvement after source QA: route proposals can tentatively insert unscheduled mapped activities between fixed-time appointments when a geographic lower-bound permits, while preserving appointment order. Road-time conflict checks now sum all legs through intervening flexible stops and flag unknown visit durations. Both options remain previews until explicitly accepted; no stored itinerary, route or Supabase changes during preview.
+
 - **v0.6.45 (2026-11-19):** Discover Nearby map pins are now small unnumbered dots with business-name tooltips and the same tap-to-open place details. The results-list action is labeled “Show on map” without a number. Existing lists, result loading, route overlays, and Supabase records are unchanged.
 
 - **v0.6.44 (2026-11-19):** Corrected midnight departure handling in itinerary driving-time conflict calculations and displayed a clear message when the Geoapify API key is missing. Source-only conservative schedule validation; existing routes, itinerary and Supabase schema untouched.

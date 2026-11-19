@@ -37,3 +37,19 @@ test('Preview uses actual road route and only saves on explicit acceptance',()=>
  assert.ok(js.includes("itinerarySuggestions.snapshot!==itinerarySnapshot("));
  assert.ok(js.includes("config.getRoutes().push(r)"));
 });
+test('Conflict detection sums every road leg across an intervening flexible stop',()=>{
+ const route=[stop('Museum','10:00','11:00'),stop('Coffee shop',''),stop('Dinner','11:30')];
+ const result=f.itineraryDrivingAssessment(route,[{durationS:1200},{durationS:1200}]);
+ assert.equal(result.checked,true);
+ assert.equal(result.issues.length,1);
+ assert.match(result.issues[0],/via 1 flexible stop/);
+ assert.match(result.issues[0],/10 min after 11:30/);
+ assert.match(result.message,/visit durations are unknown/);
+});
+test('Flexible stop order cannot be pronounced schedule-safe without visit durations',()=>{
+ const route=[stop('Museum','10:00','10:30'),stop('Coffee shop',''),stop('Dinner','12:30')];
+ const result=f.itineraryDrivingAssessment(route,[{durationS:900},{durationS:900}]);
+ assert.equal(result.issues.length,0);
+ assert.match(result.message,/flexible stops/);
+ assert.match(result.message,/opening hours/);
+});

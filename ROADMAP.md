@@ -13,6 +13,8 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **v0.6.46 (2026-11-19):** Itinerary routing now offers a tentative between-appointments sequence for flexible activities, rejects physically impossible insertions using only an optimistic straight-line lower bound, and checks road-leg time cumulatively through all intervening untimed stops. Missing dwell/parking/hours/traffic remain explicitly unknown. Acceptance is separate; no Supabase changes. Next: true opening-hours/visit-duration modeling, multi-day proposals, and real signed-in phone/desktop acceptance.
+
 - **v0.6.45 (2026-11-19):** Removed numerical badges from Discover Nearby map markers, retaining visible clickable dots, business-name tooltips and popups, and matching list “Show on map” actions. No Supabase changes; signed-in device visual review remains outstanding.
 
 - **v0.6.44 (2026-11-19):** Follow-up schedule verification: midnight is treated as a real time rather than an absent end time; missing routing credentials are displayed explicitly. Live real-device routing still awaits acceptance.
@@ -70,7 +72,7 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 4. Trip-specific sharing/access beyond current household model, if needed.
 5. Scheduler integration: connect to the existing Lazy Acres Scheduler deliberately, without creating a second calendar system.
 6. Cross-app integrations with existing Shopping/Packing and Boondocking apps, without migrating or duplicating their authoritative records.
-7. **Itinerary-driven route suggestions — outstanding:** analyze scheduled and flexible itinerary activities for each trip day; respect fixed event/reservation times and available opening hours; suggest sensible stop sequences and driving routes, with day-by-day mileage/time comparisons, alternative orders, conflict warnings, and user-editable route geometry. Suggest without modifying itinerary dates, times, or existing routes until an option is explicitly accepted. Use current free Geoapify routing capabilities first.
+7. **Itinerary-driven route suggestions — partially implemented:** map scheduled and flexible day activities, offer tentative interleaved or chronological stop orders, and compare Geoapify driving miles/time when accessible. Still outstanding: visit-duration inputs, actual business opening-hour constraints, flexible-stop scheduling against fixed appointments beyond driving alone, multi-day mileage/time comparisons, route geometry acceptance checks on real devices. Keep previews non-persistent until explicitly accepted.
 8. Basic route builder implemented in v0.6.19: multiple named Supabase routes, Geoapify driving paths, road-shaping clicks, ordered waypoints, linked Ideas/itinerary stops, start/end date/time, route preferences, visibility, alternative copies and distance/time comparisons. **Outstanding:** route-corridor attraction discovery, configurable maximum detour time, schedule-linked multi-day routing, and real-device alternate route acceptance.
 9. Deeper fishing access, boat launches, trails, events discovery, and weather along routes/dates.
 10. Browser save extension, location-aware research notes, and optional trip photos.
