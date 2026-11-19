@@ -849,3 +849,14 @@ footer{
 .route-day-times{color:#254f52!important;background:#e8f2e9;padding:5px 7px;border-radius:6px;margin:4px 0;line-height:1.5!important}
 .route-itinerary-controls .field{flex:1 1 115px}
 .route-itinerary-controls input[type=time]{min-height:42px}
+
+/* Saved-route corridor discovery */
+.discover-scope-controls{display:grid;gap:5px;margin:8px 0}
+.discover-scope-controls .field{margin:4px 0}
+.discover-scope-controls select{width:100%;min-height:41px}
+#discoverRouteControls{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:7px}
+#discoverRouteControls>p{grid-column:1/-1;margin:2px 0}
+.route-detour{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:7px;margin:6px 0;background:#faf8ef;border:1px solid #d7d6c9;border-radius:7px}
+.route-detour small{flex:1 1 130px;color:#435f5d;font-size:12px}
+.route-detour button{min-height:38px}
+@media(max-width:440px){#discoverRouteControls{grid-template-columns:minmax(0,1fr)}}

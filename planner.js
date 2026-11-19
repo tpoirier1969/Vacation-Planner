@@ -18,6 +18,16 @@ function ideaTiming(x){
  if(x.time)items.push(Itinerary.formatTime(x.time)+(x.endTime?' – '+Itinerary.formatTime(x.endTime):''));
  return items.length?'<div class="muted small-details">'+esc(items.join(' · '))+'</div>':'';
 }
+function refreshDiscoveryScope(){
+ const mode=$('#discoverScope').value,along=mode==='route';
+ $('#discoverRouteControls').classList.toggle('hidden',!along);
+ const list=(state.routes||[]).filter(r=>r.tripId===active),select=$('#discoverRoute'),chosen=select.value;
+ select.innerHTML=list.length?list.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+'</option>').join(''):
+  '<option value="">No saved routes</option>';
+ select.value=list.some(x=>x.id===chosen)?chosen:list[0]?.id||'';
+ $('#discover').textContent=along?'Find along saved route':'Find on visible map';
+ $('#discover').disabled=along&&!list.length;
+}
 function render(){const t=trip();document.body.classList.toggle('mobile-workspace',!!t);$('#home').classList.toggle('hidden',!!t);$('#workspace').classList.toggle('hidden',!t);$('#tripHero').classList.toggle('hidden',!t);$('#mastheadHome').classList.toggle('hidden',!!t);$('#context').textContent=t?'TRIP WORKSPACE':'THE OPEN ROAD IS CALLING';$('#tripCards').innerHTML=state.trips.length?state.trips.map(x=>'<button class="trip" data-open="'+esc(x.id)+'"><span class="chip">Open trip</span><strong>'+esc(x.name)+'</strong><span>'+esc(x.destination||'Destination undecided')+'</span><small>'+formatDate(x.start)+(x.end?' – '+formatDate(x.end):'')+'</small></button>').join(''):'<p class="empty">No trips yet. Create a trip to begin exploring.</p>';if(!t)return;
 $('#tripTitle').textContent=t.name;$('#tripSub').textContent=(t.destination||'Explore anywhere')+' · '+formatDate(t.start)+(t.end?' – '+formatDate(t.end):'');
 TABS.forEach(n=>{$('#'+n).classList.toggle('hidden',n!==tab);document.querySelector('[data-tab="'+n+'"]').classList.toggle('active',n===tab)});if(tab==='explore')setTimeout(initMap,0);
@@ -72,7 +82,7 @@ $('#activityList').innerHTML=activities.length?activityDays.map(day=>
  }).join('')+'</section>'
 ).join('') : '<p class="empty">'+(allActivities.length?'No plans match this view. Choose another filter.':'Nothing decided yet. Choose an idea or add a plan directly.')+'</p>';
 $('#noteList').innerHTML=forTrip('notes').length?forTrip('notes').map(x=>'<div class="day"><div class="row entry-head"><strong>'+esc(x.title)+'</strong>'+editAndRemove('notes',x)+'</div><p style="white-space:pre-wrap">'+esc(x.body)+'</p></div>').join(''):'<p class="empty">Save links, questions, reservations, and research here.</p>';
-const packing=forTrip('packing');const checked=packing.filter(x=>x.done).length;$('#packProgress').textContent=checked+' of '+packing.length+' items packed · '+PACKING_CATEGORIES.length+' categories';$('#packList').innerHTML=PACKING_CATEGORIES.map(c=>{const items=packing.filter(x=>(x.category||'trip-misc')===c.key);return '<details class="pack-category" '+(items.length?'open':'')+'><summary><span class="pack-category-name">'+esc(c.label)+'</span><span class="pack-count">'+items.filter(x=>x.done).length+' / '+items.length+'</span></summary><div class="pack-items">'+(items.length?items.map(x=>'<div class="check"><input type="checkbox" aria-label="Packed '+esc(x.title)+'" data-pack="'+esc(x.id)+'" '+(x.done?'checked':'')+'><span style="'+(x.done?'text-decoration:line-through;opacity:.6':'')+'">'+esc(x.title)+'</span><span class="entry-actions"><button class="quiet small" data-edit="packing:'+esc(x.id)+'">Edit</button><button class="quiet small" data-remove="packing:'+esc(x.id)+'">Remove</button></span></div>').join(''):'<p class="muted pack-empty">Nothing on this list yet.</p>')+'</div></details>'}).join('');routeUI?.render();refreshMarkers();}
+const packing=forTrip('packing');const checked=packing.filter(x=>x.done).length;$('#packProgress').textContent=checked+' of '+packing.length+' items packed · '+PACKING_CATEGORIES.length+' categories';$('#packList').innerHTML=PACKING_CATEGORIES.map(c=>{const items=packing.filter(x=>(x.category||'trip-misc')===c.key);return '<details class="pack-category" '+(items.length?'open':'')+'><summary><span class="pack-category-name">'+esc(c.label)+'</span><span class="pack-count">'+items.filter(x=>x.done).length+' / '+items.length+'</span></summary><div class="pack-items">'+(items.length?items.map(x=>'<div class="check"><input type="checkbox" aria-label="Packed '+esc(x.title)+'" data-pack="'+esc(x.id)+'" '+(x.done?'checked':'')+'><span style="'+(x.done?'text-decoration:line-through;opacity:.6':'')+'">'+esc(x.title)+'</span><span class="entry-actions"><button class="quiet small" data-edit="packing:'+esc(x.id)+'">Edit</button><button class="quiet small" data-remove="packing:'+esc(x.id)+'">Remove</button></span></div>').join(''):'<p class="muted pack-empty">Nothing on this list yet.</p>')+'</div></details>'}).join('');refreshDiscoveryScope();routeUI?.render();refreshMarkers();}
 window.applyVacationPlannerRemoteState=next=>{
  state=structuredClone(next);
  if(active&&!trip()){active=null;sessionStorage.removeItem(SESSION);}
@@ -1174,12 +1184,130 @@ function discoveryCard(item,i){
   '<div class="row wrap poi-links">'+(review?'<a href="'+esc(review)+'" target="_blank" rel="noopener noreferrer">Find ratings & reviews on Google Maps</a>':'')+
     (item.website?'<a href="'+esc(item.website)+'" target="_blank" rel="noopener noreferrer">Website</a>':'')+'</div>'+
   '<div class="poi-extra" id="poi-extra-'+i+'"></div>'+
+  (item.corridor?'<div class="route-detour"><small id="detour-status-'+i+'">'+
+   (Number.isFinite(item.corridor.detourMinutes)?
+    'About '+item.corridor.detourMinutes.toFixed(0)+' min added driving · '+(item.corridor.within?'within limit':'over limit'):
+    'Near the route · added driving time not checked')+'</small>'+
+   '<button class="quiet small" data-detour-check="'+i+'">Check detour minutes</button></div>':'')+
   '<div class="row wrap poi-actions"><button class="quiet small" data-preview="'+i+'">Show on map</button>'+
   '<button class="quiet small" data-place-details="'+i+'">Details</button>'+
   '<button class="secondary small" data-suggest="'+i+'" '+(saved?'disabled':'')+'>'+(saved?'Saved':'+ Save idea')+'</button>'+
   '<button class="primary small" data-suggest-plan="'+i+'">+ Itinerary</button></div></article>';
 }
+// Geoapify's POST polyline filter searches the *actual saved road line*.
+// The minute setting is a target, not a verified travel time until checked.
+let corridorOffset=0,corridorSignature='',corridorRouteVersion='';
+const CORRIDOR_PAGE_SIZE=100,CORRIDOR_MAX_PAGES=8;
+function corridorFingerprint(route){
+ return JSON.stringify([route?.id,route?.polyline,route?.segments?.map(x=>x.polyline),
+  route?.preferences,route?.start,route?.end,route?.waypoints]);
+}
+async function discoverAlongRoute(loadMore=false){
+ const route=(state.routes||[]).find(r=>r.id===$('#discoverRoute').value&&r.tripId===active);
+ const status=$('#discoverStatus'),results=$('#suggestions'),button=$('#discover'),more=$('#discoverMore');
+ if(!route){status.textContent='Select a saved route.';return;}
+ const geometry=window.VacationRouteDomain.routeDiscoveryGeometry(route);
+ if(!geometry){status.textContent='Calculate the saved route’s road path in Route first.';return;}
+ const key=window.LAZY_ACRES_GEOAPIFY_KEY;
+ if(!key||key==='PASTE_YOUR_GEOAPIFY_BROWSER_KEY_HERE'){status.textContent='Geoapify is not configured.';return;}
+ const category=$('#category').value,term=$('#discoverText').value.trim();
+ const match=DISCOVERY_TERMS.find(x=>x.pattern.test(term));
+ const categories=category==='all'||category==='other'?
+  match?.categories||DISCOVERY_CATEGORIES[category]||DISCOVERY_CATEGORIES.all:
+  DISCOVERY_CATEGORIES[category]||DISCOVERY_CATEGORIES.all;
+ const restaurantOnly=category==='restaurants'||((category==='all'||category==='other')&&!!match&&
+  /catering\.(restaurant|fast_food|food_court)/.test(categories));
+ const nameFilter=term&&!genericDiscoveryTerm(term)?normalizedBusinessName(term):'';
+ const maxMinutes=Number($('#discoverDetourMinutes').value)||15;
+ // Liberal geographic prefilter: the actual road detour may be longer.
+ const buffer=Math.min(50000,Math.max(3000,maxMinutes*2000));
+ const fingerprint=corridorFingerprint(route);
+ const signature=JSON.stringify([active,route.id,fingerprint,category,term,maxMinutes]);
+ if(!loadMore||corridorSignature!==signature){
+  loadMore=false;corridorOffset=0;corridorSignature=signature;corridorRouteVersion=fingerprint;
+ }
+ if(loadMore&&corridorOffset>=CORRIDOR_PAGE_SIZE*CORRIDOR_MAX_PAGES)return;
+ const token=++discoveryRequest;
+ button.disabled=true;more.disabled=true;
+ if(!loadMore){results.innerHTML='';window.__tripSuggestions=[];discoveryMarkers?.clearLayers();
+  $('#discoverShowOnMap').classList.add('hidden');}
+ status.textContent='Searching along '+route.name+'…';
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),16000);
+ try{
+  const body={categories:categories.split(','),filter:{...geometry.filter,buffer},
+   limit:CORRIDOR_PAGE_SIZE,offset:corridorOffset};
+  if(nameFilter)body.name=nameFilter;
+  const response=await fetch('https://api.geoapify.com/v2/places?apiKey='+encodeURIComponent(key),{
+   method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:controller.signal});
+  if(!response.ok)throw Error(response.status===429?'Geoapify rate limit reached':'Geoapify HTTP '+response.status);
+  const data=await response.json();
+  if(!Array.isArray(data.features))throw Error('Unexpected corridor search response.');
+  if(token!==discoveryRequest||corridorFingerprint(route)!==corridorRouteVersion)return;
+  const previous=loadMore?(window.__tripSuggestions||[]):[],newItems=[];
+  for(const feature of data.features){
+   if(restaurantOnly&&!isCustomerFacingRestaurant(feature.properties||{}))continue;
+   const item=discoveryFoundPlace(feature,category,match,restaurantOnly);
+   if(!item||nameFilter&&!item.name.toLowerCase().includes(nameFilter.toLowerCase()))continue;
+   if([...previous,...newItems].some(x=>sameNearbyBusiness(x,item)))continue;
+   item.corridor={routeId:route.id,maxMinutes};
+   newItems.push(item);
+  }
+  const found=[...previous,...newItems];
+  corridorOffset+=CORRIDOR_PAGE_SIZE;window.__tripSuggestions=found;
+  results.innerHTML=found.length?found.map(discoveryCard).join(''):
+   '<p class="empty">No route-corridor results. Try different categories or a wider detour target.</p>';
+  renderDiscoveryMarkers(found);observeDiscoveryCards();
+  const hasMore=data.features.length===CORRIDOR_PAGE_SIZE&&
+   corridorOffset<CORRIDOR_PAGE_SIZE*CORRIDOR_MAX_PAGES;
+  more.classList.toggle('hidden',!hasMore);more.textContent='Load more along route';
+  $('#discoverShowOnMap').classList.toggle('hidden',!found.length);
+  $('#discoverShowOnMap').textContent='Show all '+found.length+' on map';
+  status.textContent=found.length+' route-corridor places loaded · '+maxMinutes+
+   '-minute detour target; check each result for actual added road time'+
+   (hasMore?' · more results available':'')+
+   (corridorOffset>=CORRIDOR_PAGE_SIZE*CORRIDOR_MAX_PAGES?' · results may be incomplete':'')+'.';
+  if(found.length)showDiscoveryResultsOnMap();
+  else if(window.matchMedia('(max-width:760px)').matches)setMobileSheet('expanded');
+ }catch(error){
+  if(token===discoveryRequest)status.textContent=error.name==='AbortError'?'Route search timed out.':
+   'Route search failed: '+error.message;
+ }finally{clearTimeout(timer);if(token===discoveryRequest){button.disabled=false;more.disabled=false;}}
+}
+async function verifyCorridorDetour(index){
+ const item=window.__tripSuggestions?.[index];
+ if(!item?.corridor||!geo(item))return;
+ const route=(state.routes||[]).find(r=>r.id===item.corridor.routeId&&r.tripId===active);
+ const label=$('#detour-status-'+index),button=document.querySelector('[data-detour-check="'+index+'"]');
+ if(!label||!button)return;
+ if(!route||corridorFingerprint(route)!==corridorRouteVersion){
+  label.textContent='Route changed. Search again to check its current detour.';return;
+ }
+ const windowPoints=window.VacationRouteDomain.nearestRoadWindow(route,item);
+ if(!windowPoints){label.textContent='No connected road section found near the place.';return;}
+ const domain=window.VacationRouteDomain,key=window.LAZY_ACRES_GEOAPIFY_KEY;
+ const common={start:windowPoints.start,end:windowPoints.end,preferences:route.preferences||{}};
+ const urls=[domain.routeURL({...common,waypoints:[]},key),
+  domain.routeURL({...common,waypoints:[{lat:item.lat,lng:item.lng,kind:'stop'}]},key)];
+ const token=discoveryRequest,controller=new AbortController(),timer=setTimeout(()=>controller.abort(),18000);
+ button.disabled=true;label.textContent='Checking real road travel time…';
+ try{
+  const durations=await Promise.all(urls.map(async url=>{
+   const response=await fetch(url,{signal:controller.signal});
+   if(!response.ok)throw Error('Routing HTTP '+response.status);
+   return domain.parseRoute(await response.json()).durationS;
+  }));
+  if(token!==discoveryRequest||corridorFingerprint(route)!==corridorRouteVersion)return;
+  const added=(durations[1]-durations[0])/60,within=added<=item.corridor.maxMinutes;
+  item.corridor.detourMinutes=added;item.corridor.within=within;
+  label.textContent=(added>=0?'About +':'About ')+added.toFixed(0)+' minutes added road time · '+
+   (within?'within':'exceeds')+' the '+item.corridor.maxMinutes+'-minute limit (local section estimate).';
+ }catch(error){
+  if(token===discoveryRequest)label.textContent='Unable to check road detour: '+error.message;
+ }finally{clearTimeout(timer);if(token===discoveryRequest)button.disabled=false;}
+}
+
 async function discover(loadMore=false){
+ if($('#discoverScope').value==='route')return discoverAlongRoute(loadMore);
  if(!map)return;
  const category=$('#category').value,term=$('#discoverText').value.trim();
  const center=map.getCenter();
@@ -1319,6 +1447,9 @@ $('#ideaCategoryFilter').addEventListener('change',e=>{ideaFilter=e.target.value
 $('#ideaSearch').addEventListener('input',e=>{ideaQuery=e.target.value;render();});
 $('#ideaClearSearch').addEventListener('click',()=>{ideaQuery='';$('#ideaSearch').value='';render();$('#ideaSearch').focus();});
 $('#itineraryView').addEventListener('change',e=>{itineraryView=['all','unscheduled','booking','mustdo'].includes(e.target.value)?e.target.value:'all';render();});
+$('#discoverScope').addEventListener('change',()=>{refreshDiscoveryScope();$('#discoverMore').classList.add('hidden');});
+$('#discoverRoute').addEventListener('change',()=>$('#discoverMore').classList.add('hidden'));
+$('#discoverDetourMinutes').addEventListener('change',()=>$('#discoverMore').classList.add('hidden'));
 // A one-step category correction, without editing any other Idea fields.
 $('#placeList').addEventListener('change',e=>{
  const select=e.target.closest?.('[data-idea-category]');
@@ -1536,6 +1667,8 @@ function moveBackToIdeas(id){
 $('#contactClose').addEventListener('click',()=>$('#contactDialog').close());
 $('#contactDialog').addEventListener('close',()=>{contactInfoRequest++;});
 document.addEventListener('click',async e=>{
+ const detour=e.target.closest('[data-detour-check]');
+ if(detour){void verifyCorridorDetour(Number(detour.dataset.detourCheck));return;}
  const infoButton=e.target.closest('[data-contact-info]');
  if(infoButton){
   const [kind,id]=infoButton.dataset.contactInfo.split(':');

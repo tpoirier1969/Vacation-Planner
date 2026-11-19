@@ -13,6 +13,8 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **v0.6.51 (2026-11-19):** Route-corridor discovery first pass: selected saved route and Geoapify polyline POST buffer (not visible-map rectangle), 5–30 min detour target, paging, deduplicated results and all loaded map pins, on-demand verification of added local-section driving time, no modifications to route or saved trip data. Real browser/iPhone Geoapify POST and routing acceptance pending; estimated detour is not a guarantee.
+
 - **v0.6.50 (2026-11-19):** Read-only day scheduling proposals added: opening/closing window, fixed appointments, optional dwell, flexible stop insertion and unplaced-stop alerts. Timing is a 70 mph straight-line optimistic lower bound until actual road legs are checked. Next: route-corridor discovery and better full-road-time optimization. No database changes.
 
 - **v0.6.49 (2026-11-19):** On-demand Info popup for Ideas and Itinerary includes available website, phone, location and email links, with linked-Idea/contact-source matching and no guessed values or database changes. Directly entered unmapped places can offer limited information; real signed-in mobile acceptance still outstanding.

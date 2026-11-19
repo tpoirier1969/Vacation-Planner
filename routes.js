@@ -77,6 +77,39 @@ function samplesByDistance(polyline,count=18){
  }
  return out;
 }
+// Use saved calculated road geometry. Disconnected sections remain separate.
+function routeDiscoveryGeometry(route){
+ const segments=Array.isArray(route?.segments)?route.segments.filter(x=>typeof x.polyline==='string'&&x.polyline):[];
+ const strings=segments.length?segments.map(x=>x.polyline):route?.polyline?[route.polyline]:[];
+ const lines=strings.map(decodePolyline).filter(x=>x.length>=2);
+ if(!lines.length)return null;
+ if(lines.length===1&&strings[0].length<90000)
+  return {filter:{type:'polyline',geometry:strings[0],encoding:'polyline5'},lines};
+ const count=lines.reduce((n,line)=>n+line.length,0),stride=Math.max(1,Math.ceil(count/2500));
+ const coordinates=lines.map(line=>line.filter((_,i)=>i===0||i===line.length-1||i%stride===0)
+  .map(point=>[Number(point[1].toFixed(6)),Number(point[0].toFixed(6))]));
+ return {filter:{type:'polyline',geometry:{type:'MultiLineString',coordinates}},lines};
+}
+// Find a few kilometers of the original road around a candidate. Two routing
+// requests then measure the extra time for a visit compared with no visit.
+function nearestRoadWindow(route,place){
+ const geometry=routeDiscoveryGeometry(route);
+ if(!geometry||!pointOK(place))return null;
+ let best=null;
+ for(const line of geometry.lines)for(let i=0;i<line.length;i++){
+  const point={lat:line[i][0],lng:line[i][1]};
+  const distance=straightLineMiles(point,place);
+  if(!best||distance<best.distance)best={line,index:i,distance};
+ }
+ if(!best)return null;
+ const line=best.line;let from=best.index,to=best.index,back=0,ahead=0;
+ const at=i=>({lat:line[i][0],lng:line[i][1]});
+ while(from>0&&back<1.5){back+=straightLineMiles(at(from),at(from-1));from--;}
+ while(to<line.length-1&&ahead<1.5){ahead+=straightLineMiles(at(to),at(to+1));to++;}
+ if(from===to){from=0;to=line.length-1;}
+ if(from===to||straightLineMiles(at(from),at(to))<0.005)return null;
+ return {start:at(from),end:at(to),distanceMiles:best.distance};
+}
 function sameRoad(a,b){
  const x=samplesByDistance(a),y=samplesByDistance(b);
  if(!x.length||x.length!==y.length)return false;
@@ -1061,6 +1094,6 @@ function createController(config){
  bind();
  return {attachMap,render,onTripChange,consumeMapClick,cancelPick,isPicking:()=>!!pick,getPick:()=>pick,setTool};
 }
-root.VacationRouteDomain=Object.freeze({newRoute,decodePolyline,routeURL,parseRoute,windowError,summary,pointOK,sectionGeometry,suggestItineraryRoutes,smartDailyItinerary,tentativeDayTimeline,itineraryTripOverview,itineraryDrivingAssessment,itinerarySnapshot});
+root.VacationRouteDomain=Object.freeze({newRoute,decodePolyline,routeURL,parseRoute,routeDiscoveryGeometry,nearestRoadWindow,windowError,summary,pointOK,sectionGeometry,suggestItineraryRoutes,smartDailyItinerary,tentativeDayTimeline,itineraryTripOverview,itineraryDrivingAssessment,itinerarySnapshot});
 root.createVacationRoutes=createController;
 })(window);

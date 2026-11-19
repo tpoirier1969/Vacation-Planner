@@ -6,6 +6,8 @@ A shared, trip-focused vacation workspace for Tod and Donna. Hosted as a static 
 
 ## Current features
 
+- **v0.6.51 (2026-11-19):** Discover Nearby can search Along saved route using Geoapify's documented POST polyline filter on calculated road geometry, with category/name filters, paged results, unnumbered pins and usual Idea/Itinerary actions. Maximum detour target (5–30 minutes) controls a geographic buffer, and each candidate has an optional on-demand two-road-route comparison to estimate added driving minutes. Results are not represented as verified driving-time matches until checked. No route/itinerary/Supabase writes.
+
 - **v0.6.50 (2026-11-19):** Daily itinerary suggestions now offer a tentative timed schedule with configurable day start/end, optional visit-duration estimate, fixed appointment order, flexible stops before/between/after appointments, basic listed opening-hours constraints, and explicit alerts for stops that cannot fit. Lower-bound timing is labelled optimistic, with road-time warnings checked through Geoapify. Only accepting a proposal saves a new route; no Supabase schema/data changes.
 
 - **v0.6.49 (2026-11-19):** Ideas and Itinerary entries now have Info buttons opening a mobile-friendly contact dialog with available website, phone, address/map and email actions. The lookup first uses a saved Idea Geoapify ID or linked Idea, then an exact-name/proximity matched discovered listing or on-demand map lookup. Missing data is clearly labeled; no contact fields or trip records are written to Supabase.
