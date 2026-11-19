@@ -119,9 +119,53 @@ function routeType(r){
  const direction=r?.preferences?.journeyDirection;
  return direction==='outbound'||direction==='return'?direction:'journey';
 }
+// Route suggestions are ephemeral until accepted. Preserve scheduled appointment
+// order and compare flexible stops with a geographic nearest-neighbour sequence.
+function straightLineMiles(a,b){
+ const lat1=Number(a.lat)*Math.PI/180,lat2=Number(b.lat)*Math.PI/180;
+ const dLat=lat2-lat1,dLng=(Number(b.lng)-Number(a.lng))*Math.PI/180;
+ const h=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2;
+ return 3958.7613*2*Math.asin(Math.min(1,Math.sqrt(h)));
+}
+function candidateDistance(items){
+ return items.slice(1).reduce((sum,item,i)=>sum+straightLineMiles(items[i],item),0);
+}
+function nearestSequence(items,start){
+ const remaining=items.slice(),ordered=[];let anchor=start;
+ while(remaining.length){
+  let best=0,min=Infinity;
+  for(let i=0;i<remaining.length;i++){
+   const distance=anchor?straightLineMiles(anchor,remaining[i]):0;
+   if(distance<min||(distance===min&&String(remaining[i].title).localeCompare(String(remaining[best].title))<0)){min=distance;best=i;}
+  }
+  const next=remaining.splice(best,1)[0];ordered.push(next);anchor=next;
+ }
+ return ordered;
+}
+function suggestItineraryRoutes(activities,day){
+ const all=(activities||[]).filter(x=>x.date===day);
+ const eligible=all.filter(pointOK);
+ if(eligible.length<2)return {day,options:[],excluded:all.length-eligible.length,reason:'At least two mapped itinerary stops are needed for this day.'};
+ if(eligible.length>MAX_WAYPOINTS+2)return {day,options:[],excluded:all.length-eligible.length,reason:'A day route supports up to '+(MAX_WAYPOINTS+2)+' locations. Split this day into two routes.'};
+ const byTime=(a,b)=>String(a.time||'').localeCompare(String(b.time||''))||String(a.id).localeCompare(String(b.id));
+ const timed=eligible.filter(x=>/^\d{2}:\d{2}/.test(x.time||'')).sort(byTime);
+ const flexible=eligible.filter(x=>!/^\d{2}:\d{2}/.test(x.time||'')).sort((a,b)=>String(a.title).localeCompare(String(b.title)));
+ const schedules=[{label:'Scheduled order',stops:[...timed,...flexible]}];
+ if(flexible.length>1){
+  const nearby=nearestSequence(flexible,timed[timed.length-1]);
+  const alternate=[...timed,...nearby];
+  if(alternate.map(x=>x.id).join('|')!==schedules[0].stops.map(x=>x.id).join('|'))
+   schedules.push({label:'Nearby flexible stops',stops:alternate});
+ }
+ return {day,excluded:all.length-eligible.length,untimed:flexible.length,options:schedules.map(s=>({
+  ...s,directMiles:candidateDistance(s.stops),ids:s.stops.map(x=>x.id)
+ }))};
+}
+
 function createController(config){
  const $=id=>document.getElementById(id);
  let currentId='',tool='discover',pick='',map=null,layer=null,undoStack=[],busy=false,status='';
+ let suggestedDay='',itinerarySuggestions=null;
  let dragHandle=null,dragHandleLeg=-1,dragHandleRoute='',directDrag=null;
  const routes=()=>{const t=config.getTrip();return t?(config.getRoutes()||[]).filter(r=>r.tripId===t.id).sort((a,b)=>(a.routeOrder||0)-(b.routeOrder||0)):[];};
  const routePoints=r=>[r.start,...(r.waypoints||[]),r.end];
@@ -279,6 +323,38 @@ function createController(config){
   }
   status='Map point saved. Select Suggest route to calculate the road path.';render();
   return true;
+ }
+ function availableItineraryDays(){
+  return [...new Set(config.getActivities().filter(x=>x.date).map(x=>x.date))].sort();
+ }
+ function previewItinerary(){
+  const day=$('routeItineraryDay').value;
+  suggestedDay=day;
+  itinerarySuggestions=day?suggestItineraryRoutes(config.getActivities(),day):null;
+  render();
+ }
+ function acceptItinerarySuggestion(index){
+  if(!itinerarySuggestions||!suggestedDay||index<0||index>=itinerarySuggestions.options.length)return;
+  if(routes().length>=MAX_ROUTES)return report('Maximum '+MAX_ROUTES+' routes. Remove one before accepting a suggestion.');
+  const proposal=itinerarySuggestions.options[index];
+  // Re-check that the source activities have not moved or changed since preview.
+  const newest=suggestItineraryRoutes(config.getActivities(),suggestedDay);
+  if(!newest.options.some(x=>x.ids.join('|')===proposal.ids.join('|'))||
+     proposal.ids.some(id=>!config.getActivities().some(x=>x.id===id&&x.date===suggestedDay&&pointOK(x)))){
+   itinerarySuggestions=null;report('The itinerary changed. Generate suggestions again.');render();return;
+  }
+  const stops=proposal.ids.map(id=>config.getActivities().find(x=>x.id===id));
+  const t=config.getTrip(),r=newRoute(config.uid(),t.id,('Itinerary · '+suggestedDay+' · '+proposal.label).slice(0,160));
+  r.startDate=suggestedDay;r.endDate=suggestedDay;
+  const place=x=>({lat:Number(x.lat),lng:Number(x.lng),label:x.title,sourceType:'activities',sourceId:x.id});
+  r.start=place(stops[0]);r.end=place(stops[stops.length-1]);
+  r.waypoints=stops.slice(1,-1).map(x=>({...place(x),id:config.uid(),kind:'stop'}));
+  r.routeOrder=Math.max(-1,...routes().map(x=>x.routeOrder||0))+1;
+  config.getRoutes().push(r);currentId=r.id;undoStack=[];selectedSection='';pick='';
+  itinerarySuggestions=null;suggestedDay='';
+  config.persist();
+  status='Suggested route saved separately. Check the stop order and select Calculate route for real road mileage and driving time.';
+  render();fitMap();
  }
  function addRoute(copy=false){
   const t=config.getTrip();if(!t||routes().length>=MAX_ROUTES)return report('Maximum '+MAX_ROUTES+' saved routes per trip.');
@@ -459,6 +535,23 @@ function createController(config){
    button.setAttribute('aria-selected',String(button.dataset.exploreTool===tool));
   }
   const r=selected(),list=routes();
+  const days=availableItineraryDays(),daySelect=$('routeItineraryDay');
+  const chosen=suggestedDay&&days.includes(suggestedDay)?suggestedDay:(days[0]||'');
+  if(suggestedDay&&chosen!==suggestedDay)itinerarySuggestions=null;
+  suggestedDay=chosen;
+  daySelect.innerHTML=days.length?days.map(d=>'<option value="'+esc(d)+'">'+esc(d)+'</option>').join(''):
+   '<option value="">No dated itinerary activities</option>';
+  daySelect.value=chosen;
+  $('routeSuggestItinerary').disabled=!chosen;
+  $('routeItineraryOptions').innerHTML=itinerarySuggestions?.day===chosen?
+   (itinerarySuggestions.options.length?itinerarySuggestions.options.map((option,i)=>
+     '<div class="route-itinerary-choice"><div><strong>'+esc(option.label)+'</strong>'+
+     '<small>'+esc(option.stops.map(x=>(x.time?x.time+' ':'')+x.title).join(' → '))+'</small>'+
+     '<small>Approx. '+option.directMiles.toFixed(1)+' straight-line mi between stops · road time not calculated</small></div>'+
+     '<button type="button" class="secondary small" data-route-itinerary-accept="'+i+'" '+(list.length>=MAX_ROUTES?'disabled':'')+'>Use this route</button></div>').join(''):
+     '<p class="muted">'+esc(itinerarySuggestions.reason)+'</p>')+
+   (itinerarySuggestions.excluded?'<p class="muted small-details">'+itinerarySuggestions.excluded+' activity/activities have no mapped location and were excluded.</p>':'')+
+   '<p class="muted small-details">Timed stops keep their chronological order. Flexible stops are suggestions, not appointments; check time windows and opening hours before driving.</p>':'';
   $('routePicker').innerHTML=list.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+
    (x.distanceM!=null?' · '+(x.distanceM/1609.344).toFixed(0)+' mi':'')+'</option>').join('');
   $('routePicker').value=currentId;
@@ -531,10 +624,16 @@ function createController(config){
   draw();
  }
  function setTool(next){tool=next==='routes'?'routes':'discover';if(tool!=='routes')pick='';config.onPickChange?.();render();}
- function onTripChange(){currentId='';undoStack=[];pick='';selectedSection='';status='';render();}
+ function onTripChange(){currentId='';undoStack=[];pick='';selectedSection='';status='';suggestedDay='';itinerarySuggestions=null;render();}
  function bind(){
   $('exploreToolTabs').addEventListener('click',e=>{const b=e.target.closest('[data-explore-tool]');if(b)setTool(b.dataset.exploreTool);});
   $('routeNew').addEventListener('click',()=>addRoute());
+  $('routeSuggestItinerary').addEventListener('click',previewItinerary);
+  $('routeItineraryDay').addEventListener('change',e=>{suggestedDay=e.target.value;itinerarySuggestions=null;render();});
+  $('routeItineraryOptions').addEventListener('click',e=>{
+   const button=e.target.closest('[data-route-itinerary-accept]');
+   if(button)acceptItinerarySuggestion(Number(button.dataset.routeItineraryAccept));
+  });
   $('routeAlternative').addEventListener('click',()=>addRoute(true));
   $('routeGenerateAlternatives').addEventListener('click',()=>void generateAlternatives());
   $('routeShowAlternatives').addEventListener('change',render);
@@ -644,6 +743,6 @@ function createController(config){
  bind();
  return {attachMap,render,onTripChange,consumeMapClick,cancelPick,isPicking:()=>!!pick,getPick:()=>pick,setTool};
 }
-root.VacationRouteDomain=Object.freeze({newRoute,decodePolyline,routeURL,parseRoute,windowError,summary,pointOK,sectionGeometry});
+root.VacationRouteDomain=Object.freeze({newRoute,decodePolyline,routeURL,parseRoute,windowError,summary,pointOK,sectionGeometry,suggestItineraryRoutes});
 root.createVacationRoutes=createController;
 })(window);

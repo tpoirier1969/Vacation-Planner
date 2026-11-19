@@ -6,6 +6,8 @@ A shared, trip-focused vacation workspace for Tod and Donna. Hosted as a static 
 
 ## Current features
 
+- **v0.6.42 (2026-11-19):** First itinerary-driven route-suggestion workflow. Choose a dated itinerary day in Routes; review a scheduled-order route and, when different, a geographic order of flexible stops. Date/time-constrained stops remain in chronological order. Direct-distance figures are explicitly not driving distances. Accepting an option creates a separate editable saved route referencing the original itinerary activity IDs; existing routes/itinerary remain unchanged. Calculate roads using the existing Geoapify button after acceptance. No database schema changes or new paid integrations; live signed-in browser acceptance pending.
+
 - **v0.6.41 (2026-11-19):** Fixed map result selection on iOS: popup options stop pointer/touch and click propagation, so selecting a named business opens its details instead of triggering another map lookup. Display only the nearest five distinct valid matches, sorted by distance. Corrected the primary Geoapify error catch to preserve fallback behavior. No Supabase changes; field acceptance pending.
 
 - **v0.6.40 (2026-11-19):** Map taps first check nearby Geoapify Places records. A match within 35 meters avoids any expensive direct OpenStreetMap building/API request. When there is no credible near-point match, the app then checks OpenStreetMap named buildings and Overpass together, including building polygon hit tests. A distant result such as a resort 217m away does not prevent the fallback. No Supabase changes; live device acceptance outstanding.
