@@ -674,12 +674,12 @@ function makeDiscoveryPopup(place,savedId=''){
 function renderDiscoveryMarkers(found){
  if(!map||!discoveryMarkers)return;
  discoveryMarkers.clearLayers();
- found.forEach((x,index)=>{
+ found.forEach(x=>{
   if(!geo(x))return;
-  const icon=L.divIcon({className:'discovery-marker-icon',html:'<span class="discovery-map-pin" aria-hidden="true">'+(index+1)+'</span>',iconSize:[28,30],iconAnchor:[14,28],popupAnchor:[0,-25]});
+  const icon=L.divIcon({className:'discovery-marker-icon',html:'<span class="discovery-map-pin" aria-hidden="true"></span>',iconSize:[18,18],iconAnchor:[9,9],popupAnchor:[0,-12]});
   const popup=makeDiscoveryPopup(x);
-  const marker=L.marker([x.lat,x.lng],{icon,title:(index+1)+'. '+x.name,alt:x.name}).addTo(discoveryMarkers).bindPopup(popup.content);
-  marker.bindTooltip((index+1)+'. '+x.name,{direction:'top',offset:[0,-20]});
+  const marker=L.marker([x.lat,x.lng],{icon,title:x.name,alt:x.name}).addTo(discoveryMarkers).bindPopup(popup.content);
+  marker.bindTooltip(x.name,{direction:'top',offset:[0,-12]});
   marker.on('popupopen',()=>popup.load());
  });
 }
@@ -1039,7 +1039,7 @@ function discoveryCard(item,i){
   '<div class="row wrap poi-links">'+(review?'<a href="'+esc(review)+'" target="_blank" rel="noopener noreferrer">Find ratings & reviews on Google Maps</a>':'')+
     (item.website?'<a href="'+esc(item.website)+'" target="_blank" rel="noopener noreferrer">Website</a>':'')+'</div>'+
   '<div class="poi-extra" id="poi-extra-'+i+'"></div>'+
-  '<div class="row wrap poi-actions"><button class="quiet small" data-preview="'+i+'">Map #'+(i+1)+'</button>'+
+  '<div class="row wrap poi-actions"><button class="quiet small" data-preview="'+i+'">Show on map</button>'+
   '<button class="quiet small" data-place-details="'+i+'">Details</button>'+
   '<button class="secondary small" data-suggest="'+i+'" '+(saved?'disabled':'')+'>'+(saved?'Saved':'+ Save idea')+'</button>'+
   '<button class="primary small" data-suggest-plan="'+i+'">+ Itinerary</button></div></article>';

@@ -13,6 +13,8 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **v0.6.45 (2026-11-19):** Removed numerical badges from Discover Nearby map markers, retaining visible clickable dots, business-name tooltips and popups, and matching list “Show on map” actions. No Supabase changes; signed-in device visual review remains outstanding.
+
 - **v0.6.44 (2026-11-19):** Follow-up schedule verification: midnight is treated as a real time rather than an absent end time; missing routing credentials are displayed explicitly. Live real-device routing still awaits acceptance.
 
 - **v0.6.43 (2026-11-19):** Route proposals now optionally include actual Geoapify road mileage/duration and per-leg schedule conflict warnings for consecutive timed stops. If leg stats are missing, display unverified rather than fabricated schedule safety. Itinerary snapshot checked before acceptance. Next: insertion of flexible activities between appointments, opening hours, trip-wide multi-day evaluation. No database changes.

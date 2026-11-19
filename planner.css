@@ -113,11 +113,11 @@ header{flex-wrap:wrap}.app-version{display:inline-block;background:#f7d395;color
 .map-pin-itinerary{border-radius:8px 8px 4px 4px}
 .map-pin-both{outline:2px solid #263936}
 
-/* Numbered markers from the most recent discovery search. */
+/* Simple unnumbered markers from the most recent discovery search. */
 .discovery-marker-icon{background:none;border:0}
 .discover-map-results{display:block;width:100%;min-height:44px;margin:8px 0 12px;font-weight:800}
 .discover-map-results.hidden{display:none!important}
-.discovery-map-pin{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border:2px solid white;border-radius:50%;background:#344e53;color:white;font-weight:800;font-size:12px;box-shadow:0 2px 5px #0009}
+.discovery-map-pin{display:block;width:18px;height:18px;border:2px solid white;border-radius:50%;background:#344e53;box-shadow:0 2px 5px #0009;box-sizing:border-box}
 
 /* Respect conditional lodging checkout field even though field labels use flex display. */
 #activityEndField[hidden]{display:none!important}

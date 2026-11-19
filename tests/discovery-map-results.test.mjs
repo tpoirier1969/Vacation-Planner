@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 
-test('all loaded discovery results receive numbered markers; map fits all pages and opens on mobile',()=>{
+test('all loaded discovery results receive plain unnumbered markers; map fits all pages and opens on mobile',()=>{
  const src=readFileSync(new URL('../planner.js',import.meta.url),'utf8');
  const start=src.indexOf('function renderDiscoveryMarkers(found){');
  const end=src.indexOf('function refreshMarkers(){',start);
@@ -23,7 +23,7 @@ test('all loaded discovery results receive numbered markers; map fits all pages 
  };
  const L={
   divIcon(x){return x;},
-  marker(p,opts){markers.push({p,opts});return{addTo(){return this;},bindPopup(){return this;},bindTooltip(){return this;},on(){return this;}};},
+  marker(p,opts){const record={p,opts,tooltip:''};markers.push(record);return{addTo(){return this;},bindPopup(){return this;},bindTooltip(label){record.tooltip=label;return this;},on(){return this;}};},
   latLngBounds(points){return{points,pad(){return this;}};}
  };
  const window={__tripSuggestions:discoveries,matchMedia(){return{matches:true};}};
@@ -37,7 +37,10 @@ test('all loaded discovery results receive numbered markers; map fits all pages 
  runInNewContext(code,scope);
  scope.renderDiscoveryMarkers(discoveries);
  assert.equal(markers.length,3);
- assert.deepEqual(markers.map(x=>x.opts.title),['1. Place one','2. Place two','3. Place three on a second page']);
+ assert.deepEqual(markers.map(x=>x.opts.title),discoveries.map(x=>x.name));
+ assert.deepEqual(markers.map(x=>x.tooltip),discoveries.map(x=>x.name));
+ assert.ok(markers.every(x=>!/>\\s*\\d+\\s*</.test(x.opts.icon.html)));
+ assert.ok(markers.every(x=>x.opts.icon.html.includes('discovery-map-pin')));
  scope.showDiscoveryResultsOnMap();
  assert.equal(calls.fit,1);
  assert.equal(calls.points.length,3);
@@ -51,4 +54,12 @@ test('discovery UI includes an explicit show-all-map action and maintains pagina
  assert.match(js,/mapButton\.textContent='Show all '\+found\.length\+' on map'/);
  assert.match(js,/const found=\[\.\.\.previous,\.\.\.additions\]/);
  assert.match(js,/if\(found\.length\)showDiscoveryResultsOnMap\(\)/);
+});
+
+test('discovery list retains direct map action without an index badge',()=>{
+ const src=readFileSync(new URL('../planner.js',import.meta.url),'utf8');
+ const fn=src.slice(src.indexOf('function discoveryCard(item,i){'),src.indexOf('async function discover(loadMore=false)'));
+ assert.match(fn,/Show on map/);
+ assert.doesNotMatch(fn,/Map #/);
+ assert.match(fn,/data-preview/);
 });

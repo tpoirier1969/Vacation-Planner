@@ -6,6 +6,8 @@ A shared, trip-focused vacation workspace for Tod and Donna. Hosted as a static 
 
 ## Current features
 
+- **v0.6.45 (2026-11-19):** Discover Nearby map pins are now small unnumbered dots with business-name tooltips and the same tap-to-open place details. The results-list action is labeled “Show on map” without a number. Existing lists, result loading, route overlays, and Supabase records are unchanged.
+
 - **v0.6.44 (2026-11-19):** Corrected midnight departure handling in itinerary driving-time conflict calculations and displayed a clear message when the Geoapify API key is missing. Source-only conservative schedule validation; existing routes, itinerary and Supabase schema untouched.
 
 - **v0.6.43 (2026-11-19):** Itinerary route previews now request real road distance, total driving time and (when returned) per-leg driving times from the existing Geoapify free routing service, limited to two requests per preview. Timed consecutive stops are checked against provided local start/end times and flagged if travel alone would arrive late. Missing leg times, unknown visit durations, traffic, parking and hours are explicitly not treated as verified. Review remains non-persistent until accepted, and stale itinerary edits invalidate suggestions. No Supabase changes; live routing acceptance pending.
