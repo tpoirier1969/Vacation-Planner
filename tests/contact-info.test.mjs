@@ -43,3 +43,38 @@ test('Lookups remain on-demand, tied to active trip, and never persist data',()=
  assert.ok(block.includes('active!==record.tripId'));
  assert.ok(!block.includes('persist()'));
 });
+
+test('Info lookup keeps going after Geoapify has no website, without writing data',async()=>{
+ const section=fragment('const websiteLookupCache=new Map();','function contactRow(');
+ const found={name:'Fika Bakery & Coffee House',lat:45.153,lng:-87.282,
+  datasource:{raw:{'contact:website':'https://fika.example'}}};
+ const exports=new Function('safeExternalURL','geo','normalizedContactName','getDiscoveryPlaceDetails',
+  'namedOsmMapAtClick','contactMatch','placeWebsite','fetch','URLSearchParams','AbortController',
+  'setTimeout','clearTimeout',section+';return {enrichBusinessWebsite,businessWikidataId,officialWebsiteFromWikidata};')(
+  x=>/^https?:\/\//.test(x||'')?x:null,
+  x=>x?.lat!=null&&x?.lng!=null,
+  x=>String(x).toLowerCase(),
+  async()=>({wiki_and_media:{wikidata:'Q42'}}),
+  async()=>[found],(found,name)=>found.name===name,
+  x=>x?.datasource?.raw?.['contact:website']||x?.website||'',
+  async()=>({ok:true,json:async()=>({entities:{}})}),
+  URLSearchParams,AbortController,setTimeout,clearTimeout);
+ const base={id:'p1',name:found.name,lat:45.153,lng:-87.282,geoapifyId:'geo-1'};
+ const result=await exports.enrichBusinessWebsite(base,null,{name:found.name,website:'',address:'Egg Harbor'});
+ assert.equal(result.website,'https://fika.example');
+ assert.equal(result.websiteSource,'OpenStreetMap matched business');
+ assert.equal(exports.businessWikidataId({wiki_and_media:{wikidata:'Q42'}}),'Q42');
+ assert.equal(exports.officialWebsiteFromWikidata({entities:{Q42:{claims:{P856:[
+ {rank:'normal',mainsnak:{datavalue:{value:'https://real.example'}}}
+ ]}}}},'Q42'),'https://real.example');
+ assert.equal(exports.officialWebsiteFromWikidata({entities:{Q42:{claims:{P856:[
+ {rank:'deprecated',mainsnak:{datavalue:{value:'https://old.example'}}}
+ ]}}}},'Q42'),'');
+ assert.ok(!section.includes('persist()'));
+});
+test('Info always offers explicit manual website search without claiming a match',()=>{
+ assert.match(code,/https:\/\/www\.google\.com\/search\?q=/);
+ assert.match(code,/Search the web for this business/);
+ assert.match(code,/await enrichBusinessWebsite\(record,linked,details\)/);
+ assert.match(code,/if\(token!==contactInfoRequest\|\|!dialog\.open/);
+});

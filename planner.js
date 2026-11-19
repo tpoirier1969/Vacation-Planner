@@ -634,6 +634,79 @@ async function contactSourceForRecord(kind,record,linked){
  }
  return contactViewDetails({...base,name,lat:record.lat??base.lat,lng:record.lng??base.lng});
 }
+// Only search for a website when the saved/matched place lacks one. Exact
+// map identifiers, matching name + coordinates and Wikidata P856 are distinct
+// evidence paths; broad web search is always offered as a *manual* fallback.
+const websiteLookupCache=new Map();
+function businessWikidataId(data){
+ const value=String(data?.wikidata||data?.wiki_and_media?.wikidata||
+  data?.datasource?.raw?.wikidata||'').trim();
+ return /^Q[1-9][0-9]{0,11}$/.test(value)?value:'';
+}
+function officialWebsiteFromWikidata(data,id){
+ const statements=data?.entities?.[id]?.claims?.P856||[];
+ for(const claim of statements){
+  if(claim.rank==='deprecated')continue;
+  const value=claim?.mainsnak?.datavalue?.value;
+  const site=safeExternalURL(value);
+  if(site)return site;
+ }
+ return '';
+}
+async function getWikidataOfficialWebsite(id){
+ if(!/^Q[1-9][0-9]{0,11}$/.test(String(id||'')))return '';
+ const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),7000);
+ try{
+  const url='https://www.wikidata.org/w/api.php?'+new URLSearchParams({
+   action:'wbgetentities',ids:id,props:'claims',format:'json',origin:'*'});
+  const response=await fetch(url,{signal:controller.signal});
+  if(!response.ok)return '';
+  return officialWebsiteFromWikidata(await response.json(),id);
+ }catch{return '';}finally{clearTimeout(timeout);}
+}
+async function enrichBusinessWebsite(record,linked,details){
+ if(details.website)return details;
+ const base=linked||record,name=record.name||record.title||'';
+ const coords=geo(record)?record:geo(base)?base:null;
+ const cacheKey=[base.geoapifyId||'',normalizedContactName(name),
+  coords?Number(coords.lat).toFixed(4)+','+Number(coords.lng).toFixed(4):''].join('|');
+ if(websiteLookupCache.has(cacheKey)){
+  const cached=websiteLookupCache.get(cacheKey);
+  return cached?{...details,website:cached.url,websiteSource:cached.source}:details;
+ }
+ let website='',source='',wikidata='';
+ // The original Geoapify place may have an explicit Wikidata identifier even
+ // though its own details omitted a website.
+ if(base.geoapifyId){
+  try{
+   const provider=await getDiscoveryPlaceDetails({placeId:base.geoapifyId});
+   website=placeWebsite(provider)||'';
+   wikidata=businessWikidataId(provider);
+   if(website)source='Geoapify business listing';
+  }catch{}
+ }
+ if(!website&&coords){
+  try{
+   // Named OSM nodes and building outlines can carry contact:website even
+   // when the commercial POI index does not. Require exact name + proximity.
+   const matches=await namedOsmMapAtClick(coords);
+   const found=matches.find(x=>contactMatch(x,name,coords));
+   if(found){
+    website=placeWebsite(found)||'';
+    if(website)source='OpenStreetMap matched business';
+    wikidata=wikidata||businessWikidataId(found);
+   }
+  }catch{}
+ }
+ if(!website&&wikidata){
+  website=await getWikidataOfficialWebsite(wikidata);
+  if(website)source='Wikidata official website';
+ }
+ if(websiteLookupCache.size>=80)websiteLookupCache.delete(websiteLookupCache.keys().next().value);
+ websiteLookupCache.set(cacheKey,website?{url:website,source}:null);
+ return website?{...details,website,websiteSource:source}:details;
+}
+
 function contactRow(host,label,value,href='',actionLabel=''){
  const row=document.createElement('div');row.className='contact-info-row';
  const title=document.createElement('dt');title.textContent=label;
@@ -652,6 +725,11 @@ function showContactDetails(data){
  const website=safeExternalURL(data.website),phone=String(data.phone||'').trim();
  const dial=phone.replace(/[^+0-9]/g,''),email=contactEmail({email:data.email});
  contactRow(list,'Website',website||'',website||'','Visit website');
+ if(website&&data.websiteSource){
+  const provenance=document.createElement('p');provenance.className='muted small-details';
+  provenance.textContent='Website found via '+data.websiteSource+'. Verify before booking.';
+  list.append(provenance);
+ }
  contactRow(list,'Phone',phone,dial.length>=7?'tel:'+dial:'','Call');
  const address=String(data.address||'').trim();
  let mapTarget='';
@@ -668,6 +746,13 @@ function showContactDetails(data){
  search.href='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent([data.name,data.address||''].filter(Boolean).join(' '));
  search.target='_blank';search.rel='noopener noreferrer';search.textContent='Look up this business on Google Maps';
  host.append(search);
+ const webSearch=document.createElement('a');
+ webSearch.href='https://www.google.com/search?q='+encodeURIComponent(
+  [data.name,data.address||'','official website'].filter(Boolean).join(' '));
+ webSearch.target='_blank';webSearch.rel='noopener noreferrer';
+ webSearch.textContent=website?'Search for another website':'Search the web for this business’s website';
+ const space=document.createTextNode(' · ');
+ host.append(space,webSearch);
 }
 async function openContactInfo(kind,id){
  if(!['places','activities'].includes(kind))return;
@@ -679,9 +764,16 @@ async function openContactInfo(kind,id){
  $('#contactBody').textContent='Looking up available contact details…';
  if(!dialog.open)dialog.showModal();
  try{
-  const result=await contactSourceForRecord(kind,record,linked);
+  const details=await contactSourceForRecord(kind,record,linked);
   if(token!==contactInfoRequest||!dialog.open||active!==record.tripId)return;
-  showContactDetails(result);
+  // Show known contact details immediately. Extra website sources are loaded
+  // only on demand; a missing website must not block calling or map actions.
+  showContactDetails(details);
+  if(!details.website){
+   const enriched=await enrichBusinessWebsite(record,linked,details);
+   if(token!==contactInfoRequest||!dialog.open||active!==record.tripId)return;
+   showContactDetails(enriched);
+  }
  }catch{
   if(token!==contactInfoRequest||!dialog.open)return;
   showContactDetails(contactViewDetails(record,linked||record));

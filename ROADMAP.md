@@ -13,6 +13,8 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **v0.6.52 (2026-11-19):** On-demand website enrichment in Ideas/Itinerary Info: after an empty saved Geoapify website, check named OSM building/node metadata and exact-identifier Wikidata P856 official website, with strict name/proximity matching. Add a name/address-based web search when no structured source provides the link. Do not auto-select search engine hits or alter Supabase. Live verification pending.
+
 - **v0.6.51 (2026-11-19):** Route-corridor discovery first pass: selected saved route and Geoapify polyline POST buffer (not visible-map rectangle), 5–30 min detour target, paging, deduplicated results and all loaded map pins, on-demand verification of added local-section driving time, no modifications to route or saved trip data. Real browser/iPhone Geoapify POST and routing acceptance pending; estimated detour is not a guarantee.
 
 - **v0.6.50 (2026-11-19):** Read-only day scheduling proposals added: opening/closing window, fixed appointments, optional dwell, flexible stop insertion and unplaced-stop alerts. Timing is a 70 mph straight-line optimistic lower bound until actual road legs are checked. Next: route-corridor discovery and better full-road-time optimization. No database changes.
