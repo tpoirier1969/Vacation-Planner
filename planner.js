@@ -228,7 +228,8 @@ function detectedCategory(tags=[],name='',searchCategory=''){
  const restaurantTagged=/catering\.(?:restaurant|fast_food|food_court)(?:\.|\s|$)/.test(c);
  const cafeTagged=/catering\.cafe(?:\.|\s|$)/.test(c);
  const coffeeNamed=/\b(?:coffee(?:\s*(?:shop|house|bar))?|espresso|roaster(?:y|ies)?|caf[eé])\b/i.test(label);
- if(searchCategory==='coffee_shops'||(coffeeNamed||cafeTagged)&&!restaurantTagged)return 'Coffee Shops';
+ const coffeeRetailTagged=/commercial\.food_and_drink\.coffee_and_tea(?:\.|\s|$)/.test(c);
+ if(searchCategory==='coffee_shops'||coffeeRetailTagged||(coffeeNamed||cafeTagged)&&!restaurantTagged)return 'Coffee Shops';
  if(/catering|restaurant|cafe|fast_food/.test(c))return 'Restaurants';
  if(/commercial|shop|shopping/.test(c))return 'Shopping';
  if(/hiking|trail/.test(c))return 'Hiking';
@@ -703,6 +704,17 @@ function normalizedBusinessName(term){
 let searchMatches=[];
 async function searchLocation(query,store=false){
  const term=String(query||'').trim();if(!term)return;
+ // Send generic business-type queries to the paginated discovery workflow,
+ // keeping map search for actual named places, towns, and addresses.
+ if(!store&&genericDiscoveryTerm(term)&&DISCOVERY_TERMS.some(x=>x.pattern.test(term))){
+  $('#searchMatches').classList.add('hidden');
+  const discoverTab=document.querySelector('[data-explore-tool="discover"]');
+  if(discoverTab&&!discoverTab.classList.contains('active'))discoverTab.click();
+  $('#category').value='all';
+  $('#discoverText').value=term;
+  await discover(false);
+  return;
+ }
  const token=++searchToken,key=window.LAZY_ACRES_GEOAPIFY_KEY,center=map?.getCenter()||{lat:trip()?.lat??46.55,lng:trip()?.lng??-87.4};
  const area=store?null:visibleMapArea();
  const canUseGeoapify=!!key&&key!=='PASTE_YOUR_GEOAPIFY_BROWSER_KEY_HERE';
@@ -812,7 +824,7 @@ $('#searchMatches').addEventListener('click',e=>{
 const DISCOVERY_CATEGORIES={
  lodging:'accommodation',
  restaurants:'catering.restaurant,catering.fast_food,catering.food_court',
- coffee_shops:'catering.cafe',
+ coffee_shops:'catering.cafe,commercial.food_and_drink.coffee_and_tea',
  wineries:'production.winery',
  shopping:'commercial',
  hiking:'leisure,natural',
@@ -826,7 +838,7 @@ const DISCOVERY_CATEGORIES={
 const DISCOVERY_TERMS=[
  {pattern:/winer(y|ies)|vineyard|wine tasting/i,categories:'production.winery'},
  {pattern:/restaurant|diner|bistro|take[ -]?out|takeaway|fast[ -]?food/i,categories:'catering.restaurant,catering.fast_food,catering.food_court'},
- {pattern:/caf[eé]|coffee|espresso|roaster/i,categories:'catering.cafe'},
+ {pattern:/caf[eé]|coffee|espresso|roaster/i,categories:'catering.cafe,commercial.food_and_drink.coffee_and_tea'},
  {pattern:/museum|historical/i,categories:'entertainment.museum,tourism.sights'},
  {pattern:/antique|thrift/i,categories:'commercial.antiques,commercial.second_hand'},
  {pattern:/shop|shopping/i,categories:'commercial'},
@@ -854,10 +866,48 @@ function diningLabel(p){
  if(tags.some(t=>/^catering\.cafe/.test(t))||amenity==='cafe')return 'Cafe';
  return 'Restaurant';
 }
+// Search directly tagged café and coffee/tea shops missed by the Geoapify
+// category index. Only a user-initiated, reasonably sized map-view request;
+// never poll, prefetch, or run an unrestricted regional/bulk query.
+const osmCoffeeCache=new Map();
+async function osmCoffeePlaces(area,signal){
+ if(osmCoffeeCache.has(area))return osmCoffeeCache.get(area);
+ const [west,south,east,north]=area.slice(5).split(',').map(Number);
+ const sizeKm2=(north-south)*111.32*(east-west)*111.32*Math.max(0,Math.cos((north+south)/2*Math.PI/180));
+ if(!Number.isFinite(sizeKm2)||sizeKm2>30000)return [];
+ const bbox=[south,west,north,east].map(x=>x.toFixed(5)).join(',');
+ const query='[out:json][timeout:12];(nwr["amenity"="cafe"]('+bbox+');'+
+  'nwr["shop"~"^(coffee|tea)$"]('+bbox+'););out center 250;';
+ const response=await fetch('https://overpass-api.de/api/interpreter?'+new URLSearchParams({data:query}),{signal});
+ if(!response.ok)throw Error('OSM coffee search HTTP '+response.status);
+ const data=await response.json();
+ const features=(Array.isArray(data.elements)?data.elements:[]).map(e=>{
+  const raw=e.tags||{},name=String(raw.name||'').trim();
+  const lat=Number(e.lat??e.center?.lat),lon=Number(e.lon??e.center?.lon);
+  if(!name||!Number.isFinite(lat)||!Number.isFinite(lon))return null;
+  const cafe=raw.amenity==='cafe';
+  const categories=cafe?['catering','catering.cafe']:['commercial','commercial.food_and_drink.coffee_and_tea'];
+  const street=[raw['addr:housenumber'],raw['addr:street']].filter(Boolean).join(' ');
+  const address=[street,raw['addr:city'],raw['addr:state']].filter(Boolean).join(', ');
+  return {type:'Feature',geometry:{coordinates:[lon,lat]},properties:{
+   name,lat,lon,categories,formatted:address,opening_hours:raw.opening_hours||'',
+   datasource:{raw},sourceLabel:'OpenStreetMap',
+   website:raw.website||raw['contact:website']||'',description:''
+  }};
+ }).filter(Boolean);
+ if(osmCoffeeCache.size>=12)osmCoffeeCache.delete(osmCoffeeCache.keys().next().value);
+ osmCoffeeCache.set(area,features);
+ return features;
+}
+function sameNearbyBusiness(a,b){
+ if(a.placeId&&b.placeId&&a.placeId===b.placeId)return true;
+ return a.name.trim().toLowerCase()===b.name.trim().toLowerCase()&&mapPlaceDistance(a,b)<110;
+}
+
 const discoveryCache=new Map();
 
 let discoveryOffset=0,discoverySignature='',discoveryRequest=0,discoveryArea='';
-const DISCOVERY_PAGE_SIZE=40;
+const DISCOVERY_PAGE_SIZE=100;
 function genericDiscoveryTerm(term){
  return /^(restaurants?|caf[eé]s?|coffees?|coffee shops?|winer(?:y|ies)|vineyards?|wine tasting|shops?|shopping|antique shops?|thrift stores?|museums?|historical sites?|hiking|trails?|boating|fishing|marinas?|waterfalls?|falls|lighthouses?|attractions?|events?|hotels?|lodging|camping|parks?|scenic drives?|businesses?|nearby)$/i.test(term.trim());
 }
@@ -923,6 +973,7 @@ async function discover(loadMore=false){
  const match=DISCOVERY_TERMS.find(x=>x.pattern.test(term));
  const categories=category==='all'||category==='other'?(match?.categories||DISCOVERY_CATEGORIES[category]||DISCOVERY_CATEGORIES.all):(DISCOVERY_CATEGORIES[category]||DISCOVERY_CATEGORIES.all);
  const restaurantOnly=category==='restaurants'||((category==='all'||category==='other')&&!!match&&/catering\.(restaurant|fast_food|food_court)/.test(categories));
+ const coffeeSearch=category==='coffee_shops'||((category==='all'||category==='other')&&!!match&&match.categories.includes('catering.cafe'));
  // A term such as "Lake View Restaurant" is a name, not merely a request for any restaurant.
  const nameFilter=term&&!genericDiscoveryTerm(term)?normalizedBusinessName(term):'';
  const centerPoint=Number(center.lng).toFixed(6)+','+Number(center.lat).toFixed(6);
@@ -977,13 +1028,25 @@ async function discover(loadMore=false){
   }
   const {features,more:hasMore}=cached;
   if(token!==discoveryRequest)return;
+  let coffeeSupplement=[];
+  let coffeeCoverageNote='';
+  if(!loadMore&&coffeeSearch){
+   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),14000);
+   try{coffeeSupplement=await osmCoffeePlaces(area,controller.signal);}
+   catch{coffeeCoverageNote=' · Direct OpenStreetMap lookup unavailable';}
+   finally{clearTimeout(timer);}
+  }
+  if(token!==discoveryRequest)return;
   const previous=loadMore?(window.__tripSuggestions||[]):[];
   const known=new Set(previous.map(x=>x.placeId||[x.name.toLowerCase(),x.lat.toFixed(4),x.lng.toFixed(4)].join('|')));
-  const additions=features.filter(f=>!restaurantOnly||isCustomerFacingRestaurant(f.properties||{}))
+  const accepted=[];
+  const additions=[...features,...coffeeSupplement].filter(f=>!restaurantOnly||isCustomerFacingRestaurant(f.properties||{}))
    .map(f=>discoveryFoundPlace(f,category,match,restaurantOnly)).filter(Boolean)
    .filter(x=>{
+    if(nameFilter&&!x.name.toLowerCase().includes(nameFilter.toLowerCase()))return false;
     const k=x.placeId||[x.name.toLowerCase(),x.lat.toFixed(4),x.lng.toFixed(4)].join('|');
-    if(known.has(k))return false;known.add(k);return true;
+    if(known.has(k)||[...previous,...accepted].some(y=>sameNearbyBusiness(x,y)))return false;
+    known.add(k);accepted.push(x);return true;
    });
   const found=[...previous,...additions];
   // When a named business is missing from Geoapify, query OSM within the
@@ -1018,8 +1081,8 @@ async function discover(loadMore=false){
   mapButton.textContent='Show all '+found.length+' on map';
   moreButton.classList.toggle('hidden',!hasMore);
   status.textContent=found.length+' matching places in '+scope+
-   (hasMore?' · more results may be available':'')+
-   (nameFilter?' · name: '+nameFilter:'')+'.';
+   (hasMore?' · use Load more to see the next '+DISCOVERY_PAGE_SIZE:'')+
+   (nameFilter?' · name: '+nameFilter:'')+coffeeCoverageNote+'.';
   if(found.length)showDiscoveryResultsOnMap();
   else if(window.matchMedia('(max-width:760px)').matches)setMobileSheet('expanded');
  }catch(error){

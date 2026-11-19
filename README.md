@@ -6,6 +6,8 @@ A shared, trip-focused vacation workspace for Tod and Donna. Hosted as a static 
 
 ## Current features
 
+- **v0.6.32 (2026-11-19):** Expanded café search to Geoapify coffee-and-tea retail category and a narrow, user-triggered raw OSM café/coffee shop check in reasonably sized visible map bounds. Generic terms like "coffee" in the top map search now use paged Discover Nearby rather than name matching. Geoapify discovery pages contain up to 100 results; the Load next results control is visible above the list. Nearby duplicates are suppressed by name and proximity. Missing Google Maps-only businesses remain outside the free OSM data. No Supabase changes.
+
 - **v0.6.31 (2026-11-19):** Exact named-place searches in both Explore search and Discover Nearby fall back to OpenStreetMap when Geoapify finds no business, respecting the same map bounds and selected category. The redundant hosted preview is retired in favor of the live canonical app. No database or stored user records changed.
 
 - **v0.6.30 live upgrade (2026-11-19):** Nearby and map business searches are restricted to the visible map rectangle; radius control removed. Coffee is interpreted as a café category rather than a required name. Bounded OpenStreetMap name fallback and precise map-click named-POI lookup supplement Geoapify, with manual pin placement retained. All loaded discovery results display numbered map markers, with page expansion. Promoted advanced route-section editing, selectable/draggable alternatives, and Ideas/Itinerary mobile filters to production. No Supabase schema, policies, or existing trip records were changed. Real signed-in browser/iPhone acceptance still required.
