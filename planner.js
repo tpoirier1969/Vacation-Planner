@@ -280,22 +280,25 @@ function mapPlaceFromFeature(feature){
 }
 // The base map's place labels are raster tiles; identify nearby named OSM objects on a lookup miss.
 async function openStreetMapNearClick(latlng,signal){
- const query='[out:json][timeout:10];nwr(around:100,'+
-  Number(latlng.lat).toFixed(6)+','+Number(latlng.lng).toFixed(6)+')['+'"name"'+'];out center 80;';
+ const query='[out:json][timeout:12];nwr(around:250,'+
+  Number(latlng.lat).toFixed(6)+','+Number(latlng.lng).toFixed(6)+')['+'"name"'+'];out center 150;';
  const response=await fetch('https://overpass-api.de/api/interpreter?'+new URLSearchParams({data:query}),{signal,headers:{Accept:'application/json'}});
  if(!response.ok)throw Error('OpenStreetMap named-places HTTP '+response.status);
  const data=await response.json();
  return (Array.isArray(data.elements)?data.elements:[]).map(e=>{
   const t=e.tags||{},lat=Number(e.lat??e.center?.lat),lng=Number(e.lon??e.center?.lon);
+  // Some named POIs are mapped as commercial buildings, not shops or amenities.
   if(!t.name||!Number.isFinite(lat)||!Number.isFinite(lng)||
-    !['amenity','shop','tourism','leisure','craft','office','historic','healthcare','man_made'].some(k=>t[k]))return null;
-  const kind=t.amenity||t.shop||t.tourism||t.leisure||t.craft||t.office||t.historic||t.healthcare||t.man_made;
+    !['amenity','shop','tourism','leisure','craft','office','historic','healthcare','man_made','building'].some(k=>t[k]))return null;
+  const kind=t.amenity||t.shop||t.tourism||t.leisure||t.craft||t.office||t.historic||t.healthcare||t.man_made||'building';
   const categories=t.amenity==='cafe'?['catering.cafe']:t.amenity==='restaurant'?['catering.restaurant']:
-    t.amenity==='fast_food'?['catering.fast_food']:t.shop?['commercial']:t.tourism?['tourism']:[kind];
+    t.amenity==='fast_food'?['catering.fast_food']:
+    t.shop==='bakery'?['commercial.food_and_drink.bakery']:
+    t.shop?['commercial']:t.tourism?['tourism']:[kind];
   const place={name:String(t.name),lat,lng,kind,categories,placeId:'',
    sourceLabel:'OpenStreetMap named place',datasource:{raw:t},hours:t.opening_hours||'',address:t['addr:full']||'',
    website:safeExternalURL(t.website||t['contact:website']||'')||'',category:detectedCategory(categories,String(t.name))};
-  return mapPlaceDistance(latlng,place)<=105?place:null;
+  return mapPlaceDistance(latlng,place)<=230?place:null;
  }).filter(Boolean);
 }
 
@@ -347,17 +350,19 @@ async function showMapPlaceMenu(latlng,name='',notes=''){
    matches=(await request('https://api.geoapify.com/v2/places?'+nearby)).map(mapPlaceFromFeature).filter(Boolean);
   }catch(e){placeError=e;}
   if(!alive())return;
-  if(!matches.some(p=>mapPlaceDistance(latlng,p)<=45)){
-   try{matches.push(...await openStreetMapNearClick(latlng,controller.signal));}
-   catch{/* Public lookup failure must not block saving the exact clicked point. */}
-  }
+  // Search the underlying OSM map data on EVERY click. A nearby hotel may be
+  // indexed by Geoapify while the tapped bakery is only a named OSM building.
+  try{matches.push(...await openStreetMapNearClick(latlng,controller.signal));}
+  catch{/* Public lookup failure must not block saving the exact clicked point. */}
   if(!alive())return;
   // Nearest results appear first, and duplicate entries are suppressed.
   matches.sort((a,b)=>mapPlaceDistance(latlng,a)-mapPlaceDistance(latlng,b));
-  const seen=new Set();
+  const distinct=[];
   matches=matches.filter(p=>{
-   const identity=p.placeId||p.name.toLowerCase()+':'+p.lat.toFixed(5)+':'+p.lng.toFixed(5);
-   if(seen.has(identity))return false;seen.add(identity);return true;
+   // 217m-away resorts are not plausible matches for a tapped storefront.
+   if(mapPlaceDistance(latlng,p)>180)return false;
+   if(distinct.some(x=>sameNearbyBusiness(x,p)))return false;
+   distinct.push(p);return true;
   }).slice(0,10);
   if(matches.length===1&&mapPlaceDistance(latlng,matches[0])<=90){
    select(matches[0]);return;
@@ -409,7 +414,7 @@ async function showMapPlaceMenu(latlng,name='',notes=''){
    button.type='button';button.className='quiet small map-place-choice';
    button.style.display='block';button.style.marginTop='6px';button.style.textAlign='left';
    const distance=mapPlaceDistance(latlng,place);
-   button.textContent=place.name+(place.sourceLabel?' · '+place.sourceLabel:' · '+distance+' m away');
+   button.textContent=place.name+' · '+distance+' m away'+(place.sourceLabel?' · '+place.sourceLabel:'');
    button.title=place.address||place.kind;
    button.onclick=()=>select(place);
    box.append(button);
@@ -877,7 +882,9 @@ async function osmCoffeePlaces(area,signal){
  if(!Number.isFinite(sizeKm2)||sizeKm2>30000)return [];
  const bbox=[south,west,north,east].map(x=>x.toFixed(5)).join(',');
  const query='[out:json][timeout:12];(nwr["amenity"="cafe"]('+bbox+');'+
-  'nwr["shop"~"^(coffee|tea)$"]('+bbox+'););out center 250;';
+  'nwr["shop"~"^(coffee|tea)$"]('+bbox+');'+
+  'nwr["shop"="bakery"]["name"~"coffee|caf[eé]|espresso|roaster",i]('+bbox+');'+
+  'nwr["building"]["name"~"coffee|caf[eé]|espresso|roaster",i]('+bbox+'););out center 450;';
  const response=await fetch('https://overpass-api.de/api/interpreter?'+new URLSearchParams({data:query}),{signal});
  if(!response.ok)throw Error('OSM coffee search HTTP '+response.status);
  const data=await response.json();
@@ -885,8 +892,13 @@ async function osmCoffeePlaces(area,signal){
   const raw=e.tags||{},name=String(raw.name||'').trim();
   const lat=Number(e.lat??e.center?.lat),lon=Number(e.lon??e.center?.lon);
   if(!name||!Number.isFinite(lat)||!Number.isFinite(lon))return null;
-  const cafe=raw.amenity==='cafe';
-  const categories=cafe?['catering','catering.cafe']:['commercial','commercial.food_and_drink.coffee_and_tea'];
+  const cafe=raw.amenity==='cafe',bakery=raw.shop==='bakery',coffeeRetail=['coffee','tea'].includes(raw.shop);
+  const coffeeNamed=/coffee|caf[eé]|espresso|roaster/i.test(name);
+  // Named buildings and bakeries qualify only if the name advertises coffee.
+  if(!cafe&&!coffeeRetail&&!coffeeNamed)return null;
+  const categories=cafe?['catering','catering.cafe']:bakery?
+   ['commercial','commercial.food_and_drink.bakery']:
+   ['commercial','commercial.food_and_drink.coffee_and_tea'];
   const street=[raw['addr:housenumber'],raw['addr:street']].filter(Boolean).join(' ');
   const address=[street,raw['addr:city'],raw['addr:state']].filter(Boolean).join(', ');
   return {type:'Feature',geometry:{coordinates:[lon,lat]},properties:{

@@ -6,6 +6,8 @@ A shared, trip-focused vacation workspace for Tod and Donna. Hosted as a static 
 
 ## Current features
 
+- **v0.6.33 (2026-11-19):** Fixed the Fika Bakery & Coffee House case: Coffee Shops lookup also discovers bakeries and named buildings advertising coffee, café, espresso, or roasting in the name. Map tap lookup always checks underlying named OpenStreetMap features, including named buildings, instead of skipping this whenever Geoapify returns a nearby unrelated place. Rejects remote candidates over 180m, deduplicates close records, and always shows distance. The exact-click manual-save option remains. No Supabase data/schema changes.
+
 - **v0.6.32 (2026-11-19):** Expanded café search to Geoapify coffee-and-tea retail category and a narrow, user-triggered raw OSM café/coffee shop check in reasonably sized visible map bounds. Generic terms like "coffee" in the top map search now use paged Discover Nearby rather than name matching. Geoapify discovery pages contain up to 100 results; the Load next results control is visible above the list. Nearby duplicates are suppressed by name and proximity. Missing Google Maps-only businesses remain outside the free OSM data. No Supabase changes.
 
 - **v0.6.31 (2026-11-19):** Exact named-place searches in both Explore search and Discover Nearby fall back to OpenStreetMap when Geoapify finds no business, respecting the same map bounds and selected category. The redundant hosted preview is retired in favor of the live canonical app. No database or stored user records changed.
