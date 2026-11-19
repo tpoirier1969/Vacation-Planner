@@ -13,6 +13,8 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **v0.6.37 (2026-11-19):** Corrected the retired Overpass hostname used by named-place map taps and Coffee Shops discovery; both share the current Private.coffee provider with fallback and bounded timeouts. Fika has an OSM bakery listing. Live iPhone validation outstanding; no database changes.
+
 - **v0.6.36 (2026-11-19):** Password-setting UI relocated to signed-in Trip options as "Change login password", eliminating the always-visible "Set login password" prompt even for users with an existing password. Preserves Supabase auth and trips. Mobile header status repositioned; signed-in iPhone UI check pending. Fika basemap label still not confirmed as resolvable from external Places/Overpass data.
 
 - **v0.6.35 (2026-11-19):** Automatic cache busting on startup and on app focus, using canonical version.js and unique query parameters. iPhone installed app should self-refresh after future releases. Existing old cached shell may require a one-time fresh URL. No Supabase changes; device acceptance outstanding.

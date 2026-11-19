@@ -13,9 +13,12 @@ test('Map tap never treats nearby addresses as named businesses',()=>{
 });
 test('OSM lookup retries another source for named places',()=>{
  const block=slice('async function openStreetMapNearClick(latlng,signal)','async function showMapPlaceMenu(');
- assert.ok(block.includes('overpass-api.de/api/interpreter'));
- assert.ok(block.includes('overpass.kumi.systems/api/interpreter'));
- assert.ok(block.includes('if(signal?.aborted)break'));
+ assert.ok(block.includes('requestOsmElements(query,signal)'));
+ const transport=slice('async function requestOsmElements(query,signal)','async function showMapPlaceMenu(');
+ assert.ok(transport.includes('overpass.private.coffee/api/interpreter'));
+ assert.ok(transport.includes('overpass-api.de/api/interpreter'));
+ assert.ok(!transport.includes('overpass.kumi.systems'));
+ assert.ok(transport.includes('setTimeout(cancel,6000)'));
 });
 test('Mobile trip header gives status its own row',()=>{
  assert.ok(css.includes('--phone-header:92px'));

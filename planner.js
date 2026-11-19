@@ -284,19 +284,7 @@ async function openStreetMapNearClick(latlng,signal){
   Number(latlng.lat).toFixed(6)+','+Number(latlng.lng).toFixed(6)+')['+'"name"'+'];out center 150;';
  // Overpass mirrors occasionally fail independently. Retry the same small
  // user-requested point query, never enlarge its radius or bypass cancellation.
- const endpoints=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
- let data=null,lastError=null;
- for(const endpoint of endpoints){
-  if(signal?.aborted)break;
-  try{
-   const response=await fetch(endpoint+'?'+new URLSearchParams({data:query}),{signal,headers:{Accept:'application/json'}});
-   if(!response.ok)throw Error('OpenStreetMap HTTP '+response.status);
-   data=await response.json();
-   if(!Array.isArray(data?.elements))throw Error('Invalid named-place results');
-   break;
-  }catch(error){lastError=error;}
- }
- if(!data)throw lastError||Error('Named-place lookup unavailable');
+ const data=await requestOsmElements(query,signal);
  return (Array.isArray(data.elements)?data.elements:[]).map(e=>{
   const t=e.tags||{},lat=Number(e.lat??e.center?.lat),lng=Number(e.lon??e.center?.lon);
   // Some named POIs are mapped as commercial buildings, not shops or amenities.
@@ -312,6 +300,30 @@ async function openStreetMapNearClick(latlng,signal){
    website:safeExternalURL(t.website||t['contact:website']||'')||'',category:detectedCategory(categories,String(t.name))};
   return mapPlaceDistance(latlng,place)<=230?place:null;
  }).filter(Boolean);
+}
+
+// Current Overpass host, with fallback and independent six-second timeouts.
+// The old overpass.kumi.systems hostname has been replaced by Private.coffee.
+async function requestOsmElements(query,signal){
+ const endpoints=['https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter'];
+ let lastError=null;
+ for(const endpoint of endpoints){
+  if(signal?.aborted)throw Error('OpenStreetMap request cancelled');
+  const controller=new AbortController();
+  const cancel=()=>controller.abort();
+  signal?.addEventListener?.('abort',cancel,{once:true});
+  const timer=setTimeout(cancel,6000);
+  try{
+   const response=await fetch(endpoint+'?'+new URLSearchParams({data:query}),{
+    signal:controller.signal,headers:{Accept:'application/json'}});
+   if(!response.ok)throw Error('OpenStreetMap HTTP '+response.status);
+   const data=await response.json();
+   if(!Array.isArray(data?.elements))throw Error('Invalid named-place response');
+   return data;
+  }catch(error){lastError=error;}
+  finally{clearTimeout(timer);signal?.removeEventListener?.('abort',cancel);}
+ }
+ throw lastError||Error('Named-place lookup unavailable');
 }
 
 async function showMapPlaceMenu(latlng,name='',notes=''){
@@ -873,9 +885,7 @@ async function osmCoffeePlaces(area,signal){
   'nwr["shop"~"^(coffee|tea)$"]('+bbox+');'+
   'nwr["shop"="bakery"]["name"~"coffee|caf[eé]|espresso|roaster",i]('+bbox+');'+
   'nwr["building"]["name"~"coffee|caf[eé]|espresso|roaster",i]('+bbox+'););out center 450;';
- const response=await fetch('https://overpass-api.de/api/interpreter?'+new URLSearchParams({data:query}),{signal});
- if(!response.ok)throw Error('OSM coffee search HTTP '+response.status);
- const data=await response.json();
+ const data=await requestOsmElements(query,signal);
  const features=(Array.isArray(data.elements)?data.elements:[]).map(e=>{
   const raw=e.tags||{},name=String(raw.name||'').trim();
   const lat=Number(e.lat??e.center?.lat),lon=Number(e.lon??e.center?.lon);

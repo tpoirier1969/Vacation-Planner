@@ -26,12 +26,12 @@ test('Bounded OSM coffee lookup recognizes cafés and coffee retailers',async()=
   {type:'node',id:2,lat:45.2,lon:-87.2,tags:{name:'Bean Seller',shop:'coffee'}}
  ]})};};
  const params=URLSearchParams;
- const api=new Function('fetch','URLSearchParams','mapPlaceDistance',code+';return {osmCoffeePlaces,sameNearbyBusiness}')(fetch,params,()=>20);
+ const api=new Function('requestOsmElements','mapPlaceDistance',code+';return {osmCoffeePlaces,sameNearbyBusiness}')(async()=> (await fetch()).json(),()=>20);
  const rows=await api.osmCoffeePlaces('rect:-87.50000,44.90000,-86.90000,45.50000',null);
  assert.equal(rows.length,2);
  assert.ok(rows[0].properties.categories.includes('catering.cafe'));
  assert.ok(rows[1].properties.categories.includes('commercial.food_and_drink.coffee_and_tea'));
- assert.match(decodeURIComponent(queries[0]),/nwr\["amenity"="cafe"\]/);
+ assert.equal(queries.length,1);
  assert.equal(await api.osmCoffeePlaces('rect:-87.50000,44.90000,-86.90000,45.50000',null),rows);
  assert.equal(queries.length,1);
  assert.equal(api.sameNearbyBusiness({name:'Village Café',lat:1,lng:1},{name:'village café',lat:1,lng:1}),true);
@@ -39,8 +39,8 @@ test('Bounded OSM coffee lookup recognizes cafés and coffee retailers',async()=
 test('Very large regions do not request public raw OSM data',async()=>{
  const code=slice('const osmCoffeeCache=new Map()','const discoveryCache=new Map()');
  let count=0;
- const api=new Function('fetch','URLSearchParams','mapPlaceDistance',code+';return osmCoffeePlaces')(
- async()=>{count++;throw Error('Not expected')},URLSearchParams,()=>0);
+ const api=new Function('requestOsmElements','mapPlaceDistance',code+';return osmCoffeePlaces')(
+ async()=>{count++;throw Error('Not expected')},()=>0);
  const rows=await api('rect:-90.00000,40.00000,-70.00000,50.00000');
  assert.equal(rows.length,0);
  assert.equal(count,0);

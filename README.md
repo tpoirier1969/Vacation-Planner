@@ -6,6 +6,8 @@ A shared, trip-focused vacation workspace for Tod and Donna. Hosted as a static 
 
 ## Current features
 
+- **v0.6.37 (2026-11-19):** Corrected the retired OpenStreetMap Overpass lookup hostname. The current overpass.private.coffee service is used first and overpass-api.de is the fallback, with independent six-second timeouts. This applies to both map taps and Coffee Shops discovery. Fika's named bakery record exists in OpenStreetMap. Live real-device service verification is still pending. No Supabase changes.
+
 - **v0.6.36 (2026-11-19):** Removed the persistent "Set login password" action from the mobile masthead. The existing authorized-account password control now appears as "Change login password" under Trip options; no password-state guessing, duplicate account logic, or Supabase changes. Shifted connection status into a separate mobile header row and updated email-link help text.
 
 - **v0.6.35 (2026-11-19):** Cache-busted version.js at each application launch, then loaded CSS/JS with the resolved release version. Returning to an iPhone Home Screen app or Safari tab checks the current version without cache, and automatically refreshes the root page with a unique query if a newer version is released. No data or session clearing; Supabase unaffected.
