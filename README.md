@@ -6,6 +6,8 @@ A shared, trip-focused vacation workspace for Tod and Donna. Hosted as a static 
 
 ## Current features
 
+- **v0.6.35 (2026-11-19):** Cache-busted version.js at each application launch, then loaded CSS/JS with the resolved release version. Returning to an iPhone Home Screen app or Safari tab checks the current version without cache, and automatically refreshes the root page with a unique query if a newer version is released. No data or session clearing; Supabase unaffected.
+
 - **v0.6.34 (2026-11-19):** Map tap lookup now retries a second Overpass mirror for nearby named features, and does not pass street addresses off as matching businesses at 0 meters. If no named business is found, one tap opens the Save Idea form at the exact coordinate with an editable name. Existing map points/Ideas still work. Mobile header expanded/reflowed so Supabase status/password controls no longer overlap trip title/date. Supabase schema and existing records unchanged.
 
 - **v0.6.33 (2026-11-19):** Fixed the Fika Bakery & Coffee House case: Coffee Shops lookup also discovers bakeries and named buildings advertising coffee, café, espresso, or roasting in the name. Map tap lookup always checks underlying named OpenStreetMap features, including named buildings, instead of skipping this whenever Geoapify returns a nearby unrelated place. Rejects remote candidates over 180m, deduplicates close records, and always shows distance. The exact-click manual-save option remains. No Supabase data/schema changes.

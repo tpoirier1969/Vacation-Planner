@@ -13,6 +13,8 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **v0.6.35 (2026-11-19):** Automatic cache busting on startup and on app focus, using canonical version.js and unique query parameters. iPhone installed app should self-refresh after future releases. Existing old cached shell may require a one-time fresh URL. No Supabase changes; device acceptance outstanding.
+
 - **v0.6.34 (2026-11-19):** Address-only reverse geocodes are no longer offered as business names. Point lookup uses fallback Overpass mirror; missing POI triggers direct name-entry form at tapped coordinate, rather than an address choice list. Fixed header title/status overlap on mobile. Verify Fika tap and add on signed-in iPhone; no Supabase data/schema writes performed in release.
 
 - **v0.6.33 (2026-11-19):** Map-tap lookup now checks OSM on every tap, includes named commercial buildings, eliminates unrelated 217m-away candidate results, and sorts genuine nearby matches. Coffee discovery adds name-matched bakeries/named buildings (e.g. Fika Bakery & Coffee House, Egg Harbor) without turning every bakery into a coffee shop. Manual save still works. No Supabase modifications; live device/source acceptance pending.
