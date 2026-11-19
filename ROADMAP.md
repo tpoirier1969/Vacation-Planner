@@ -13,6 +13,8 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **v0.6.34 (2026-11-19):** Address-only reverse geocodes are no longer offered as business names. Point lookup uses fallback Overpass mirror; missing POI triggers direct name-entry form at tapped coordinate, rather than an address choice list. Fixed header title/status overlap on mobile. Verify Fika tap and add on signed-in iPhone; no Supabase data/schema writes performed in release.
+
 - **v0.6.33 (2026-11-19):** Map-tap lookup now checks OSM on every tap, includes named commercial buildings, eliminates unrelated 217m-away candidate results, and sorts genuine nearby matches. Coffee discovery adds name-matched bakeries/named buildings (e.g. Fika Bakery & Coffee House, Egg Harbor) without turning every bakery into a coffee shop. Manual save still works. No Supabase modifications; live device/source acceptance pending.
 
 - **v0.6.32 (2026-11-19):** Broadened coffee places to cafés and coffee/tea retailers. Supplement café searches with a single on-demand small-area OpenStreetMap query, deduplicate near-identical named places, increase pages to 100, and surface Load next results before the list. Route generic map-search terms to Discover Nearby. No data/schema changes. Accuracy still limited to available free sources; compare live Door County results and keep Google Maps-only venues manually addable.

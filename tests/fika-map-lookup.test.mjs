@@ -21,7 +21,10 @@ test('Tap lookup always checks OSM and never suggests a 217m-away hotel',()=>{
  assert.ok(click.includes('matches.push(...await openStreetMapNearClick(latlng,controller.signal))'));
  assert.ok(!click.includes('if(!matches.some(p=>mapPlaceDistance(latlng,p)<=45))'));
  assert.ok(click.includes('if(mapPlaceDistance(latlng,p)>180)return false'));
- assert.ok(click.includes('Save exact clicked point instead'));
+ assert.ok(click.includes('Name and save exact clicked point'));
+ assert.ok(!click.includes('Nearby address'));
+ assert.ok(click.includes('No named business was identified here'));
+ assert.ok(click.includes("openPlace(latlng.lat,latlng.lng,'','','places','Other')"));
 });
 test('Named bakery or building map object remains eligible in a tap lookup',async()=>{
  const code=extract('async function openStreetMapNearClick(latlng,signal)','async function showMapPlaceMenu(');

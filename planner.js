@@ -282,9 +282,21 @@ function mapPlaceFromFeature(feature){
 async function openStreetMapNearClick(latlng,signal){
  const query='[out:json][timeout:12];nwr(around:250,'+
   Number(latlng.lat).toFixed(6)+','+Number(latlng.lng).toFixed(6)+')['+'"name"'+'];out center 150;';
- const response=await fetch('https://overpass-api.de/api/interpreter?'+new URLSearchParams({data:query}),{signal,headers:{Accept:'application/json'}});
- if(!response.ok)throw Error('OpenStreetMap named-places HTTP '+response.status);
- const data=await response.json();
+ // Overpass mirrors occasionally fail independently. Retry the same small
+ // user-requested point query, never enlarge its radius or bypass cancellation.
+ const endpoints=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
+ let data=null,lastError=null;
+ for(const endpoint of endpoints){
+  if(signal?.aborted)break;
+  try{
+   const response=await fetch(endpoint+'?'+new URLSearchParams({data:query}),{signal,headers:{Accept:'application/json'}});
+   if(!response.ok)throw Error('OpenStreetMap HTTP '+response.status);
+   data=await response.json();
+   if(!Array.isArray(data?.elements))throw Error('Invalid named-place results');
+   break;
+  }catch(error){lastError=error;}
+ }
+ if(!data)throw lastError||Error('Named-place lookup unavailable');
  return (Array.isArray(data.elements)?data.elements:[]).map(e=>{
   const t=e.tags||{},lat=Number(e.lat??e.center?.lat),lng=Number(e.lon??e.center?.lon);
   // Some named POIs are mapped as commercial buildings, not shops or amenities.
@@ -314,8 +326,8 @@ async function showMapPlaceMenu(latlng,name='',notes=''){
   const box=document.createElement('div'),text=document.createElement('p'),button=document.createElement('button');
   text.textContent=message;
   button.type='button';button.className='secondary small';
-  button.textContent='Save this exact point manually';
-  button.onclick=()=>popup.setContent(mapMenuContent(latlng));
+  button.textContent='Name and save this exact location';
+  button.onclick=()=>{map?.closePopup();openPlace(latlng.lat,latlng.lng,'','','places','Other')};
   box.append(text,button);popup.setContent(box);
  }
  if(!key||key==='PASTE_YOUR_GEOAPIFY_BROWSER_KEY_HERE'){
@@ -368,34 +380,10 @@ async function showMapPlaceMenu(latlng,name='',notes=''){
    select(matches[0]);return;
   }
   if(!matches.length){
-   // Some labels on the basemap are addresses or unclassified OSM amenities,
-   // not Geoapify Places categories. Reverse geocode as a deliberate fallback.
-   for(const type of ['amenity','']){
-    try{
-     const params=new URLSearchParams({
-      lat:Number(latlng.lat).toFixed(6),lon:Number(latlng.lng).toFixed(6),
-      limit:'3',apiKey:key
-     });
-     if(type)params.set('type',type);
-     const results=await request('https://api.geoapify.com/v1/geocode/reverse?'+params);
-     if(!alive())return;
-     const accepted=results.map(f=>{
-      const p=f.properties||{};
-      const distance=Number(p.distance);
-      if(Number.isFinite(distance)&&distance>120)return null;
-      const isNamed=typeof p.name==='string'&&p.name.trim();
-      const address=(p.result_type==='amenity'||p.result_type==='building'||p.result_type==='street')?
-       String(p.address_line1||'').trim():'';
-      const name=String(isNamed||address||'').trim();
-      if(!name)return null;
-      return {name,lat:Number(latlng.lat),lng:Number(latlng.lng),kind:p.result_type||'Location',
-       categories:[p.category].filter(Boolean),address:p.formatted||'',placeId:p.place_id||'',
-       datasource:p.datasource||null,sourceLabel:isNamed?'Nearby named place':'Nearby address',
-       category:detectedCategory([p.category].filter(Boolean),name)};
-     }).filter(Boolean);
-     if(accepted.length){matches=accepted.slice(0,5);break;}
-    }catch{/* Try another reverse-geocoding level or offer manual save. */}
-   }
+   // A street address is not a verified business name. Keep the exact map
+   // coordinates and offer a directly editable name instead of fake 0m POIs.
+   showManual('No named business was identified here. Enter the name shown on the map to save this exact location.');
+   return;
   }
   if(!alive())return;
   if(!matches.length){
@@ -421,8 +409,8 @@ async function showMapPlaceMenu(latlng,name='',notes=''){
   }
   const manual=document.createElement('button');
   manual.type='button';manual.className='secondary small';
-  manual.style.marginTop='8px';manual.textContent='Save exact clicked point instead';
-  manual.onclick=()=>popup.setContent(mapMenuContent(latlng));
+  manual.style.marginTop='8px';manual.textContent='Name and save exact clicked point';
+  manual.onclick=()=>{map?.closePopup();openPlace(latlng.lat,latlng.lng,'','','places','Other')};
   box.append(manual);popup.setContent(box);
  }catch{
   showManual('Place identification timed out or failed. You can still save this exact point.');

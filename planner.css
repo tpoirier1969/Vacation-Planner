@@ -553,7 +553,7 @@ footer{
 
 @media(max-width:760px){
  body.mobile-workspace{overflow:hidden;height:100dvh}
- body.mobile-workspace{--phone-header:66px;--phone-nav:calc(62px + env(safe-area-inset-bottom,0px))}
+ body.mobile-workspace{--phone-header:92px;--phone-nav:calc(62px + env(safe-area-inset-bottom,0px))}
  body.mobile-workspace .planner-masthead{
    position:fixed;top:0;left:0;right:0;width:100%;height:var(--phone-header);
    z-index:810;padding:6px 11px;background:#def0e7;border-bottom:2px solid #bb855b;
@@ -586,13 +586,20 @@ footer{
  body.mobile-workspace .trip-summary-actions button{min-height:42px;font-size:13px}
  body.mobile-workspace #mobileSignOut{display:block}
  body.mobile-workspace .masthead-utility{
-   display:block;position:absolute;bottom:0;left:0;right:92px;min-width:0;z-index:1
+   display:block;position:absolute;top:49px;bottom:auto;left:0;right:92px;min-width:0;z-index:1
  }
  body.mobile-workspace .masthead-utility #context,
  body.mobile-workspace .masthead-utility .app-version{display:none}
  body.mobile-workspace .planner-masthead .cloud-strip{
-   padding:0;border:0;background:transparent;box-shadow:none;display:block;
+   padding:0;border:0;background:transparent;box-shadow:none;display:flex;
+   align-items:center;justify-content:flex-start;gap:5px;flex-wrap:nowrap;
    min-width:0;text-align:left;font-size:10px;
+ }
+ body.mobile-workspace .planner-masthead .cloud-strip #cloudStatus{
+   min-width:0;flex:1 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+ }
+ body.mobile-workspace .planner-masthead .cloud-strip #cloudSetPassword{
+   flex:0 0 auto;max-width:145px;white-space:normal;font-size:10px;line-height:1.1
  }
  body.mobile-workspace #cloudStatus{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
  body.mobile-workspace #cloudSignOut{display:none}
