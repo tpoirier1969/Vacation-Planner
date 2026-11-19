@@ -43,10 +43,11 @@ test('map search returns partially named restaurants and offers Idea + Itinerary
   detectedCategory:()=> 'Restaurants',esc:String,
   setMobileSheet(){},setTab(){},initMap(){},setTimeout(){},L:{},
   saveDiscoveredIdea(){return true;},planDiscoveredPlace(){return true;},
+  genericDiscoveryTerm:()=>false,DISCOVERY_TERMS:[],discover:async()=>{},
   DISCOVERY_CATEGORIES:{all:'tourism,entertainment,catering'}
  };
  const code=section('function visibleMapArea(', '// Geoapify Places API');
- const create=new Function('d', 'const {URLSearchParams,document,HTMLElement,window,map,trip,$,fetch,mapPlaceFromFeature,detectedCategory,esc,setMobileSheet,setTab,initMap,setTimeout,L,saveDiscoveredIdea,planDiscoveredPlace,DISCOVERY_CATEGORIES}=d;let searchToken=0;'+code+';return {searchLocation,results:()=>searchMatches};');
+ const create=new Function('d', 'const {URLSearchParams,document,HTMLElement,window,map,trip,$,fetch,mapPlaceFromFeature,detectedCategory,esc,setMobileSheet,setTab,initMap,setTimeout,L,saveDiscoveredIdea,planDiscoveredPlace,DISCOVERY_CATEGORIES,genericDiscoveryTerm,DISCOVERY_TERMS,discover}=d;let searchToken=0;'+code+';return {searchLocation,results:()=>searchMatches};');
  const api=create(dependencies);
  await api.searchLocation('Old Post Office');
  assert.equal(api.results()[0]?.name,'Old Post Office Restaurant');

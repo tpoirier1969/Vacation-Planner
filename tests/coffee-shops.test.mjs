@@ -25,13 +25,14 @@ test('Geoapify coffee and cafe listings are distinct from restaurants',()=>{
  assert.equal(detect(['catering.cafe.coffee_shop'],'High Street'),'Coffee Shops');
  assert.equal(detect(['catering','catering.cafe'],'Starbucks'),'Coffee Shops');
  assert.equal(detect(['commercial'],'North Woods Coffee House'),'Coffee Shops');
+ assert.equal(detect(['commercial.food_and_drink.coffee_and_tea'],'Village Beans'),'Coffee Shops');
  assert.equal(detect(['catering.restaurant'],'Old Post Office Restaurant'),'Restaurants');
  assert.equal(detect(['catering.cafe','catering.restaurant'],'Diner and Cafe'),'Restaurants');
  assert.equal(detect(['catering.restaurant'],'Cafe Breakfast','coffee_shops'),'Coffee Shops');
 });
 
 test('Coffee Shops discovery is a Geoapify Places cafe category',()=>{
- assert.match(source, /coffee_shops:'catering\.cafe'/);
+ assert.match(source, /coffee_shops:'catering\.cafe,commercial\.food_and_drink\.coffee_and_tea'/);
  assert.match(source, /restaurantOnly=category==='restaurants'/);
  assert.match(html, /<option value="coffee_shops">Coffee Shops<\/option>/);
 });
