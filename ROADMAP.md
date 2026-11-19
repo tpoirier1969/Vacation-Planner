@@ -13,6 +13,8 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **v0.6.47 (2026-11-19):** Itinerary previews now support optional uniform stop-duration assumptions and conservative simple business-hours checks, including waiting and closing warnings. Holiday rules, per-stop duration settings, more complete schedule optimization and multi-day proposals remain outstanding. No database changes.
+
 - **v0.6.46 (2026-11-19):** Itinerary routing now offers a tentative between-appointments sequence for flexible activities, rejects physically impossible insertions using only an optimistic straight-line lower bound, and checks road-leg time cumulatively through all intervening untimed stops. Missing dwell/parking/hours/traffic remain explicitly unknown. Acceptance is separate; no Supabase changes. Next: true opening-hours/visit-duration modeling, multi-day proposals, and real signed-in phone/desktop acceptance.
 
 - **v0.6.45 (2026-11-19):** Removed numerical badges from Discover Nearby map markers, retaining visible clickable dots, business-name tooltips and popups, and matching list “Show on map” actions. No Supabase changes; signed-in device visual review remains outstanding.

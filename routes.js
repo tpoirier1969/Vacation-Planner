@@ -211,40 +211,106 @@ function minutesOfDay(value){
  const v=String(value||'');
  return /^([01]\d|2[0-3]):[0-5]\d/.test(v)?Number(v.slice(0,2))*60+Number(v.slice(3,5)):null;
 }
-function itineraryDrivingAssessment(stops,legs){
+// Only simple day/time OSM listings are interpreted. Complex opening_hours
+// including holidays, overnight spans and conditions remain unknown.
+function simpleOpeningWindows(hours,day){
+ const raw=String(hours||'').trim();
+ if(!raw||!/^\d{4}-\d{2}-\d{2}$/.test(String(day||'')))return null;
+ if(raw==='24/7')return [{start:0,end:1440}];
+ const days=['Su','Mo','Tu','We','Th','Fr','Sa'],weekday=new Date(day+'T12:00:00Z').getUTCDay();
+ if(!Number.isInteger(weekday))return null;
+ const windows=[];let closed=false;
+ for(const part of raw.split(';')){
+  const segment=part.trim();
+  const m=segment.match(/^(?:(Mo|Tu|We|Th|Fr|Sa|Su)(?:-(Mo|Tu|We|Th|Fr|Sa|Su))?(?:,\s*(?:Mo|Tu|We|Th|Fr|Sa|Su)(?:-(?:Mo|Tu|We|Th|Fr|Sa|Su))?)*\s+)?((?:[0-2]\d:[0-5]\d-[0-2]\d:[0-5]\d)(?:,\s*(?:[0-2]\d:[0-5]\d-[0-2]\d:[0-5]\d))*|off)$/);
+  if(!m)return null;
+  const detail=m[3],selector=segment.slice(0,segment.length-detail.length).trim();
+  const rules=selector?selector.split(',').map(x=>x.trim()):['Mo-Su'];
+  const selected=rules.some(rule=>{
+   const [one,two]=rule.split('-'),a=days.indexOf(one),b=days.indexOf(two||one);
+   return a<=b?weekday>=a&&weekday<=b:weekday>=a||weekday<=b;
+  });
+  if(detail==='off'){if(selected)closed=true;continue;}
+  for(const range of detail.split(',')){
+   const [a,b]=range.trim().split('-');
+   const start=minutesOfDay(a),end=b==='24:00'?1440:minutesOfDay(b);
+   if(start===null||end===null||end<=start)return null;
+   if(selected)windows.push({start,end});
+  }
+ }
+ if(closed&&windows.length)return null;
+ return closed?[]:windows.sort((a,b)=>a.start-b.start);
+}
+function clockText(m){
+ return String(Math.floor(m/60)%24).padStart(2,'0')+':'+String(Math.ceil(m%60)).padStart(2,'0');
+}
+function itineraryDrivingAssessment(stops,legs,settings={}){
  const valid=Array.isArray(legs)&&legs.length===stops.length-1&&
   legs.every(x=>x&&Number.isFinite(Number(x.durationS))&&Number(x.durationS)>=0);
- if(!valid)return {checked:false,issues:[],message:'Road mileage is available, but stop-by-stop driving times were not provided. Schedule conflicts could not be checked.'};
- const issues=[],uncertainIntervals=[];
+ if(!valid)return {checked:false,issues:[],notes:[],message:'Road mileage is available, but stop-by-stop driving times were not provided. Schedule conflicts could not be checked.'};
+ const estimate=Number(settings.estimatedVisitMinutes);
+ const assumed=Number.isFinite(estimate)&&estimate>0&&estimate<=480?Math.round(estimate):0;
+ const day=settings.day||stops.find(x=>x?.date)?.date||'';
+ const issues=[],notes=[],uncertainIntervals=[],drive=i=>Math.ceil(Number(legs[i].durationS)/60);
  let previousTimed=-1;
  for(let i=0;i<stops.length;i++){
   const appointment=minutesOfDay(stops[i].time);
   if(appointment===null)continue;
   if(previousTimed>=0){
-   const from=stops[previousTimed],to=stops[i];
-   const departure=minutesOfDay(from.endTime)??minutesOfDay(from.time);
-   const travel=legs.slice(previousTimed,i).reduce((sum,leg)=>sum+Math.ceil(Number(leg.durationS)/60),0);
+   const from=stops[previousTimed],to=stops[i],end=minutesOfDay(from.endTime),start=minutesOfDay(from.time);
+   const departure=end??(start===null?null:start+assumed);
+   const travel=legs.slice(previousTimed,i).reduce((sum,_,j)=>sum+drive(previousTimed+j),0);
    const via=i-previousTimed-1;
-   if(via>0)uncertainIntervals.push(via);
-   if(departure!==null&&departure+travel>appointment){
-    const late=departure+travel-appointment;
-    issues.push('Driving from '+from.title+' to '+to.title+
-     (via?' via '+via+' flexible stop(s)':'')+
-     ' would arrive at least '+late+' min after '+to.time+'.');
-   }
+   if(via&&!assumed)uncertainIntervals.push(via);
+   const arrival=departure===null?null:departure+travel+via*assumed;
+   if(arrival!==null&&arrival>appointment)
+    issues.push('Driving from '+from.title+' to '+to.title+(via?' via '+via+' flexible stop(s)':'')+
+     ' would arrive at least '+(arrival-appointment)+' min after '+to.time+
+     (assumed?' under the '+assumed+'-minute visit assumption':'')+'.');
   }
   previousTimed=i;
  }
+ // Carry the earliest known clock through explicit visit times, estimated
+ // visits and necessary waits for supported business-hour schedules.
+ let clock=null,waited=false,unparsedHours=0;
+ for(let i=0;i<stops.length;i++){
+  const item=stops[i],scheduled=minutesOfDay(item.time),end=minutesOfDay(item.endTime);
+  if(i&&clock!==null)clock+=drive(i-1);
+  if(scheduled!==null&&clock!==null&&clock>scheduled&&waited)
+   issues.push(item.title+' may be reached '+(clock-scheduled)+' min after '+item.time+' after waiting for opening hours.');
+  if(scheduled!==null){clock=scheduled;waited=false;}
+  const windows=simpleOpeningWindows(item.hours,day);
+  if(item.hours&&windows===null)unparsedHours++;
+  if(windows!==null){
+   if(!windows.length)issues.push(item.title+' is listed closed on '+day+'.');
+   else if(clock!==null){
+    if(scheduled!==null){
+     if(!windows.some(w=>clock>=w.start&&clock<w.end&&(end===null||end<=w.end)))
+      issues.push(item.title+' is scheduled outside its listed hours ('+item.time+(item.endTime?'–'+item.endTime:'')+').');
+    }else{
+     const slot=windows.find(w=>clock<=w.end&&Math.max(clock,w.start)+assumed<=w.end);
+     if(!slot)issues.push(item.title+' may be closed before the estimated visit can fit.');
+     else if(clock<slot.start){
+      notes.push(item.title+' opens at '+clockText(slot.start)+'; allow '+(slot.start-clock)+' min to wait.');
+      clock=slot.start;waited=true;
+     }
+    }
+   }
+  }
+  if(scheduled!==null&&end!==null)clock=end;
+  else if(clock!==null)clock+=assumed;
+ }
  let message=issues.length?issues.length+' possible scheduling conflict(s).':
-  'No driving-only travel-time conflicts detected between timed appointments.';
- if(uncertainIntervals.length)message+=' '+uncertainIntervals.length+
-  ' interval(s) include flexible stops; their visit durations are unknown.';
- message+=' Activity duration, parking, traffic and opening hours are not included.';
- return {checked:true,issues,uncertainIntervals,message};
+  (assumed?'No travel/visit-time conflicts detected under the '+assumed+'-minute estimate.':
+   'No driving-only travel-time conflicts detected between timed appointments.');
+ if(uncertainIntervals.length)message+=' '+uncertainIntervals.length+' interval(s) include flexible stops; their visit durations are unknown.';
+ if(unparsedHours)message+=' '+unparsedHours+' opening-hours entry/entries could not be interpreted.';
+ message+=' Provisional only: parking, traffic, missing/holiday hours and actual visit durations require review.';
+ return {checked:true,issues,notes,uncertainIntervals,unparsedHours,message};
 }
 function itinerarySnapshot(activities,day){
  return JSON.stringify((activities||[]).filter(x=>x.date===day)
-  .map(x=>({id:x.id,title:x.title,date:x.date,time:x.time||'',endTime:x.endTime||'',lat:x.lat,lng:x.lng}))
+  .map(x=>({id:x.id,title:x.title,date:x.date,time:x.time||'',endTime:x.endTime||'',hours:x.hours||'',lat:x.lat,lng:x.lng}))
   .sort((a,b)=>String(a.id).localeCompare(String(b.id))));
 }
 
@@ -442,7 +508,9 @@ function createController(config){
      const result=parseRoute(await response.json());
      option.roadMiles=result.distanceM/1609.344;
      option.roadMinutes=Math.ceil(result.durationS/60);
-     option.assessment=itineraryDrivingAssessment(points,result.legStats);
+     option.roadLegStats=result.legStats;
+     option.assessment=itineraryDrivingAssessment(points,result.legStats,{day,
+      estimatedVisitMinutes:Number($('routeVisitEstimate').value)||0});
     }catch(error){
      option.routeError=error.name==='AbortError'?'Request timed out':error.message;
     }finally{clearTimeout(timeout);}
@@ -680,11 +748,12 @@ function createController(config){
      (option.routeError?'<small>Road lookup unavailable: '+esc(option.routeError)+'</small>':'')+
      (option.assessment?'<small>'+esc(option.assessment.message)+'</small>':'')+
      (option.assessment?.issues||[]).map(msg=>'<small class="route-schedule-warning">'+esc(msg)+'</small>').join('')+
+     (option.assessment?.notes||[]).map(msg=>'<small>'+esc(msg)+'</small>').join('')+
      '</div><button type="button" class="secondary small" data-route-itinerary-accept="'+i+'" '+(itineraryPreviewBusy||list.length>=MAX_ROUTES?'disabled':'')+'>Use this route</button></div>').join(''):
      '<p class="muted">'+esc(itinerarySuggestions.reason)+'</p>')+
    (itinerarySuggestions.routeNote?'<p class="muted small-details">'+esc(itinerarySuggestions.routeNote)+'</p>':'')+
    (itinerarySuggestions.excluded?'<p class="muted small-details">'+itinerarySuggestions.excluded+' activity/activities have no mapped location and were excluded.</p>':'')+
-   '<p class="muted small-details">Timed stops keep their chronological order. Flexible insertions are tentative; direct-line placement is not a driving-time estimate. Road-leg checks include driving through flexible stops, but visit durations, parking, traffic and business hours still require review.</p>':'';
+   '<p class="muted small-details">Timed stops keep their chronological order. Visit estimates include time at intermediate stops; listed opening-hour warnings are limited to simple schedules. Check all assumptions.</p>':'';
   $('routePicker').innerHTML=list.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+
    (x.distanceM!=null?' · '+(x.distanceM/1609.344).toFixed(0)+' mi':'')+'</option>').join('');
   $('routePicker').value=currentId;
@@ -763,6 +832,14 @@ function createController(config){
   $('routeNew').addEventListener('click',()=>addRoute());
   $('routeSuggestItinerary').addEventListener('click',previewItinerary);
   $('routeItineraryDay').addEventListener('change',e=>{itineraryPreviewRequest++;suggestedDay=e.target.value;itinerarySuggestions=null;render();});
+  $('routeVisitEstimate').addEventListener('change',()=>{
+   if(!itinerarySuggestions||itineraryPreviewBusy)return;
+   for(const option of itinerarySuggestions.options)
+    if(option.roadLegStats)option.assessment=itineraryDrivingAssessment(option.stops,option.roadLegStats,{
+     day:itinerarySuggestions.day,estimatedVisitMinutes:Number($('routeVisitEstimate').value)||0
+    });
+   render();
+  });
   $('routeItineraryOptions').addEventListener('click',e=>{
    const button=e.target.closest('[data-route-itinerary-accept]');
    if(button)acceptItinerarySuggestion(Number(button.dataset.routeItineraryAccept));

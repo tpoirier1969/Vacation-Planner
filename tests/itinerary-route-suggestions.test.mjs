@@ -64,3 +64,9 @@ test('Very tight scheduled appointments do not receive physically impossible ins
  assert.equal(result.options.length,1);
  assert.deepEqual(result.options[0].ids,['appointment-1','appointment-2','coffee-near-middle']);
 });
+
+test('Estimated visit duration is preview-only and not a saved route setting',()=>{
+ assert.match(html,/id="routeVisitEstimate"/);
+ assert.match(js,/option\.roadLegStats=result\.legStats/);
+ assert.match(js,/routeVisitEstimate'\)\.addEventListener\('change'/);
+});

@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 const js=readFileSync(new URL('../routes.js',import.meta.url),'utf8');
 const start=js.indexOf('function minutesOfDay('),end=js.indexOf('function createController(config)',start);
 assert.ok(start>=0&&end>start);
-const f=new Function(js.slice(start,end)+'return {itineraryDrivingAssessment,itinerarySnapshot};')();
+const f=new Function(js.slice(start,end)+'return {itineraryDrivingAssessment,itinerarySnapshot,simpleOpeningWindows};')();
 const stop=(id,time,endTime='')=>({id,title:id,date:'2026-12-22',lat:45,lng:-87,time,endTime});
 test('Driving leg too long for two fixed appointments is warned, not silently reordered',()=>{
  const result=f.itineraryDrivingAssessment([stop('Museum','10:00','11:00'),stop('Lunch','11:15')],[{durationS:1800}]);
@@ -33,7 +33,7 @@ test('Changed time or coordinates invalidates proposal signature',()=>{
 });
 test('Preview uses actual road route and only saves on explicit acceptance',()=>{
  assert.ok(js.includes("option.roadMiles=result.distanceM/1609.344"));
- assert.ok(js.includes("option.assessment=itineraryDrivingAssessment(points,result.legStats)"));
+ assert.ok(js.includes("option.assessment=itineraryDrivingAssessment(points,result.legStats,{"));
  assert.ok(js.includes("itinerarySuggestions.snapshot!==itinerarySnapshot("));
  assert.ok(js.includes("config.getRoutes().push(r)"));
 });
@@ -52,4 +52,30 @@ test('Flexible stop order cannot be pronounced schedule-safe without visit durat
  assert.equal(result.issues.length,0);
  assert.match(result.message,/flexible stops/);
  assert.match(result.message,/opening hours/);
+});
+
+test('Simple weekly OSM hours use trip-local weekday and unknown holidays',()=>{
+ assert.deepEqual(f.simpleOpeningWindows('Mo-Fr 09:00-17:00; Sa 10:00-14:00; Su off','2026-12-22'),[{start:540,end:1020}]);
+ assert.deepEqual(f.simpleOpeningWindows('Mo-Fr 09:00-17:00; Sa 10:00-14:00; Su off','2026-12-26'),[{start:600,end:840}]);
+ assert.deepEqual(f.simpleOpeningWindows('Mo-Fr 09:00-17:00; Sa 10:00-14:00; Su off','2026-12-27'),[]);
+ assert.equal(f.simpleOpeningWindows('Mo-Fr 09:00-17:00; PH off','2026-12-22'),null);
+});
+test('Estimated flexible visits expose late arrival missing in driving-only calculation',()=>{
+ const entries=[stop('Museum','10:00','11:00'),stop('Coffee shop',''),stop('Lunch','11:50')];
+ const legs=[{durationS:900},{durationS:900}];
+ assert.equal(f.itineraryDrivingAssessment(entries,legs).issues.length,0);
+ assert.match(f.itineraryDrivingAssessment(entries,legs,{estimatedVisitMinutes:30}).issues[0],/10 min after 11:50/);
+});
+test('Listed opening hours flag conflicts and waiting time',()=>{
+ const after=f.itineraryDrivingAssessment([{...stop('Cafe','18:00'),hours:'Mo-Fr 08:00-17:00'},stop('Dinner','20:00')],[{durationS:900}],{day:'2026-12-22'});
+ assert.match(after.issues.join(';'),/outside its listed hours/);
+ const stops=[stop('Museum','09:00','09:20'),{...stop('Coffee shop',''),hours:'Mo-Fr 10:00-17:00'},stop('Lunch','10:15')];
+ const wait=f.itineraryDrivingAssessment(stops,[{durationS:600},{durationS:600}],{day:'2026-12-22',estimatedVisitMinutes:20});
+ assert.match(wait.notes.join(';'),/opens at 10:00/);
+ assert.match(wait.issues.join(';'),/after waiting for opening hours/);
+});
+test('Changing stored opening hours invalidates a route proposal',()=>{
+ const entries=[{...stop('Cafe','10:00'),hours:'Mo-Fr 09:00-17:00'},stop('Lunch','12:00')];
+ const initial=f.itinerarySnapshot(entries,'2026-12-22');entries[0].hours='24/7';
+ assert.notEqual(f.itinerarySnapshot(entries,'2026-12-22'),initial);
 });
