@@ -70,20 +70,34 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 - **v0.6.23 authentication diagnostics committed:** The app now verifies the logged-in Supabase user instead of trusting only the cached session, and shows the exact signed-in email on membership denial; this does not grant permission or bypass RLS. Live iPhone Home Screen testing remains required.
 - **iPhone launcher sign-in still unresolved:** Suite standalone Home Screen context may hold a separate Supabase session from Safari, and membership must be checked using the signed-in user ID. Do not grant membership automatically or bypass RLS to mask the issue. Verify which account appears in each context before changing authorization.
 
-## Next priorities
+## Next priorities — owner-selected development focus (2026-11-19)
 
-1. Live two-account verification: Donna's email sign-in, shared household membership, Realtime refresh between two authenticated browsers, concurrent-edit behavior, save/reload, and mobile layout. Source code and mock tests are not enough.
-2. Itinerary and Ideas UX acceptance: category balance, compact layout, promotion/return flows, date/time and fixed-event constraints, booking details, and visual checks in actual browsers.
-3. **Completed:** Added Vacation Planner to `tpoirier1969/Lazy-Acres-Suite` household launcher in Suite v0.1.84; verified deployed module registry and live Suite version. Its card opens `https://tpoirier1969.github.io/Vacation-Planner/` and uses the original Vacation Planner sign artwork.
-4. Trip-specific sharing/access beyond current household model, if needed.
-5. Scheduler integration: connect to the existing Lazy Acres Scheduler deliberately, without creating a second calendar system.
-6. Cross-app integrations with existing Shopping/Packing and Boondocking apps, without migrating or duplicating their authoritative records.
-7. **Itinerary-driven route suggestions — partially implemented:** map scheduled and flexible day activities, offer tentative interleaved or chronological stop orders, and compare Geoapify driving miles/time when accessible. Still outstanding: visit-duration inputs, actual business opening-hour constraints, flexible-stop scheduling against fixed appointments beyond driving alone, multi-day mileage/time comparisons, route geometry acceptance checks on real devices. Keep previews non-persistent until explicitly accepted.
-8. Basic route builder implemented in v0.6.19: multiple named Supabase routes, Geoapify driving paths, road-shaping clicks, ordered waypoints, linked Ideas/itinerary stops, start/end date/time, route preferences, visibility, alternative copies and distance/time comparisons. **Outstanding:** route-corridor attraction discovery, configurable maximum detour time, schedule-linked multi-day routing, and real-device alternate route acceptance.
-9. Deeper fishing access, boat launches, trails, events discovery, and weather along routes/dates.
-10. Browser save extension, location-aware research notes, and optional trip photos.
-11. Review quality of satellite imagery.
-12. Construction/accident traffic alerts and costly integrations remain deferred for the $0 proof of concept unless a free sustainable data source emerges.
+**Top priority 1 — Smarter daily itinerary scheduling** (formerly #3 in Tod's 2026-11-19 shortlist).
+- Build useful daily stop sequences around **fixed event/reservation times**, without silently moving them. Flexible activities may be inserted before, between, or after appointments as the schedule allows.
+- Consider actual **road driving time** from existing Geoapify routing, known visit durations and optional estimates, and business hours when the source can be interpreted reliably. Warn explicitly when duration, opening hours or travel times are unknown; do not represent straight-line distances as road times.
+- Compare practical alternative plans and identify what fits, what conflicts, and what remains unscheduled. Existing itinerary entries and accepted routes stay unchanged until the user explicitly chooses a proposed route or scheduling change.
+- **Do not block this priority on building individual per-activity duration controls.** First improve the scheduling logic using existing end times and the optional preview duration estimate. Add individual duration editing as a subsequent refinement if needed.
+- Test timetable constraints including consecutive appointments, waiting for openings, midnight, unmapped entries and no-API-key fallback; verify desktop and iPhone.
+
+**Top priority 2 — Discover places along an existing route** (formerly #5 in Tod's 2026-11-19 shortlist).
+- Search along a selected saved route's actual road geometry, not just the visible map rectangle. Categories should include restaurants/coffee, attractions, fishing access, boat launches, trails, and other useful stops where existing free data offers coverage.
+- Provide a **configurable maximum detour in driving minutes**, with conservative filtering and real road calculations where available; distinguish approximate prefiltering from verified detour drive time. Keep requests within free Geoapify/OpenStreetMap quotas, use bounded queries and pagination.
+- **Show all loaded discoveries on the map simultaneously**, using unobtrusive unnumbered markers; offer filters, matching result cards, Info where available, and actions to add to Ideas or Itinerary.
+- Searching must never reshape or save the selected route or make unapproved itinerary changes. An explicit user action adds a saved place; preserving original route geometry is mandatory.
+- Test selected-route switching, no road geometry, direct/short routes, long routes, mobile results/map visibility, and provider failures.
+
+**Acceptance and supporting work, not competing development priorities:**
+1. Verify releases in authenticated desktop/iPhone sessions: routing, Info popups, saving/reopening, travel-time assumptions and map interactions. Do not call code-only checks live acceptance.
+2. Individual per-activity visit durations and additional opening-hours/holiday support, where needed to refine priority 1.
+3. Multi-day route planning between lodging and overnight stops, after daily scheduling is dependable.
+4. Deeper discovery coverage, weather and travel alerts, with no new recurring cost during proof of concept.
+5. Integration with existing Scheduler, Shopping/Packing and Boondocking apps, avoiding a second authoritative calendar or duplicated records.
+6. Trip-specific sharing, browser save extension, location-aware notes, photos, satellite imagery assessment and other enhancements.
+
+**Deferred at Tod's request:** Donna's separate account enrollment and two-account approval testing. Do not make it a blocker for the two selected priorities. Revisit only when requested.
+
+**Previously completed:** The Vacation Planner household launcher card was added to Lazy Acres Suite v0.1.84; retain that integration.
+
 
 ## UI and map usability — outstanding
 
