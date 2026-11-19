@@ -406,7 +406,7 @@ async function showMapPlaceMenu(latlng,name='',notes=''){
   text.textContent=message;
   button.type='button';button.className='secondary small';
   button.textContent='Name and save this exact location';
-  button.onclick=()=>{map?.closePopup();openPlace(latlng.lat,latlng.lng,'','','places','Other')};
+  button.onclick=e=>{L.DomEvent.stop(e);map?.closePopup();openPlace(latlng.lat,latlng.lng,'','','places','Other')};
   box.append(text,button);popup.setContent(box);
  }
  const canUseGeoapify=!!key&&key!=='PASTE_YOUR_GEOAPIFY_BROWSER_KEY_HERE';
@@ -439,7 +439,7 @@ async function showMapPlaceMenu(latlng,name='',notes=''){
   // circle is not the business tapped: require a credible point match.
   if(canUseGeoapify){
    try{matches=(await request('https://api.geoapify.com/v2/places?'+nearby)).map(mapPlaceFromFeature).filter(Boolean);}
-   catch(e){placeError=e;}
+   catch{/* A failed primary lookup triggers the named OSM fallback below. */}
   }
   if(!alive())return;
   const closeMatches=matches.filter(p=>mapPlaceDistance(latlng,p)<=35);
@@ -464,7 +464,7 @@ async function showMapPlaceMenu(latlng,name='',notes=''){
    if(mapPlaceDistance(latlng,p)>180)return false;
    if(distinct.some(x=>sameNearbyBusiness(x,p)))return false;
    distinct.push(p);return true;
-  }).slice(0,10);
+  }).slice(0,5);
   if(matches.length===1&&mapPlaceDistance(latlng,matches[0])<=90){
    select(matches[0]);return;
   }
@@ -475,6 +475,12 @@ async function showMapPlaceMenu(latlng,name='',notes=''){
    return;
   }
   const box=document.createElement('div'),heading=document.createElement('strong');
+  // A touch on a popup option must never bubble through to map.on('click').
+  // Protect pointer/touch starts as well as clicks for iOS WebKit.
+  L.DomEvent.disableClickPropagation(box);
+  for(const type of ['pointerdown','touchstart','click','dblclick','contextmenu']){
+   box.addEventListener(type,e=>e.stopPropagation());
+  }
   heading.textContent='Which place did you mean?';box.append(heading);
   for(const place of matches){
    const button=document.createElement('button');
@@ -483,13 +489,13 @@ async function showMapPlaceMenu(latlng,name='',notes=''){
    const distance=mapPlaceDistance(latlng,place);
    button.textContent=place.name+' · '+distance+' m away'+(place.sourceLabel?' · '+place.sourceLabel:'');
    button.title=place.address||place.kind;
-   button.onclick=()=>select(place);
+   button.onclick=e=>{L.DomEvent.stop(e);select(place);};
    box.append(button);
   }
   const manual=document.createElement('button');
   manual.type='button';manual.className='secondary small';
   manual.style.marginTop='8px';manual.textContent='Name and save exact clicked point';
-  manual.onclick=()=>{map?.closePopup();openPlace(latlng.lat,latlng.lng,'','','places','Other')};
+  manual.onclick=e=>{L.DomEvent.stop(e);map?.closePopup();openPlace(latlng.lat,latlng.lng,'','','places','Other')};
   box.append(manual);popup.setContent(box);
  }catch{
   showManual('Place identification timed out or failed. You can still save this exact point.');
