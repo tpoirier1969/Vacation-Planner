@@ -62,11 +62,12 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 4. Trip-specific sharing/access beyond current household model, if needed.
 5. Scheduler integration: connect to the existing Lazy Acres Scheduler deliberately, without creating a second calendar system.
 6. Cross-app integrations with existing Shopping/Packing and Boondocking apps, without migrating or duplicating their authoritative records.
-7. Basic route builder implemented in v0.6.19: multiple named Supabase routes, Geoapify driving paths, road-shaping clicks, ordered waypoints, linked Ideas/itinerary stops, start/end date/time, route preferences, visibility, alternative copies and distance/time comparisons. **Outstanding:** route-corridor attraction discovery, configurable maximum detour time, schedule-linked multi-day routing, and real-device alternate route acceptance.
-8. Deeper fishing access, boat launches, trails, events discovery, and weather along routes/dates.
-9. Browser save extension, location-aware research notes, and optional trip photos.
-10. Review quality of satellite imagery.
-11. Construction/accident traffic alerts and costly integrations remain deferred for the $0 proof of concept unless a free sustainable data source emerges.
+7. **Itinerary-driven route suggestions — outstanding:** analyze scheduled and flexible itinerary activities for each trip day; respect fixed event/reservation times and available opening hours; suggest sensible stop sequences and driving routes, with day-by-day mileage/time comparisons, alternative orders, conflict warnings, and user-editable route geometry. Suggest without modifying itinerary dates, times, or existing routes until an option is explicitly accepted. Use current free Geoapify routing capabilities first.
+8. Basic route builder implemented in v0.6.19: multiple named Supabase routes, Geoapify driving paths, road-shaping clicks, ordered waypoints, linked Ideas/itinerary stops, start/end date/time, route preferences, visibility, alternative copies and distance/time comparisons. **Outstanding:** route-corridor attraction discovery, configurable maximum detour time, schedule-linked multi-day routing, and real-device alternate route acceptance.
+9. Deeper fishing access, boat launches, trails, events discovery, and weather along routes/dates.
+10. Browser save extension, location-aware research notes, and optional trip photos.
+11. Review quality of satellite imagery.
+12. Construction/accident traffic alerts and costly integrations remain deferred for the $0 proof of concept unless a free sustainable data source emerges.
 
 ## UI and map usability — outstanding
 
