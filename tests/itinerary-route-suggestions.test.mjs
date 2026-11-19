@@ -68,7 +68,8 @@ test('Very tight scheduled appointments do not receive physically impossible ins
 test('Estimated visit duration is preview-only and not a saved route setting',()=>{
  assert.match(html,/id="routeVisitEstimate"/);
  assert.match(js,/option\.roadLegStats=result\.legStats/);
- assert.match(js,/routeVisitEstimate'\)\.addEventListener\('change'/);
+ assert.match(js,/for\(const id of \['routeVisitEstimate','routeDayStart','routeDayEnd'\]\)/);
+ assert.match(js,/Schedule settings changed\. Generate suggestions again\./);
 });
 
 test('Trip-wide overview lists each dated day and distinguishes mapped from unmapped',()=>{
