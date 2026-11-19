@@ -13,6 +13,8 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **v0.6.38 (2026-11-19):** Removed the idle map navigation instruction overlay that obstructed Fika and other businesses while preserving contextual add-place and route-picking prompts. Actual identification of Fika by Geoapify/OSM still requires validation against live provider data; no Supabase changes.
+
 - **v0.6.37 (2026-11-19):** Corrected the retired Overpass hostname used by named-place map taps and Coffee Shops discovery; both share the current Private.coffee provider with fallback and bounded timeouts. Fika has an OSM bakery listing. Live iPhone validation outstanding; no database changes.
 
 - **v0.6.36 (2026-11-19):** Password-setting UI relocated to signed-in Trip options as "Change login password", eliminating the always-visible "Set login password" prompt even for users with an existing password. Preserves Supabase auth and trips. Mobile header status repositioned; signed-in iPhone UI check pending. Fika basemap label still not confirmed as resolvable from external Places/Overpass data.
