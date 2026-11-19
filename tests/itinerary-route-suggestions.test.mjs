@@ -5,7 +5,7 @@ const js=readFileSync(new URL('../routes.js',import.meta.url),'utf8');
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const start=js.indexOf('function straightLineMiles('),end=js.indexOf('function createController(config)',start);
 assert.ok(start>=0&&end>start);
-const domain=new Function('pointOK','MAX_WAYPOINTS',js.slice(start,end)+';return {suggestItineraryRoutes,itineraryTripOverview};')(
+const domain=new Function('pointOK','MAX_WAYPOINTS',js.slice(start,end)+';return {suggestItineraryRoutes,itineraryTripOverview,smartDailyItinerary,tentativeDayTimeline};')(
  p=>p&&Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lng))&&p.lat!=null&&p.lng!=null,16);
 const item=(id,lat,lng,time='',day='2026-12-22')=>({id,title:id,lat,lng,time,date:day});
 test('Timed appointments stay chronologically ordered, flexible stops remain optional to reorder',()=>{
@@ -92,4 +92,32 @@ test('Overview is read-only and exposes an explicit per-day review action',()=>{
  assert.match(js,/void previewItinerary\(\)/);
  const pair=[item('a',45,-87,'09:00'),item('b',45,-87.1,'13:00')];
  const prior=JSON.stringify(pair);domain.itineraryTripOverview(pair);assert.equal(JSON.stringify(pair),prior);
+});
+
+test('Smart daily plan inserts flexible early and preserves appointment chronology and data',()=>{
+ const rows=[
+  {...item('museum',45,-87,'11:00'),endTime:'12:00'},
+  {...item('dinner',45,-87.12,'18:00'),endTime:'19:00'},
+  {...item('morning bakery',45,-87.01),hours:'Mo-Su 09:00-11:00'},
+  item('gallery',45,-87.06)
+ ];
+ const untouched=JSON.stringify(rows);
+ const plan=domain.smartDailyItinerary(rows,'2026-12-22',{dayStart:'09:00',dayEnd:'20:00',estimatedVisitMinutes:30});
+ assert.ok(plan.ids.indexOf('morning bakery')<plan.ids.indexOf('museum'));
+ assert.ok(plan.ids.indexOf('museum')<plan.ids.indexOf('dinner'));
+ assert.ok(plan.ids.indexOf('gallery')<plan.ids.indexOf('dinner'));
+ assert.equal(JSON.stringify(rows),untouched);
+});
+test('Impossible flexible detours are listed rather than silently dropped',()=>{
+ const rows=[{...item('museum',45,-87,'09:00'),endTime:'12:00'},
+ {...item('lunch',45,-87.1,'12:15'),endTime:'12:45'},item('far stop',47,-87.1)];
+ const plan=domain.smartDailyItinerary(rows,'2026-12-22',{dayStart:'09:00',dayEnd:'13:00',estimatedVisitMinutes:60});
+ assert.deepEqual(plan.ids,['museum','lunch']);
+ assert.deepEqual(plan.unplaced,['far stop']);
+});
+test('Daily proposals are explicitly opt-in',()=>{
+ const data=[item('first',45,-87,'10:00'),item('second',45,-87.12,'18:00'),item('coffee',45,-87.02)];
+ assert.ok(domain.suggestItineraryRoutes(data,'2026-12-22').options.every(x=>x.label!=='Tentative daily schedule'));
+ assert.ok(domain.suggestItineraryRoutes(data,'2026-12-22',{smart:true,dayStart:'09:00',dayEnd:'21:00',estimatedVisitMinutes:30})
+  .options.some(x=>x.label==='Tentative daily schedule'));
 });

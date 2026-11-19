@@ -179,7 +179,68 @@ function insertFlexibleBetweenAppointments(timed,flexible){
  }
  return ordered;
 }
-function suggestItineraryRoutes(activities,day){
+// Read-only daily plan. 70 mph direct-line travel is only an optimistic
+// lower bound; Geoapify road-leg checks are essential before committing.
+function tentativeDayTimeline(stops,day,settings={}){
+ const start=minutesOfDay(settings.dayStart||'09:00'),end=minutesOfDay(settings.dayEnd||'21:00');
+ const n=Number(settings.estimatedVisitMinutes),visit=Number.isFinite(n)&&n>=0&&n<=480?Math.round(n):0;
+ if(start===null||end===null||end<=start)return {valid:false,issues:['Day end must be after day start.'],slots:[],waitMinutes:0};
+ let clock=start,last=null,waitMinutes=0;
+ const issues=[],slots=[];
+ for(const stop of stops){
+  const roadLower=last?Math.ceil(straightLineMiles(last,stop)*60/70):0;
+  let arrival=clock+roadLower,at=arrival;
+  const fixed=minutesOfDay(stop.time),explicitEnd=minutesOfDay(stop.endTime);
+  if(fixed!==null){
+   if(arrival>fixed)issues.push(stop.title+' cannot be reached by '+stop.time+' even with optimistic travel.');
+   if(fixed<start||fixed>end)issues.push(stop.title+' is outside this day’s planning window.');
+   at=fixed;
+  }
+  const windows=simpleOpeningWindows(stop.hours,day);
+  if(windows!==null){
+   if(!windows.length)issues.push(stop.title+' is listed closed on this day.');
+   else if(fixed===null){
+    const available=windows.find(w=>Math.max(at,w.start)+visit<=w.end&&at<=w.end);
+    if(!available)issues.push(stop.title+' will not fit its listed opening hours.');
+    else{waitMinutes+=Math.max(0,available.start-at);at=Math.max(at,available.start);}
+   }else if(!windows.some(w=>at>=w.start&&at<w.end&&(explicitEnd===null||explicitEnd<=w.end)))
+    issues.push(stop.title+' is outside its listed opening hours.');
+  }
+  const departure=fixed!==null&&explicitEnd!==null?explicitEnd:at+visit;
+  if(departure<at)issues.push(stop.title+' ends before its start time.');
+  if(departure>end)issues.push(stop.title+' exceeds the day end time.');
+  slots.push({id:stop.id,start:clockText(at),end:clockText(departure),title:stop.title});
+  clock=Math.max(at,departure);last=stop;
+ }
+ return {valid:!issues.length,issues,slots,waitMinutes,unknownDuration:visit===0};
+}
+function smartDailyItinerary(activities,day,settings={}){
+ const mapped=(activities||[]).filter(x=>x.date===day&&pointOK(x));
+ const timed=mapped.filter(x=>minutesOfDay(x.time)!==null).sort((a,b)=>
+  a.time.localeCompare(b.time)||String(a.id).localeCompare(String(b.id)));
+ const flexible=mapped.filter(x=>minutesOfDay(x.time)===null).sort((a,b)=>
+  Number(!!b.mustDo)-Number(!!a.mustDo)||Number(!!b.hours)-Number(!!a.hours)||
+  String(a.title).localeCompare(String(b.title)));
+ let planned=timed.slice();const unplaced=[];
+ for(const stop of flexible){
+  let best=null;
+  for(let i=0;i<=planned.length;i++){
+   const list=[...planned.slice(0,i),stop,...planned.slice(i)],times=tentativeDayTimeline(list,day,settings);
+   if(!times.valid)continue;
+   const extra=candidateDistance(list)-candidateDistance(planned),score=extra+times.waitMinutes/120;
+   if(!best||score<best.score-1e-7||(Math.abs(score-best.score)<1e-7&&i<best.index))
+    best={score,index:i,list};
+  }
+  if(best)planned=best.list;
+  else unplaced.push(stop.title);
+ }
+ const schedule=tentativeDayTimeline(planned,day,settings);
+ return {label:'Tentative daily schedule',stops:planned,ids:planned.map(x=>x.id),
+  directMiles:candidateDistance(planned),slots:schedule.slots,unplaced,
+  planningIssues:schedule.issues,
+  note:'Times assume optimistic 70 mph straight-line travel, not road driving. Unknown visit lengths and complex hours require review.'};
+}
+function suggestItineraryRoutes(activities,day,settings={}){
  const all=(activities||[]).filter(x=>x.date===day);
  const eligible=all.filter(pointOK);
  if(eligible.length<2)return {day,options:[],excluded:all.length-eligible.length,reason:'At least two mapped itinerary stops are needed for this day.'};
@@ -199,9 +260,12 @@ function suggestItineraryRoutes(activities,day){
   if(alternate.map(x=>x.id).join('|')!==schedules[0].stops.map(x=>x.id).join('|'))
    schedules.push({label:'Nearby flexible stops',stops:alternate});
  }
- return {day,excluded:all.length-eligible.length,untimed:flexible.length,options:schedules.map(s=>({
-  ...s,directMiles:candidateDistance(s.stops),ids:s.stops.map(x=>x.id)
- }))};
+ const options=schedules.map(s=>({...s,directMiles:candidateDistance(s.stops),ids:s.stops.map(x=>x.id)}));
+ if(settings.smart&&flexible.length){
+  const smart=smartDailyItinerary(activities,day,settings);
+  if(smart.stops.length>=2)options.push(smart);
+ }
+ return {day,excluded:all.length-eligible.length,untimed:flexible.length,options};
 }
 
 // Read-only, trip-wide itinerary coverage. Distances are between listed stops
@@ -500,7 +564,14 @@ function createController(config){
   if(!day||itineraryPreviewBusy)return;
   const request=++itineraryPreviewRequest,snapshot=itinerarySnapshot(config.getActivities(),day);
   suggestedDay=day;
-  itinerarySuggestions=suggestItineraryRoutes(config.getActivities(),day);
+  const scheduleSettings={smart:true,dayStart:$('routeDayStart').value,dayEnd:$('routeDayEnd').value,
+   estimatedVisitMinutes:Number($('routeVisitEstimate').value)||0};
+  if(minutesOfDay(scheduleSettings.dayStart)===null||minutesOfDay(scheduleSettings.dayEnd)===null||
+    minutesOfDay(scheduleSettings.dayStart)>=minutesOfDay(scheduleSettings.dayEnd)){
+   report('Choose valid day start and end times.');return;
+  }
+  itinerarySuggestions=suggestItineraryRoutes(config.getActivities(),day,scheduleSettings);
+  itinerarySuggestions.scheduleSettings=scheduleSettings;
   itinerarySuggestions.snapshot=snapshot;
   if(!itinerarySuggestions.options.length){render();return;}
   const key=root.LAZY_ACRES_GEOAPIFY_KEY;
@@ -511,7 +582,7 @@ function createController(config){
   itineraryPreviewBusy=true;render();
   try{
    const options=itinerarySuggestions.options;
-   // At most two small, intentional requests; no data is persisted here.
+   // At most three intentional on-demand road previews; nothing is saved until accepted.
    for(const option of options){
     if(request!==itineraryPreviewRequest)break;
     const points=option.stops;
@@ -548,7 +619,7 @@ function createController(config){
    itinerarySuggestions=null;report('The itinerary changed. Generate suggestions again.');render();return;
   }
   // Re-check that the source activities have not moved or changed since preview.
-  const newest=suggestItineraryRoutes(config.getActivities(),suggestedDay);
+  const newest=suggestItineraryRoutes(config.getActivities(),suggestedDay,itinerarySuggestions.scheduleSettings||{});
   if(!newest.options.some(x=>x.ids.join('|')===proposal.ids.join('|'))||
      proposal.ids.some(id=>!config.getActivities().some(x=>x.id===id&&x.date===suggestedDay&&pointOK(x)))){
    itinerarySuggestions=null;report('The itinerary changed. Generate suggestions again.');render();return;
@@ -770,6 +841,10 @@ function createController(config){
    (itinerarySuggestions.options.length?itinerarySuggestions.options.map((option,i)=>
      '<div class="route-itinerary-choice"><div><strong>'+esc(option.label)+'</strong>'+
      '<small>'+esc(option.stops.map(x=>(x.time?x.time+' ':'')+x.title).join(' → '))+'</small>'+
+     (option.slots?.length?'<small class="route-day-times">'+esc(option.slots.map(x=>x.start+' '+x.title).join(' · '))+'</small>':'')+
+     (option.unplaced?.length?'<small class="route-schedule-warning">Cannot fit: '+esc(option.unplaced.join(', '))+'</small>':'')+
+     (option.planningIssues||[]).map(x=>'<small class="route-schedule-warning">'+esc(x)+'</small>').join('')+
+     (option.note?'<small>'+esc(option.note)+'</small>':'')+
      '<small>'+(option.roadMiles!=null?
       option.roadMiles.toFixed(1)+' road mi · about '+option.roadMinutes+' min driving':
       'Approx. '+option.directMiles.toFixed(1)+' straight-line mi · driving time unavailable')+'</small>'+
@@ -869,13 +944,9 @@ function createController(config){
    $('routeItineraryDay').value=day;
    void previewItinerary();
   });
-  $('routeVisitEstimate').addEventListener('change',()=>{
-   if(!itinerarySuggestions||itineraryPreviewBusy)return;
-   for(const option of itinerarySuggestions.options)
-    if(option.roadLegStats)option.assessment=itineraryDrivingAssessment(option.stops,option.roadLegStats,{
-     day:itinerarySuggestions.day,estimatedVisitMinutes:Number($('routeVisitEstimate').value)||0
-    });
-   render();
+  for(const id of ['routeVisitEstimate','routeDayStart','routeDayEnd'])$(id).addEventListener('change',()=>{
+   itineraryPreviewRequest++;
+   if(itinerarySuggestions){itinerarySuggestions=null;report('Schedule settings changed. Generate suggestions again.');render();}
   });
   $('routeItineraryOptions').addEventListener('click',e=>{
    const button=e.target.closest('[data-route-itinerary-accept]');
@@ -990,6 +1061,6 @@ function createController(config){
  bind();
  return {attachMap,render,onTripChange,consumeMapClick,cancelPick,isPicking:()=>!!pick,getPick:()=>pick,setTool};
 }
-root.VacationRouteDomain=Object.freeze({newRoute,decodePolyline,routeURL,parseRoute,windowError,summary,pointOK,sectionGeometry,suggestItineraryRoutes,itineraryTripOverview,itineraryDrivingAssessment,itinerarySnapshot});
+root.VacationRouteDomain=Object.freeze({newRoute,decodePolyline,routeURL,parseRoute,windowError,summary,pointOK,sectionGeometry,suggestItineraryRoutes,smartDailyItinerary,tentativeDayTimeline,itineraryTripOverview,itineraryDrivingAssessment,itinerarySnapshot});
 root.createVacationRoutes=createController;
 })(window);

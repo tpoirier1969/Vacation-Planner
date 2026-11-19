@@ -844,3 +844,8 @@ footer{
 .route-trip-overview>summary{cursor:pointer;font-weight:700;color:#205d60;padding:7px 3px}
 .route-trip-overview:focus-within{outline-offset:3px}
 .route-trip-day-row{align-items:center}
+
+/* Read-only daily itinerary previews. */
+.route-day-times{color:#254f52!important;background:#e8f2e9;padding:5px 7px;border-radius:6px;margin:4px 0;line-height:1.5!important}
+.route-itinerary-controls .field{flex:1 1 115px}
+.route-itinerary-controls input[type=time]{min-height:42px}

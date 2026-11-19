@@ -13,6 +13,8 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **v0.6.50 (2026-11-19):** Read-only day scheduling proposals added: opening/closing window, fixed appointments, optional dwell, flexible stop insertion and unplaced-stop alerts. Timing is a 70 mph straight-line optimistic lower bound until actual road legs are checked. Next: route-corridor discovery and better full-road-time optimization. No database changes.
+
 - **v0.6.49 (2026-11-19):** On-demand Info popup for Ideas and Itinerary includes available website, phone, location and email links, with linked-Idea/contact-source matching and no guessed values or database changes. Directly entered unmapped places can offer limited information; real signed-in mobile acceptance still outstanding.
 
 - **v0.6.48 (2026-11-19):** Initial trip-wide itinerary overview: scheduled days, mapped/untagged stops, timed/flexible distribution, clearly labeled direct-distance comparisons and one-click daily road review. Does not claim actual road mileage for all days or optimize across overnight transfers. No database changes; real-device acceptance pending.
