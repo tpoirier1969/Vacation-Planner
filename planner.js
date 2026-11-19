@@ -50,7 +50,7 @@ $('#placeList').innerHTML=filteredIdeas.length?PLACE_CATEGORIES.map(category=>{
   '<div class="day"><div class="row entry-head"><strong>'+esc(x.name)+'</strong>'+
   '<label class="idea-category-inline">Category <select data-idea-category="'+esc(x.id)+'" aria-label="Category for '+esc(x.name)+'">'+
   PLACE_CATEGORIES.map(c=>'<option value="'+esc(c)+'" '+(normalizedCategory(x.category)===c?'selected':'')+'>'+esc(c)+'</option>').join('')+
-  '</select></label>'+editAndRemove('places',x)+'</div>'+(x.location?'<div class="muted small-details">'+esc(x.location)+'</div>':'')+ideaTiming(x)+(x.notes?'<p>'+esc(x.notes)+'</p>':'')+'<div class="row wrap">'+(geo(x)?'<button class="quiet small" data-locate="'+esc(x.id)+'">Show on map</button>':'')+'<button class="secondary small" data-plan="'+esc(x.id)+'">Choose for itinerary</button></div></div>'
+  '</select></label></div>'+(x.location?'<div class="muted small-details">'+esc(x.location)+'</div>':'')+ideaTiming(x)+(x.notes?'<p>'+esc(x.notes)+'</p>':'')+'<div class="row entry-button-row">'+editAndRemove('places',x)+(geo(x)?'<button class="quiet small" data-locate="'+esc(x.id)+'">Show on map</button>':'')+'<button class="secondary small" data-plan="'+esc(x.id)+'">Choose for itinerary</button></div></div>'
  ).join('')+'</div></details>';
 }).join('') : '<p class="empty">'+(savedPlaces.length?'No ideas match these filters. Clear the search or choose another category.':'No ideas under consideration. Add an activity, event, place, or other possibility here.')+'</p>';
 const allActivities=forTrip('activities').slice().sort(Itinerary.compareEntries);
@@ -71,14 +71,14 @@ $('#activityList').innerHTML=activities.length?activityDays.map(day=>
   ].filter(Boolean).join(' ');
   const when=x.time?Itinerary.formatTime(x.time)+(x.endTime?' – '+Itinerary.formatTime(x.endTime):''):'';
   const link=safeExternalURL(x.bookingUrl);
-  return '<div class="day"><div class="row entry-head"><strong>'+esc(x.title)+'</strong>'+editAndRemove('activities',x)+'</div>'+
+  return '<div class="day"><div class="row entry-head"><strong>'+esc(x.title)+'</strong></div>'+
    (badges?'<div class="itinerary-badges">'+badges+'</div>':'')+
    '<div class="muted small-details">'+esc(x.category||'Activity')+(when?' · '+esc(when):'')+(x.endDate?' · Checkout '+formatDate(x.endDate):'')+'</div>'+
    (x.notes?'<p>'+esc(x.notes)+'</p>':'')+
    (x.hours?'<div class="muted small-details">Hours: '+esc(x.hours)+'</div>':'')+
    (x.confirmationCode?'<div class="muted small-details">Confirmation: '+esc(x.confirmationCode)+'</div>':'')+
    (link?'<a class="small-details" href="'+esc(link)+'" target="_blank" rel="noopener noreferrer">Booking / tickets</a>':'')+
-   '<div class="row wrap"><button class="quiet small" data-unschedule="'+esc(x.id)+'">Move back to Ideas</button></div></div>';
+   '<div class="row entry-button-row">'+editAndRemove('activities',x)+'<button class="quiet small" data-unschedule="'+esc(x.id)+'">Move back to Ideas</button></div></div>';
  }).join('')+'</section>'
 ).join('') : '<p class="empty">'+(allActivities.length?'No plans match this view. Choose another filter.':'Nothing decided yet. Choose an idea or add a plan directly.')+'</p>';
 $('#noteList').innerHTML=forTrip('notes').length?forTrip('notes').map(x=>'<div class="day"><div class="row entry-head"><strong>'+esc(x.title)+'</strong>'+editAndRemove('notes',x)+'</div><p style="white-space:pre-wrap">'+esc(x.body)+'</p></div>').join(''):'<p class="empty">Save links, questions, reservations, and research here.</p>';

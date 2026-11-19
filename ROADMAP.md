@@ -13,6 +13,8 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **v0.6.53 (2026-11-19):** Reduced mobile bottom nav height and changed five tabs to compact content-width buttons. Moved listing actions into one short, non-wrapping row in Ideas and Itinerary, allowing label wrapping within each button. No saved record changes; iPhone visual acceptance pending.
+
 - **v0.6.52 (2026-11-19):** On-demand website enrichment in Ideas/Itinerary Info: after an empty saved Geoapify website, check named OSM building/node metadata and exact-identifier Wikidata P856 official website, with strict name/proximity matching. Add a name/address-based web search when no structured source provides the link. Do not auto-select search engine hits or alter Supabase. Live verification pending.
 
 - **v0.6.51 (2026-11-19):** Route-corridor discovery first pass: selected saved route and Geoapify polyline POST buffer (not visible-map rectangle), 5–30 min detour target, paging, deduplicated results and all loaded map pins, on-demand verification of added local-section driving time, no modifications to route or saved trip data. Real browser/iPhone Geoapify POST and routing acceptance pending; estimated detour is not a guarantee.

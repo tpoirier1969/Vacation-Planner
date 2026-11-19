@@ -54,3 +54,27 @@ test('Planner includes responsive Ideas search, Itinerary filters and accessible
  assert.ok(css.includes('.idea-search-row'));
  assert.match(html,/id="mobileShowActivityForm"[^>]*aria-expanded="false"/);
 });
+
+test('Mobile bottom navigation uses label-sized buttons rather than full-width stretched tabs',()=>{
+ const css=readFileSync(new URL('../planner.css',import.meta.url),'utf8');
+ const start=css.indexOf(' body.mobile-workspace #tabs{');
+ const end=css.indexOf(' body.mobile-workspace #tabs .nav-long',start);
+ assert.ok(start>0&&end>start);
+ const nav=css.slice(start,end);
+ assert.match(nav,/justify-content:space-evenly/);
+ assert.match(nav,/flex:0 1 auto/);
+ assert.match(nav,/min-height:40px/);
+ assert.doesNotMatch(nav,/flex:1 1 0/);
+});
+test('Ideas and Itinerary each show all actions in a single button row',()=>{
+ const js=readFileSync(new URL('../planner.js',import.meta.url),'utf8');
+ const css=readFileSync(new URL('../planner.css',import.meta.url),'utf8');
+ assert.match(js,/class="row entry-button-row"'\+editAndRemove\('places',x\)/);
+ assert.match(js,/class="row entry-button-row"'\+editAndRemove\('activities',x\)/);
+ assert.match(css,/\.entry-button-row\{display:flex;flex-wrap:nowrap/);
+ assert.match(css,/\.entry-button-row \.entry-actions\{display:contents\}/);
+ assert.match(css,/\.entry-button-row button,\.entry-button-row \.entry-actions button\{/);
+ const mobile=css.slice(css.indexOf('@media(max-width:760px){',css.indexOf('.entry-button-row{')));
+ assert.match(mobile,/body\.mobile-workspace #placeList \.entry-button-row/);
+ assert.match(mobile,/white-space:normal;overflow-wrap:anywhere/);
+});
