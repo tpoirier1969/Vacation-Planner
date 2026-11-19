@@ -586,7 +586,7 @@ footer{
  body.mobile-workspace .trip-summary-actions button{min-height:42px;font-size:13px}
  body.mobile-workspace #mobileSignOut{display:block}
  body.mobile-workspace .masthead-utility{
-   display:block;position:absolute;top:49px;bottom:auto;left:0;right:92px;min-width:0;z-index:1
+   display:block;position:absolute;top:57px;bottom:auto;left:0;right:92px;min-width:0;z-index:1
  }
  body.mobile-workspace .masthead-utility #context,
  body.mobile-workspace .masthead-utility .app-version{display:none}

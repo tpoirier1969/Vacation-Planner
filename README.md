@@ -6,6 +6,8 @@ A shared, trip-focused vacation workspace for Tod and Donna. Hosted as a static 
 
 ## Current features
 
+- **v0.6.36 (2026-11-19):** Removed the persistent "Set login password" action from the mobile masthead. The existing authorized-account password control now appears as "Change login password" under Trip options; no password-state guessing, duplicate account logic, or Supabase changes. Shifted connection status into a separate mobile header row and updated email-link help text.
+
 - **v0.6.35 (2026-11-19):** Cache-busted version.js at each application launch, then loaded CSS/JS with the resolved release version. Returning to an iPhone Home Screen app or Safari tab checks the current version without cache, and automatically refreshes the root page with a unique query if a newer version is released. No data or session clearing; Supabase unaffected.
 
 - **v0.6.34 (2026-11-19):** Map tap lookup now retries a second Overpass mirror for nearby named features, and does not pass street addresses off as matching businesses at 0 meters. If no named business is found, one tap opens the Save Idea form at the exact coordinate with an editable name. Existing map points/Ideas still work. Mobile header expanded/reflowed so Supabase status/password controls no longer overlap trip title/date. Supabase schema and existing records unchanged.
