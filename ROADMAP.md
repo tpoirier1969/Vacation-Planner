@@ -13,6 +13,8 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **v0.6.49 (2026-11-19):** On-demand Info popup for Ideas and Itinerary includes available website, phone, location and email links, with linked-Idea/contact-source matching and no guessed values or database changes. Directly entered unmapped places can offer limited information; real signed-in mobile acceptance still outstanding.
+
 - **v0.6.48 (2026-11-19):** Initial trip-wide itinerary overview: scheduled days, mapped/untagged stops, timed/flexible distribution, clearly labeled direct-distance comparisons and one-click daily road review. Does not claim actual road mileage for all days or optimize across overnight transfers. No database changes; real-device acceptance pending.
 
 - **v0.6.47 (2026-11-19):** Itinerary previews now support optional uniform stop-duration assumptions and conservative simple business-hours checks, including waiting and closing warnings. Holiday rules, per-stop duration settings, full cross-day road route optimization and overnight transfer planning remain outstanding. No database changes.

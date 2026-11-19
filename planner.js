@@ -8,7 +8,9 @@ let active=sessionStorage.getItem(SESSION),tab='explore',map,markers,discoveryMa
 function showTrip(id){if(!state.trips.some(t=>t.id===id))return;setMobileSheet('collapsed');ideaFilter='all';ideaQuery='';itineraryView='all';$('#ideaSearch').value='';$('#itineraryView').value='all';discoveryMarkers?.clearLayers();window.__tripSuggestions=[];addingPlace=false;expandedMap=false;syncMapMode();syncExpanded();active=id;sessionStorage.setItem(SESSION,id);tab='explore';routeUI?.onTripChange();render();const t=trip();if(t.lat!=null&&t.lng!=null){map?.setView([t.lat,t.lng],10)}else if(t.destination){searchLocation(t.destination,true)}}
 function exitTrip(){setMobileSheet('collapsed');routeUI?.cancelPick();ideaFilter='all';ideaQuery='';itineraryView='all';$('#ideaSearch').value='';$('#itineraryView').value='all';discoveryMarkers?.clearLayers();window.__tripSuggestions=[];active=null;addingPlace=false;expandedMap=false;syncMapMode();syncExpanded();sessionStorage.removeItem(SESSION);render()}
 function editAndRemove(kind,x){
- return '<span class="entry-actions"><button class="quiet small" data-edit="'+kind+':'+esc(x.id)+'">Edit</button><button class="quiet small" data-remove="'+kind+':'+esc(x.id)+'">Remove</button></span>';
+ const info=kind==='places'||kind==='activities'?
+  '<button class="quiet small" data-contact-info="'+kind+':'+esc(x.id)+'" aria-label="Contact info for '+esc(x.name||x.title)+'">Info</button>':'';
+ return '<span class="entry-actions">'+info+'<button class="quiet small" data-edit="'+kind+':'+esc(x.id)+'">Edit</button><button class="quiet small" data-remove="'+kind+':'+esc(x.id)+'">Remove</button></span>';
 }
 function ideaTiming(x){
  const items=[];
@@ -543,6 +545,139 @@ function appendContactInfo(host,data){
   const row=document.createElement('p'),link=document.createElement('a');link.href=website;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Website';row.append(link);host.append(row);
  }
 }
+
+// Contact popups read existing place IDs or the mapped location on demand.
+// No contact fields are written to the authoritative trip database.
+let contactInfoRequest=0;
+function contactEmail(data){
+ const source=String(data?.contact?.email||data?.email||data?.datasource?.raw?.['contact:email']||data?.datasource?.raw?.email||'').trim();
+ return /^[A-Z0-9.!#$%&'*+/=?^_\x60{|}~-]+@[A-Z0-9](?:[A-Z0-9-]*[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]*[A-Z0-9])?)+$/i.test(source)?source:'';
+}
+function normalizedContactName(name){
+ return String(name||'').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'')
+  .replace(/[^a-z0-9]+/g,' ').replace(/^the /,'').trim();
+}
+function contactMatch(candidate,name,latlng){
+ if(!candidate?.name||normalizedContactName(candidate.name)!==normalizedContactName(name))return false;
+ if(latlng&&geo(latlng)&&geo(candidate))return mapPlaceDistance(latlng,candidate)<=110;
+ return true;
+}
+function contactAddress(data){
+ const raw=data?.datasource?.raw||{};
+ const street=[raw['addr:housenumber'],raw['addr:street']].filter(Boolean).join(' ');
+ const fromRaw=[street,raw['addr:city'],raw['addr:state'],raw['addr:postcode']].filter(Boolean).join(', ');
+ return String(data?.formatted||data?.address||fromRaw||
+  [data?.address_line1,data?.address_line2].filter(Boolean).join(', ')||'').trim();
+}
+function contactViewDetails(base,source={},details={}){
+ const merged={...source,...details,contact:{...(source.contact||{}),...(details.contact||{})},
+  datasource:{raw:{...(source.datasource?.raw||{}),...(details.datasource?.raw||{})}}};
+ const original=String(base.location||'').trim();
+ return {name:base.name||base.title||'Place',website:placeWebsite(merged)||placeWebsite(source)||'',
+  phone:placePhone(merged)||placePhone(source)||'',email:contactEmail(merged)||contactEmail(source)||'',
+  address:contactAddress(details)||contactAddress(source)||
+   (!safeExternalURL(original)?original:''),
+  addressSource:contactAddress(details)||contactAddress(source)?'provider':original?'saved':'',
+  lat:base.lat??source.lat??null,lng:base.lng??source.lng??null};
+}
+async function contactSourceForRecord(kind,record,linked){
+ const name=record.name||record.title||'',base=linked||record;
+ const ref=String(base.geoapifyId||'').trim();
+ if(ref){
+  try{
+   const details=await getDiscoveryPlaceDetails({placeId:ref});
+   return contactViewDetails({...base,name,lat:record.lat??base.lat,lng:record.lng??base.lng},base,details);
+  }catch{/* Retain saved address; try a matched nearby record below. */}
+ }
+ const point=geo(record)?record:geo(base)?base:null;
+ if(point){
+  const found=(window.__tripSuggestions||[]).find(x=>contactMatch(x,name,point));
+  if(found){
+   try{
+    const details=found.placeId?await getDiscoveryPlaceDetails(found):{};
+    return contactViewDetails({...base,name,lat:point.lat,lng:point.lng},found,details);
+   }catch{return contactViewDetails({...base,name,lat:point.lat,lng:point.lng},found);}
+  }
+  const key=window.LAZY_ACRES_GEOAPIFY_KEY;
+  if(key&&key!=='PASTE_YOUR_GEOAPIFY_BROWSER_KEY_HERE'){
+   try{
+    const params=new URLSearchParams({categories:'catering,commercial,accommodation,tourism,entertainment,leisure,production.winery',
+     filter:'circle:'+Number(point.lng).toFixed(6)+','+Number(point.lat).toFixed(6)+',110',
+     bias:'proximity:'+Number(point.lng).toFixed(6)+','+Number(point.lat).toFixed(6),limit:'50',apiKey:key});
+    const response=await fetch('https://api.geoapify.com/v2/places?'+params);
+    if(response.ok){
+     const data=await response.json();
+     const match=(data.features||[]).map(mapPlaceFromFeature).find(x=>contactMatch(x,name,point));
+     if(match){
+      let details={};try{details=await getDiscoveryPlaceDetails(match);}catch{}
+      return contactViewDetails({...base,name,lat:point.lat,lng:point.lng},match,details);
+     }
+    }
+   }catch{/* Other providers or saved metadata may still be available. */}
+  }
+  // OSM has named building records that are missing from commercial POI indexes.
+  // This is a single user-triggered read, never an automatic background scan.
+  try{
+   const source=(await namedOsmMapAtClick(point)).find(x=>contactMatch(x,name,point));
+   if(source)return contactViewDetails({...base,name,lat:point.lat,lng:point.lng},source);
+  }catch{/* No business metadata; show only what we can actually establish. */}
+ }
+ return contactViewDetails({...base,name,lat:record.lat??base.lat,lng:record.lng??base.lng});
+}
+function contactRow(host,label,value,href='',actionLabel=''){
+ const row=document.createElement('div');row.className='contact-info-row';
+ const title=document.createElement('dt');title.textContent=label;
+ const content=document.createElement('dd');
+ if(value&&href){
+  const link=document.createElement('a');link.href=href;
+  if(/^https?:/.test(href)){link.target='_blank';link.rel='noopener noreferrer';}
+  link.textContent=actionLabel||value;content.append(link);
+  if(actionLabel&&actionLabel!==value){const small=document.createElement('small');small.textContent=value;content.append(small);}
+ }else content.textContent=value||'Not listed';
+ row.append(title,content);host.append(row);
+}
+function showContactDetails(data){
+ const host=$('#contactBody');host.replaceChildren();
+ const list=document.createElement('dl');list.className='contact-info-list';
+ const website=safeExternalURL(data.website),phone=String(data.phone||'').trim();
+ const dial=phone.replace(/[^+0-9]/g,''),email=contactEmail({email:data.email});
+ contactRow(list,'Website',website||'',website||'','Visit website');
+ contactRow(list,'Phone',phone,dial.length>=7?'tel:'+dial:'','Call');
+ const address=String(data.address||'').trim();
+ let mapTarget='';
+ if(geo(data))mapTarget=Number(data.lat).toFixed(6)+','+Number(data.lng).toFixed(6);
+ else if(address)mapTarget=[data.name,address].filter(Boolean).join(', ');
+ const mapURL=mapTarget?'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(mapTarget):'';
+ contactRow(list,data.addressSource==='saved'?'Saved location':'Address',address|| (mapTarget?'Mapped location':''),mapURL,'Open map');
+ contactRow(list,'Email',email,email?'mailto:'+email:'','Write email');
+ host.append(list);
+ const note=document.createElement('p');note.className='muted small-details';
+ note.textContent='Details are shown only when found in your saved entry or a matched map listing. Check business information before visiting.';
+ host.append(note);
+ const search=document.createElement('a');
+ search.href='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent([data.name,data.address||''].filter(Boolean).join(' '));
+ search.target='_blank';search.rel='noopener noreferrer';search.textContent='Look up this business on Google Maps';
+ host.append(search);
+}
+async function openContactInfo(kind,id){
+ if(!['places','activities'].includes(kind))return;
+ const record=state[kind]?.find(x=>x.id===id&&x.tripId===active);
+ if(!record)return;
+ const linked=kind==='activities'?state.places.find(x=>x.id===record.placeId&&x.tripId===active):null;
+ const token=++contactInfoRequest,dialog=$('#contactDialog');
+ $('#contactTitle').textContent=record.name||record.title||'Contact information';
+ $('#contactBody').textContent='Looking up available contact details…';
+ if(!dialog.open)dialog.showModal();
+ try{
+  const result=await contactSourceForRecord(kind,record,linked);
+  if(token!==contactInfoRequest||!dialog.open||active!==record.tripId)return;
+  showContactDetails(result);
+ }catch{
+  if(token!==contactInfoRequest||!dialog.open)return;
+  showContactDetails(contactViewDetails(record,linked||record));
+ }
+}
+
 // Expand details only for cards approaching the viewport. This keeps the free
 // Geoapify allowance usable without sending 60 Place Details calls at once.
 let discoveryObserver=null;
@@ -1398,7 +1533,14 @@ function moveBackToIdeas(id){
  persist();
  setTab('places');
 }
+$('#contactClose').addEventListener('click',()=>$('#contactDialog').close());
+$('#contactDialog').addEventListener('close',()=>{contactInfoRequest++;});
 document.addEventListener('click',async e=>{
+ const infoButton=e.target.closest('[data-contact-info]');
+ if(infoButton){
+  const [kind,id]=infoButton.dataset.contactInfo.split(':');
+  void openContactInfo(kind,id);return;
+ }
  const detailsButton=e.target.closest('[data-place-details]');
  if(detailsButton){
   const i=Number(detailsButton.dataset.placeDetails),place=window.__tripSuggestions?.[i],target=$('#poi-extra-'+i);

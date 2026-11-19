@@ -6,6 +6,8 @@ A shared, trip-focused vacation workspace for Tod and Donna. Hosted as a static 
 
 ## Current features
 
+- **v0.6.49 (2026-11-19):** Ideas and Itinerary entries now have Info buttons opening a mobile-friendly contact dialog with available website, phone, address/map and email actions. The lookup first uses a saved Idea Geoapify ID or linked Idea, then an exact-name/proximity matched discovered listing or on-demand map lookup. Missing data is clearly labeled; no contact fields or trip records are written to Supabase.
+
 - **v0.6.48 (2026-11-19):** Added a read-only All itinerary days overview under Routes, showing mapped and missing stops, timed vs. flexible plans, and the shortest proposed straight-line mileage for each routeable day. Each day can be opened for existing road-route assessment, without making bulk API calls or modifying saved plans. Clarified that opening-hours checks are provisional. No Supabase changes.
 
 - **v0.6.47 (2026-11-19):** A preview-only per-stop visit-length estimate improves driving/appointment conflict warnings. Simple listed OSM business hours can now flag closures and required waiting. Unknown and complex opening hours remain unverified. Adjusting the estimate recalculates warnings without another route request. No Supabase changes.
