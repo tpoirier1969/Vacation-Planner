@@ -6,6 +6,8 @@ A shared, trip-focused vacation workspace for Tod and Donna. Hosted as a static 
 
 ## Current features
 
+- **v0.6.31 (2026-11-19):** Exact named-place searches in both Explore search and Discover Nearby fall back to OpenStreetMap when Geoapify finds no business, respecting the same map bounds and selected category. The redundant hosted preview is retired in favor of the live canonical app. No database or stored user records changed.
+
 - **v0.6.30 live upgrade (2026-11-19):** Nearby and map business searches are restricted to the visible map rectangle; radius control removed. Coffee is interpreted as a café category rather than a required name. Bounded OpenStreetMap name fallback and precise map-click named-POI lookup supplement Geoapify, with manual pin placement retained. All loaded discovery results display numbered map markers, with page expansion. Promoted advanced route-section editing, selectable/draggable alternatives, and Ideas/Itinerary mobile filters to production. No Supabase schema, policies, or existing trip records were changed. Real signed-in browser/iPhone acceptance still required.
 
 - **v0.6.28 password minimum:** Login password setup accepts eight or more characters (rather than twelve). Existing members and household authorization are unchanged. Adding a second member requires individually registering and approving that user's Supabase account; the existing planner does not create household memberships automatically.

@@ -680,8 +680,18 @@ async function nominatimNamedSearch(term,area,limit=8){
  const response=await fetch('https://nominatim.openstreetmap.org/search?'+params,{headers:{Accept:'application/json'}});
  if(!response.ok)throw Error('OpenStreetMap HTTP '+response.status);
  const data=await response.json();
- return (Array.isArray(data)?data:[]).map(p=>({properties:{name:p.name||p.display_name?.split(',')[0],
-  formatted:p.display_name,lat:Number(p.lat),lon:Number(p.lon)},geometry:{coordinates:[Number(p.lon),Number(p.lat)]}}));
+ return (Array.isArray(data)?data:[]).map(p=>{
+  const type=String(p.type||'').toLowerCase(),group=String(p.class||'').toLowerCase();
+  const categories=['cafe','coffee_shop'].includes(type)?['catering.cafe']:
+   ['restaurant','fast_food','food_court'].includes(type)?['catering.'+type]:
+   ['hotel','motel','guest_house','hostel'].includes(type)?['accommodation']:
+   type==='winery'?['production.winery']:group==='shop'?['commercial']:
+   group==='tourism'?['tourism']:group==='leisure'?['leisure']:[];
+  return {properties:{name:p.name||p.display_name?.split(',')[0],categories,
+   formatted:p.display_name,lat:Number(p.lat),lon:Number(p.lon),
+   datasource:{raw:group==='amenity'?{amenity:type}:{}}},
+   geometry:{coordinates:[Number(p.lon),Number(p.lat)]}};
+ });
 }
 
 function normalizedBusinessName(term){
@@ -729,8 +739,9 @@ async function searchLocation(query,store=false){
    places=responses.slice(1).filter(r=>r.status==='fulfilled')
     .flatMap(r=>Array.isArray(r.value.features)?r.value.features:[]);
    // No global fallback: the user only searches the visible map.
-   if(!store&&!places.length&&!geo.length){
-    try{geo=await nominatimNamedSearch(term,area);}catch{/* First source remains authoritative when fallback unavailable. */}
+   if(!store&&!places.length){
+    try{geo.push(...await nominatimNamedSearch(term,area));}
+    catch{/* Preserve the first source and manual placement if fallback is unavailable. */}
    }
   }else{
    geo=await nominatimNamedSearch(term,area,store?1:8);
@@ -975,6 +986,27 @@ async function discover(loadMore=false){
     if(known.has(k))return false;known.add(k);return true;
    });
   const found=[...previous,...additions];
+  // When a named business is missing from Geoapify, query OSM within the
+  // identical map rectangle. Never expand this named fallback globally.
+  if(!found.length&&nameFilter&&!loadMore){
+   try{
+    const fallback=await nominatimNamedSearch(term,area,8);
+    if(token!==discoveryRequest)return;
+    const expectedCategory={
+     lodging:'Lodging',restaurants:'Restaurants',coffee_shops:'Coffee Shops',
+     wineries:'Wineries',shopping:'Shopping',hiking:'Hiking',
+     boating:'Boating',fishing:'Fishing',events:'Events',attractions:'Attractions'
+    }[category];
+    for(const feature of fallback){
+     if(restaurantOnly&&!isCustomerFacingRestaurant(feature.properties||{}))continue;
+     const item=discoveryFoundPlace(feature,category,match,restaurantOnly);
+     if(!item||expectedCategory&&item.category!==expectedCategory)continue;
+     const id=item.placeId||[item.name.toLowerCase(),item.lat.toFixed(4),item.lng.toFixed(4)].join('|');
+     if(known.has(id))continue;
+     known.add(id);found.push(item);
+    }
+   }catch{/* Unavailable public fallback does not break primary results. */}
+  }
   window.__tripSuggestions=found;discoveryOffset+=DISCOVERY_PAGE_SIZE;
   const scroller=document.querySelector('.explore-side'),oldScroll=scroller?.scrollTop||0;
   results.innerHTML=found.length?found.map(discoveryCard).join(''):
