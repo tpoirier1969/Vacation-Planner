@@ -5,7 +5,7 @@ const js=readFileSync(new URL('../routes.js',import.meta.url),'utf8');
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const start=js.indexOf('function straightLineMiles('),end=js.indexOf('function createController(config)',start);
 assert.ok(start>=0&&end>start);
-const domain=new Function('pointOK','MAX_WAYPOINTS',js.slice(start,end)+';return {suggestItineraryRoutes};')(
+const domain=new Function('pointOK','MAX_WAYPOINTS',js.slice(start,end)+';return {suggestItineraryRoutes,itineraryTripOverview};')(
  p=>p&&Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lng))&&p.lat!=null&&p.lng!=null,16);
 const item=(id,lat,lng,time='',day='2026-12-22')=>({id,title:id,lat,lng,time,date:day});
 test('Timed appointments stay chronologically ordered, flexible stops remain optional to reorder',()=>{
@@ -69,4 +69,27 @@ test('Estimated visit duration is preview-only and not a saved route setting',()
  assert.match(html,/id="routeVisitEstimate"/);
  assert.match(js,/option\.roadLegStats=result\.legStats/);
  assert.match(js,/routeVisitEstimate'\)\.addEventListener\('change'/);
+});
+
+test('Trip-wide overview lists each dated day and distinguishes mapped from unmapped',()=>{
+ const data=[
+  item('museum',45,-87,'10:00','2026-12-22'),
+  item('dinner',45,-87.2,'18:00','2026-12-22'),
+  item('unmapped',null,null,'','2026-12-22'),
+  item('single',46,-86,'','2026-12-23'),
+  item('undated',45,-87,'','')
+ ];
+ const days=domain.itineraryTripOverview(data);
+ assert.deepEqual(days.map(x=>x.day),['2026-12-22','2026-12-23']);
+ assert.equal(days[0].mapped,2);assert.equal(days[0].unmapped,1);
+ assert.equal(days[0].timed,2);assert.equal(days[0].routeable,true);
+ assert.equal(days[1].routeable,false);assert.equal(days[1].bestDirectMiles,null);
+});
+test('Overview is read-only and exposes an explicit per-day review action',()=>{
+ assert.match(html,/id="routeTripOverviewRows"/);
+ assert.match(js,/data-route-review-day/);
+ assert.match(js,/function itineraryTripOverview/);
+ assert.match(js,/void previewItinerary\(\)/);
+ const pair=[item('a',45,-87,'09:00'),item('b',45,-87.1,'13:00')];
+ const prior=JSON.stringify(pair);domain.itineraryTripOverview(pair);assert.equal(JSON.stringify(pair),prior);
 });

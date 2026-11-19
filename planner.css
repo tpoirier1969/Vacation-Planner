@@ -829,3 +829,7 @@ footer{
 .route-itinerary-choice small{color:#58716e}
 .route-itinerary-choice button{min-height:42px;flex:0 1 auto}
 .route-itinerary-options:not(:empty){margin-top:9px}
+.route-trip-overview{border-top:1px solid #e0d3b9;margin-top:12px;padding-top:8px}
+.route-trip-overview>summary{cursor:pointer;font-weight:700;color:#205d60;padding:7px 3px}
+.route-trip-overview:focus-within{outline-offset:3px}
+.route-trip-day-row{align-items:center}

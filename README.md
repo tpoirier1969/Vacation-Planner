@@ -6,6 +6,8 @@ A shared, trip-focused vacation workspace for Tod and Donna. Hosted as a static 
 
 ## Current features
 
+- **v0.6.48 (2026-11-19):** Added a read-only All itinerary days overview under Routes, showing mapped and missing stops, timed vs. flexible plans, and the shortest proposed straight-line mileage for each routeable day. Each day can be opened for existing road-route assessment, without making bulk API calls or modifying saved plans. Clarified that opening-hours checks are provisional. No Supabase changes.
+
 - **v0.6.47 (2026-11-19):** A preview-only per-stop visit-length estimate improves driving/appointment conflict warnings. Simple listed OSM business hours can now flag closures and required waiting. Unknown and complex opening hours remain unverified. Adjusting the estimate recalculates warnings without another route request. No Supabase changes.
 
 - **v0.6.46 (2026-11-19):** First itinerary-planning improvement after source QA: route proposals can tentatively insert unscheduled mapped activities between fixed-time appointments when a geographic lower-bound permits, while preserving appointment order. Road-time conflict checks now sum all legs through intervening flexible stops and flag unknown visit durations. Both options remain previews until explicitly accepted; no stored itinerary, route or Supabase changes during preview.

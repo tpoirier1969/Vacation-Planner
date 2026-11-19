@@ -79,3 +79,8 @@ test('Changing stored opening hours invalidates a route proposal',()=>{
  const initial=f.itinerarySnapshot(entries,'2026-12-22');entries[0].hours='24/7';
  assert.notEqual(f.itinerarySnapshot(entries,'2026-12-22'),initial);
 });
+
+test('Opening-hours uncertainty remains explicit in review status',()=>{
+ const result=f.itineraryDrivingAssessment([stop('Museum','10:00'),stop('Lunch','11:00')],[{durationS:600}]);
+ assert.match(result.message,/opening hours/);
+});

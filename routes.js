@@ -204,6 +204,22 @@ function suggestItineraryRoutes(activities,day){
  }))};
 }
 
+// Read-only, trip-wide itinerary coverage. Distances are between listed stops
+// on a single day, never road distances or travel between overnight locations.
+function itineraryTripOverview(activities){
+ const all=Array.isArray(activities)?activities:[];
+ const days=[...new Set(all.filter(x=>/^\d{4}-\d{2}-\d{2}$/.test(x.date||'')).map(x=>x.date))].sort();
+ return days.map(day=>{
+  const records=all.filter(x=>x.date===day),mapped=records.filter(pointOK);
+  const proposal=suggestItineraryRoutes(all,day);
+  const best=proposal.options.length?proposal.options.reduce((a,b)=>a.directMiles<=b.directMiles?a:b):null;
+  return {day,total:records.length,mapped:mapped.length,unmapped:records.length-mapped.length,
+   timed:records.filter(x=>minutesOfDay(x.time)!==null).length,
+   flexible:records.filter(x=>minutesOfDay(x.time)===null).length,
+   routeable:!!best,bestDirectMiles:best?.directMiles??null,reason:proposal.reason||''};
+ });
+}
+
 // Exact road leg durations come only from the routing service. An entry
 // without an end time is treated as departing at its start time: a lower-bound
 // feasibility check, not a promise that the itinerary will fit.
@@ -305,7 +321,7 @@ function itineraryDrivingAssessment(stops,legs,settings={}){
    'No driving-only travel-time conflicts detected between timed appointments.');
  if(uncertainIntervals.length)message+=' '+uncertainIntervals.length+' interval(s) include flexible stops; their visit durations are unknown.';
  if(unparsedHours)message+=' '+unparsedHours+' opening-hours entry/entries could not be interpreted.';
- message+=' Provisional only: parking, traffic, missing/holiday hours and actual visit durations require review.';
+ message+=' Provisional only: parking, traffic, missing/holiday opening hours and actual visit durations require review.';
  return {checked:true,issues,notes,uncertainIntervals,unparsedHours,message};
 }
 function itinerarySnapshot(activities,day){
@@ -738,6 +754,18 @@ function createController(config){
   daySelect.value=chosen;
   $('routeSuggestItinerary').disabled=!chosen||itineraryPreviewBusy;
   $('routeSuggestItinerary').textContent=itineraryPreviewBusy?'Checking road times…':'Suggest from itinerary';
+  const overviewRows=itineraryTripOverview(config.getActivities());
+  $('routeTripOverviewRows').innerHTML=overviewRows.length?
+   '<p class="muted small-details">'+overviewRows.length+' scheduled day(s). Distances below are straight-line estimates within each day, not road miles or travel between days.</p>'+
+   overviewRows.map(row=>'<div class="route-itinerary-choice route-trip-day-row">'+
+    '<div><strong>'+esc(row.day)+'</strong>'+
+    '<small>'+row.mapped+'/'+row.total+' mapped · '+row.timed+' timed · '+row.flexible+' flexible'+
+     (row.unmapped?' · '+row.unmapped+' need locations':'')+'</small>'+
+    '<small>'+(row.routeable?'Best listed proposal: '+row.bestDirectMiles.toFixed(1)+' straight-line mi · road miles unchecked':
+     esc(row.reason))+'</small></div>'+
+    '<button type="button" class="secondary small" data-route-review-day="'+esc(row.day)+'" '+
+    (!row.routeable||itineraryPreviewBusy?'disabled':'')+'>Review this day</button></div>').join(''):
+    '<p class="muted small-details">Add dates to itinerary activities to compare trip days.</p>';
   $('routeItineraryOptions').innerHTML=itinerarySuggestions?.day===chosen?
    (itinerarySuggestions.options.length?itinerarySuggestions.options.map((option,i)=>
      '<div class="route-itinerary-choice"><div><strong>'+esc(option.label)+'</strong>'+
@@ -832,6 +860,15 @@ function createController(config){
   $('routeNew').addEventListener('click',()=>addRoute());
   $('routeSuggestItinerary').addEventListener('click',previewItinerary);
   $('routeItineraryDay').addEventListener('change',e=>{itineraryPreviewRequest++;suggestedDay=e.target.value;itinerarySuggestions=null;render();});
+  $('routeTripOverviewRows').addEventListener('click',e=>{
+   const button=e.target.closest('[data-route-review-day]');
+   if(!button||itineraryPreviewBusy)return;
+   const day=button.dataset.routeReviewDay;
+   if(!availableItineraryDays().includes(day))return;
+   itineraryPreviewRequest++;itinerarySuggestions=null;suggestedDay=day;
+   $('routeItineraryDay').value=day;
+   void previewItinerary();
+  });
   $('routeVisitEstimate').addEventListener('change',()=>{
    if(!itinerarySuggestions||itineraryPreviewBusy)return;
    for(const option of itinerarySuggestions.options)
@@ -953,6 +990,6 @@ function createController(config){
  bind();
  return {attachMap,render,onTripChange,consumeMapClick,cancelPick,isPicking:()=>!!pick,getPick:()=>pick,setTool};
 }
-root.VacationRouteDomain=Object.freeze({newRoute,decodePolyline,routeURL,parseRoute,windowError,summary,pointOK,sectionGeometry,suggestItineraryRoutes,itineraryDrivingAssessment,itinerarySnapshot});
+root.VacationRouteDomain=Object.freeze({newRoute,decodePolyline,routeURL,parseRoute,windowError,summary,pointOK,sectionGeometry,suggestItineraryRoutes,itineraryTripOverview,itineraryDrivingAssessment,itinerarySnapshot});
 root.createVacationRoutes=createController;
 })(window);

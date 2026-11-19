@@ -33,6 +33,7 @@
  <section class="route-itinerary-suggestions" aria-label="Suggest routes from your itinerary">
  <div class="route-itinerary-controls"><label class="field">Route from itinerary day<select id="routeItineraryDay"></select></label><label class="field">Time at each stop (estimate)<select id="routeVisitEstimate"><option value="">Unknown — driving only</option><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option><option value="90">1½ hours</option><option value="120">2 hours</option><option value="180">3 hours</option></select></label><button type="button" id="routeSuggestItinerary" class="secondary">Suggest from itinerary</button></div>
  <div id="routeItineraryOptions" class="route-itinerary-options" aria-live="polite"></div>
+ <details class="route-trip-overview"><summary>All itinerary days</summary><div id="routeTripOverviewRows" aria-live="polite"></div></details>
  </section>
  <p class="muted small-details route-drag-help">Select a colored route, then drag its line to reshape it. You can also tap the line and drag its handle.</p>
  <p id="routeEmpty" class="muted small-details">Create your first route.</p>
