@@ -37,7 +37,7 @@ test('map search returns partially named restaurants and offers Idea + Itinerary
  const dependencies={
   URLSearchParams,document:{activeElement:null},HTMLElement:class{},
   window:{LAZY_ACRES_GEOAPIFY_KEY:'test-key',matchMedia:()=>({matches:true})},
-  map:{getCenter:()=>({lat:45.158674,lng:-87.171573})},trip:()=>({}),$,fetch,
+  map:{getCenter:()=>({lat:45.158674,lng:-87.171573}),getBounds:()=>({getWest:()=>-87.5,getSouth:()=>44.9,getEast:()=>-86.9,getNorth:()=>45.5})},trip:()=>({}),$,fetch,
   mapPlaceFromFeature:f=>({name:f.properties.name,lat:f.properties.lat,lng:f.properties.lon,
    placeId:f.properties.place_id,categories:f.properties.categories}),
   detectedCategory:()=> 'Restaurants',esc:String,
@@ -45,13 +45,13 @@ test('map search returns partially named restaurants and offers Idea + Itinerary
   saveDiscoveredIdea(){return true;},planDiscoveredPlace(){return true;},
   DISCOVERY_CATEGORIES:{all:'tourism,entertainment,catering'}
  };
- const code=section('function normalizedBusinessName(', '// Geoapify Places API');
+ const code=section('function visibleMapArea(', '// Geoapify Places API');
  const create=new Function('d', 'const {URLSearchParams,document,HTMLElement,window,map,trip,$,fetch,mapPlaceFromFeature,detectedCategory,esc,setMobileSheet,setTab,initMap,setTimeout,L,saveDiscoveredIdea,planDiscoveredPlace,DISCOVERY_CATEGORIES}=d;let searchToken=0;'+code+';return {searchLocation,results:()=>searchMatches};');
  const api=create(dependencies);
  await api.searchLocation('Old Post Office');
  assert.equal(api.results()[0]?.name,'Old Post Office Restaurant');
  assert.equal(api.results().length,1);
- assert.ok(calls.some(x=>x.categories==='catering'&&x.name==='Old Post Office'&&x.filter?.startsWith('circle:')));
+ assert.ok(calls.some(x=>x.categories==='catering'&&x.name==='Old Post Office'&&x.filter?.startsWith('rect:')));
  assert.ok(ui.get('#searchMatches').innerHTML.includes('data-search-save="0"'));
  assert.ok(ui.get('#searchMatches').innerHTML.includes('data-search-plan="0"'));
 });

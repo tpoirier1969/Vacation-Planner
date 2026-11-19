@@ -13,6 +13,8 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **v0.6.30 released to canonical main (2026-11-19):** Both Explore search types now use visible map rectangle only; coffee terminology and named-place fallback improved; map-click OpenStreetMap POI fallback added; all paged results numbered on map. Integrated route-section editor, draggable alternatives (up to 3), and mobile Ideas/Itinerary browsing promoted from preview. No Supabase modifications. Live authenticated device/Geoapify acceptance outstanding.
+
 - **v0.6.28 (2026-11-18):** Password setup minimum reduced to 8; iPhone login continues to use each member's own Supabase account. Database check found only one existing `vacation_members` record in `tod-donna-shared`. Donna must be enrolled separately as a second approved user; cannot infer her identity from the existing member record. Avoid automatic self-approval.
 
 - **v0.6.27 password login (2026-11-18):** Primary sign-in method now Supabase `signInWithPassword`, with existing approved-account membership verification. Logged-in household members can set their password through `auth.updateUser` without a new email, then authenticate in the iPhone Home Screen shortcut. Email link retained as optional fallback. Four mocked regression tests and read-only web preview verified; real iPhone Safari/Home Screen acceptance still required. This supersedes the earlier OTP proposal, avoiding free-tier mail rate limits during normal sign-in.
@@ -38,7 +40,7 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 4. Trip-specific sharing/access beyond current household model, if needed.
 5. Scheduler integration: connect to the existing Lazy Acres Scheduler deliberately, without creating a second calendar system.
 6. Cross-app integrations with existing Shopping/Packing and Boondocking apps, without migrating or duplicating their authoritative records.
-7. Basic route builder implemented in v0.6.19: multiple named Supabase routes, Geoapify driving paths, road-shaping clicks, ordered waypoints, linked Ideas/itinerary stops, start/end date/time, route preferences, visibility, alternative copies and distance/time comparisons. **Outstanding:** route-corridor attraction discovery, configurable maximum detour time, true alternate geometry suggestions and simultaneous map overlays, and schedule-linked multi-day routing.
+7. Basic route builder implemented in v0.6.19: multiple named Supabase routes, Geoapify driving paths, road-shaping clicks, ordered waypoints, linked Ideas/itinerary stops, start/end date/time, route preferences, visibility, alternative copies and distance/time comparisons. **Outstanding:** route-corridor attraction discovery, configurable maximum detour time, schedule-linked multi-day routing, and real-device alternate route acceptance.
 8. Deeper fishing access, boat launches, trails, events discovery, and weather along routes/dates.
 9. Browser save extension, location-aware research notes, and optional trip photos.
 10. Review quality of satellite imagery.

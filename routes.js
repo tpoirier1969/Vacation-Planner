@@ -4,6 +4,8 @@
 const MAX_WAYPOINTS=16,MAX_ROUTES=40;
 const DEFAULT={strategy:'balanced',mode:'drive',avoidHighways:false,avoidTolls:false,avoidFerries:false};
 const STRATEGIES=['balanced','short','less_maneuvers'],MODES=['drive','light_truck'];
+const STRATEGY_NAMES={balanced:'Balanced',short:'Shortest',less_maneuvers:'Fewer turns'};
+const ROUTE_COLORS=['#b45237','#22769c','#8c609e'];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
 const pointOK=p=>!!p&&p.lat!=null&&p.lng!=null&&p.lat!==''&&p.lng!==''&&Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lng))&&Math.abs(Number(p.lat))<=90&&Math.abs(Number(p.lng))<=180;
 function newRoute(id,tripId,name='New route'){
@@ -52,6 +54,39 @@ function parseRoute(data){
  if(p.distance==null||p.time==null||!Number.isFinite(Number(p.distance))||!Number.isFinite(Number(p.time)))throw Error('Missing route distance or duration.');
  return {polyline,distanceM:Number(p.distance),durationS:Number(p.time),legStats:(p.legs||[]).map(x=>({distanceM:Number(x.distance)||0,durationS:Number(x.time)||0}))};
 }
+// Compare actual road geometry, not just estimated distance or strategy labels.
+// Resample by travelled distance so matching roads aren't treated as different
+// merely because one response contains a denser polyline.
+function samplesByDistance(polyline,count=18){
+ const coords=decodePolyline(polyline);
+ if(coords.length<2)return [];
+ const accumulated=[0];
+ for(let i=1;i<coords.length;i++){
+  const p=coords[i-1],q=coords[i],scale=Math.cos((p[0]+q[0])/2*Math.PI/180);
+  accumulated.push(accumulated[i-1]+Math.hypot(q[0]-p[0],(q[1]-p[1])*scale));
+ }
+ const total=accumulated[accumulated.length-1];
+ if(total<=0)return [];
+ const out=[];let cursor=1;
+ for(let i=0;i<=count;i++){
+  const target=total*i/count;
+  while(cursor<accumulated.length-1&&accumulated[cursor]<target)cursor++;
+  const a=accumulated[cursor-1],b=accumulated[cursor],t=b>a?(target-a)/(b-a):0;
+  const p=coords[cursor-1],q=coords[cursor];
+  out.push([p[0]+(q[0]-p[0])*t,p[1]+(q[1]-p[1])*t]);
+ }
+ return out;
+}
+function sameRoad(a,b){
+ const x=samplesByDistance(a),y=samplesByDistance(b);
+ if(!x.length||x.length!==y.length)return false;
+ let different=0;
+ for(let i=1;i<x.length-1;i++){
+  const p=x[i],q=y[i],scale=Math.cos(p[0]*Math.PI/180);
+  if(Math.hypot(p[0]-q[0],(p[1]-q[1])*scale)>0.015)different++;
+ }
+ return different<3;
+}
 function windowError(route){
  if(route.startDate&&route.endDate&&route.endDate<route.startDate)return 'End day is before start day.';
  if(route.startDate&&route.endDate&&route.endDate===route.startDate&&route.startTime&&route.endTime&&route.endTime<=route.startTime)return 'End time must follow start time on the same day.';
@@ -62,6 +97,23 @@ function summary(r){
  const totalMins=Math.max(1,Math.round(r.durationS/60)),hours=Math.floor(totalMins/60),mins=totalMins%60;
  return (r.distanceM/1609.344).toFixed(0)+' mi · '+(hours?hours+' hr ':'')+mins+' min driving';
 }
+// Separate a calculated road line at its ordered waypoints for precise map selection.
+function sectionGeometry(coords,points){
+ if(!Array.isArray(coords)||coords.length<points.length||points.length<2)return null;
+ const cuts=[0];let previous=0;
+ for(let j=1;j<points.length-1;j++){
+  const p=points[j],last=coords.length-(points.length-j);
+  if(!pointOK(p)||last<=previous)return null;
+  let best=previous+1,distance=Infinity,scale=Math.cos(Number(p.lat)*Math.PI/180);
+  for(let k=previous+1;k<=last;k++){
+   const dy=coords[k][0]-Number(p.lat),dx=(coords[k][1]-Number(p.lng))*scale,d=dy*dy+dx*dx;
+   if(d<distance){distance=d;best=k;}
+  }
+  cuts.push(best);previous=best;
+ }
+ cuts.push(coords.length-1);
+ return points.slice(0,-1).map((_,i)=>coords.slice(cuts[i],cuts[i+1]+1));
+}
 function routeType(r){
  if(r?.routeKind==='day')return 'day';
  const direction=r?.preferences?.journeyDirection;
@@ -70,6 +122,7 @@ function routeType(r){
 function createController(config){
  const $=id=>document.getElementById(id);
  let currentId='',tool='discover',pick='',map=null,layer=null,undoStack=[],busy=false,status='';
+ let dragHandle=null,dragHandleLeg=-1,dragHandleRoute='',directDrag=null;
  const routes=()=>{const t=config.getTrip();return t?(config.getRoutes()||[]).filter(r=>r.tripId===t.id).sort((a,b)=>(a.routeOrder||0)-(b.routeOrder||0)):[];};
  const routePoints=r=>[r.start,...(r.waypoints||[]),r.end];
  const sectionKey=(points,i)=>String(i===0?'start':points[i].id||'point-'+i)+'>'+String(i===points.length-2?'end':points[i+1].id||'point-'+(i+1));
@@ -78,7 +131,7 @@ function createController(config){
  let selectedSection='';
  const selected=()=>routes().find(r=>r.id===currentId)||null;
  const report=msg=>{status=msg;if($('routeStatus'))$('routeStatus').textContent=msg;};
- function selectDefault(){if(!routes().some(r=>r.id===currentId)){currentId=routes()[0]?.id||'';undoStack=[];}}
+ function selectDefault(){if(!routes().some(r=>r.id===currentId)){currentId=routes()[0]?.id||'';undoStack=[];selectedSection='';}}
  function invalidate(r){r.polyline='';r.distanceM=null;r.durationS=null;r.legStats=[];r.segments=[];}
  function update(fn,changedRoad=false){
   const r=selected();if(!r)return;
@@ -89,30 +142,120 @@ function createController(config){
   if(changedRoad){r.gaps=validGaps(r);invalidate(r);}
   config.persist();
  }
- function draw(){
-  if(!layer)return;layer.clearLayers();
-  const r=selected();if(!r||r.visible===false||document.getElementById('mapShowRoutes')?.checked===false)return;
-  const geometries=(r.segments||[]).length?r.segments:(r.polyline&&!validGaps(r).length?[{polyline:r.polyline,startIndex:0}]:[]);
-  for(const segment of geometries){const coords=decodePolyline(segment.polyline);
-   if(coords.length>1){const line=L.polyline(coords,{color:'#b45237',weight:5,opacity:.88,interactive:true}).addTo(layer);
-    line.on('click',()=>{selectedSection=sectionRows(r)[segment.startIndex||0]?.key||'';render();$('routeSectionList')?.scrollIntoView({behavior:'smooth',block:'nearest'});});}
+ function comparedRoutes(){
+  const r=selected(),group=r?.preferences?.compareGroup;
+  if(!r)return [];
+  if(!group||!$('routeShowAlternatives')?.checked)return [r];
+  const options=routes().filter(x=>x.preferences?.compareGroup===group&&x.visible!==false);
+  return options.slice(0,3);
+ }
+ function routeGeometry(r){
+  return (r.segments||[]).length?r.segments:(r.polyline&&!validGaps(r).length?[{polyline:r.polyline,startIndex:0,endIndex:(r.waypoints||[]).length}]:[]);
+ }
+ function addViaAt(routeId,leg,latlng){
+  if(busy||!pointOK(latlng))return;
+  const route=selected();
+  if(!route||route.id!==routeId||route.waypoints.length>=MAX_WAYPOINTS){
+   report('Select a route with space for another road point.');return;
   }
-  for(const [name,p,color] of [['Start',r.start,'#28766f'],['End',r.end,'#b45237']]){
-   if(pointOK(p))L.circleMarker([p.lat,p.lng],{radius:7,color,fillColor:color,fillOpacity:0.8})
-    .bindTooltip(name+': '+p.label).addTo(layer);
+  const rows=sectionRows(route);
+  if(!rows[leg]||rows[leg].gap)return report('Reconnect the section before reshaping it.');
+  update(r=>{r.waypoints.splice(leg,0,{id:config.uid(),lat:Number(latlng.lat),lng:Number(latlng.lng),label:'Dragged road point',kind:'via'});},true);
+  selectedSection='';dragHandle=null;
+  status='Road point added. Recalculating the selected alternative…';
+  render();void calculate();
+ }
+ function showDragHandle(latlng,leg,routeId){
+  if(busy||pick||!map||!pointOK(latlng))return;
+  if(dragHandle&&dragHandleRoute===routeId&&dragHandleLeg===leg){dragHandle.setLatLng(latlng);return;}
+  dragHandle=null;dragHandleLeg=leg;dragHandleRoute=routeId;
+  if(typeof L.marker!=='function'||typeof L.divIcon!=='function')return;
+  const icon=L.divIcon({className:'route-drag-handle-wrap',html:'<span class="route-drag-handle" aria-hidden="true">↕</span>',iconSize:[30,30],iconAnchor:[15,15]});
+  const marker=L.marker(latlng,{draggable:true,autoPan:true,icon,zIndexOffset:900}).addTo(layer);
+  marker.on('dragstart',()=>{if(map.dragging?.enabled?.())map.dragging.disable();});
+  marker.on('dragend',e=>{map.dragging?.enable?.();addViaAt(routeId,leg,e.target.getLatLng());});
+  dragHandle=marker;
+ }
+ function draw(){
+  if(!layer)return;
+  layer.clearLayers();dragHandle=null;dragHandleLeg=-1;dragHandleRoute='';
+  const r=selected();if(!r||document.getElementById('mapShowRoutes')?.checked===false)return;
+  const shown=comparedRoutes();
+  const ordered=[...shown.filter(x=>x.id!==currentId),...shown.filter(x=>x.id===currentId)];
+  for(const route of ordered){
+   const variantIndex=shown.findIndex(x=>x.id===route.id);
+   if(route.visible===false)continue;
+   const active=route.id===currentId,rows=sectionRows(route),points=routePoints(route);
+   const color=ROUTE_COLORS[variantIndex%ROUTE_COLORS.length];
+   for(const segment of routeGeometry(route)){
+    const coords=decodePolyline(segment.polyline),start=segment.startIndex||0,end=segment.endIndex??rows.length-1;
+    if(coords.length<2||end<start)continue;
+    const parts=sectionGeometry(coords,points.slice(start,end+2))||[coords];
+    for(const [index,part] of parts.entries()){
+     if(part.length<2)continue;
+     const row=rows[start+index];if(!row)continue;
+     const focused=active&&selectedSection===row.key;
+     const line=L.polyline(part,{color:focused?'#187b79':color,weight:focused?9:active?7:5,opacity:active?1:.69,interactive:true}).addTo(layer);
+     line.on('click',e=>{
+      if(!active){currentId=route.id;undoStack=[];selectedSection='';pick='';status='Alternative selected. Drag its path to customize it.';render();return;}
+      selectedSection=row.key;render();showDragHandle(e.latlng||{lat:part[Math.floor(part.length/2)][0],lng:part[Math.floor(part.length/2)][1]},row.i,route.id);
+      $('routeSectionList')?.scrollIntoView({behavior:'smooth',block:'nearest'});
+     });
+     if(active&&!row.gap){
+      line.on('mouseover',e=>showDragHandle(e.latlng,row.i,route.id));
+      line.on('mousedown',e=>{
+       if(busy||pick||!pointOK(e.latlng)||!map?.on)return;
+       const origin=e.latlng;let last=origin,moved=false;
+       const move=ev=>{
+        if(!pointOK(ev.latlng))return;
+        last=ev.latlng;
+        const scale=Math.cos(origin.lat*Math.PI/180);
+        if(Math.hypot(last.lat-origin.lat,(last.lng-origin.lng)*scale)>.00008)moved=true;
+        if(moved)showDragHandle(last,row.i,route.id);
+       };
+       const finish=()=>{
+        map.off?.('mousemove',move);map.dragging?.enable?.();directDrag=null;
+        if(moved)addViaAt(route.id,row.i,last);
+       };
+       directDrag={move,finish};map.dragging?.disable?.();
+       map.on('mousemove',move);map.once('mouseup',finish);
+      });
+     }
+    }
+   }
+  }
+  if(r.visible===false)return;
+  for(const [role,p,color] of [['start',r.start,'#28766f'],['end',r.end,'#b45237']]){
+   if(!pointOK(p))continue;
+   if(typeof L.marker==='function'&&typeof L.divIcon==='function'){
+    const marker=L.marker([p.lat,p.lng],{draggable:true,icon:L.divIcon({className:'route-endpoint-wrap',html:'<span class="route-endpoint" style="--endpoint-color:'+color+'">'+(role==='start'?'A':'B')+'</span>',iconSize:[30,30],iconAnchor:[15,15]})}).addTo(layer);
+    marker.bindTooltip?.((role==='start'?'Start: ':'Destination: ')+p.label);
+    marker.on('dragend',e=>{
+     const where=e.target.getLatLng();update(route=>{route[role]={...route[role],lat:where.lat,lng:where.lng,label:'Moved '+(role==='start'?'start':'destination')};},true);
+     status='Endpoint moved. Recalculating…';render();void calculate();
+    });
+   }else L.circleMarker([p.lat,p.lng],{radius:7,color,fillColor:color,fillOpacity:0.8}).bindTooltip((role==='start'?'Start: ':'End: ')+p.label).addTo(layer);
   }
   for(const [i,p] of (r.waypoints||[]).entries()){
-   if(pointOK(p))L.circleMarker([p.lat,p.lng],{radius:5,color:'#b08b47',fillColor:'#edc376',fillOpacity:0.9})
-    .bindTooltip((i+1)+'. '+p.label).addTo(layer);
+   if(!pointOK(p))continue;
+   if(p.kind!=='stop'&&typeof L.marker==='function'&&typeof L.divIcon==='function'){
+    const m=L.marker([p.lat,p.lng],{draggable:true,icon:L.divIcon({className:'route-via-wrap',html:'<span class="route-via-marker">◆</span>',iconSize:[23,23],iconAnchor:[11,11]})}).addTo(layer);
+    m.bindTooltip?.('Drag road point '+(i+1));
+    m.on('dragend',e=>{
+     const q=e.target.getLatLng();update(route=>{route.waypoints[i]={...route.waypoints[i],lat:q.lat,lng:q.lng,label:'Moved road point'};},true);
+     status='Road point moved. Recalculating…';render();void calculate();
+    });
+   }else L.circleMarker([p.lat,p.lng],{radius:5,color:'#b08b47',fillColor:'#edc376',fillOpacity:.9}).bindTooltip((i+1)+'. '+p.label).addTo(layer);
   }
  }
  function attachMap(next){
-  if(next!==map){if(layer&&map)map.removeLayer(layer);map=next;layer=map?L.layerGroup().addTo(map):null;}
+  if(next!==map){if(directDrag&&map){map.off?.('mousemove',directDrag.move);map.off?.('mouseup',directDrag.finish);map.dragging?.enable?.();directDrag=null;}if(layer&&map)map.removeLayer(layer);map=next;layer=map?L.layerGroup().addTo(map):null;}
   draw();
  }
  function fitMap(){
   const r=selected();if(!map||!r)return;
-  const coords=(r.segments||[]).length?r.segments.flatMap(x=>decodePolyline(x.polyline)):(r.polyline&&!validGaps(r).length?decodePolyline(r.polyline):[r.start,...(r.waypoints||[]),r.end].filter(pointOK).map(p=>[p.lat,p.lng]));
+  const shown=comparedRoutes(),combined=shown.flatMap(x=>routeGeometry(x).flatMap(seg=>decodePolyline(seg.polyline)));
+  const coords=combined.length?combined:[r.start,...(r.waypoints||[]),r.end].filter(pointOK).map(p=>[p.lat,p.lng]);
   if(coords.length>1)map.fitBounds(L.latLngBounds(coords).pad(0.12),{maxZoom:14});
   else if(coords.length===1)map.setView(coords[0],13);
  }
@@ -143,18 +286,18 @@ function createController(config){
   const r=copy&&base?{...JSON.parse(JSON.stringify(base)),id:config.uid(),name:(base.name+' — alternative').slice(0,160)}:
    newRoute(config.uid(),t.id,n?'Route '+(n+1):'Outbound route');
   r.routeOrder=Math.max(-1,...routes().map(x=>x.routeOrder||0))+1;
-  config.getRoutes().push(r);currentId=r.id;undoStack=[];pick='';status=copy?'Saved separate alternative. Recalculate to compare.':'Add start and end points to begin.';
+  config.getRoutes().push(r);currentId=r.id;undoStack=[];selectedSection='';pick='';status=copy?'Saved separate alternative. Recalculate to compare.':'Add start and end points to begin.';
   config.persist();
  }
  function removeRoute(){
   const r=selected();if(!r||!confirm('Delete the saved route "'+r.name+'"?'))return;
   const list=config.getRoutes(),i=list.findIndex(x=>x.id===r.id);if(i>=0)list.splice(i,1);
-  currentId='';undoStack=[];pick='';config.persist();
+  currentId='';undoStack=[];selectedSection='';pick='';config.persist();
  }
  function undo(){
   const r=selected(),old=undoStack.pop();if(!r||!old)return;
   for(const k of Object.keys(r))delete r[k];
-  Object.assign(r,old);status='Last edit undone.';config.persist();
+  Object.assign(r,old);status='Last edit undone.';config.persist();render();
  }
  function addExisting(){
   const r=selected(),v=$('routeSourceStop').value;if(!r||!v)return;
@@ -182,10 +325,24 @@ function createController(config){
    status='Found '+(p.formatted||text)+'. Check the marker on the map.';render();fitMap();
   }catch(e){report('Location lookup failed: '+e.message);}
  }
- function toggleSection(key){
-  const r=selected(),row=r&&sectionRows(r).find(x=>x.key===key);if(!row)return;
-  update(route=>{const gaps=new Set(validGaps(route));if(gaps.has(key))gaps.delete(key);else gaps.add(key);route.gaps=[...gaps];},true);
-  selectedSection=key;status=row.gap?'Driving section reconnected. Recalculate roads.':'Driving section removed; its endpoints are retained. Recalculate remaining roads.';render();
+ function setSectionConnection(key,connected){
+  const r=selected(),row=r&&sectionRows(r).find(x=>x.key===key);
+  if(!row||row.gap===!connected)return;
+  update(route=>{
+   const gaps=new Set(validGaps(route));
+   if(connected)gaps.delete(key);else gaps.add(key);
+   route.gaps=[...gaps];
+  },true);
+  selectedSection=key;
+  status=connected?'Driving section reconnected. Recalculate roads.':'Driving section skipped. Endpoints are retained; Undo restores it.';
+  render();
+ }
+ function clearEndpoint(role){
+  const r=selected();if(!r||!['start','end'].includes(role)||!r[role])return;
+  update(route=>{route[role]=null;},true);
+  selectedSection='';
+  status=(role==='start'?'Starting point':'Destination')+' removed. Stops remain. Undo restores it.';
+  render();
  }
  function moveRoute(direction){
   const list=routes(),index=list.findIndex(r=>r.id===currentId),other=index+direction;
@@ -193,6 +350,67 @@ function createController(config){
   [list[index],list[other]]=[list[other],list[index]];
   list.forEach((r,i)=>r.routeOrder=i);
   config.persist();status='Route order saved.';render();
+ }
+ function applyRouteResult(route,result){
+  route.polyline=result.polyline;route.distanceM=result.distanceM;route.durationS=result.durationS;
+  route.legStats=result.legStats||[];
+  route.segments=[{startIndex:0,endIndex:(route.waypoints||[]).length,polyline:result.polyline,distanceM:result.distanceM,durationS:result.durationS}];
+ }
+ async function generateAlternatives(){
+  const r=selected(),key=root.LAZY_ACRES_GEOAPIFY_KEY;
+  if(!r||busy)return;
+  if(!key)return report('Geoapify routing is not configured.');
+  if(!pointOK(r.start)||!pointOK(r.end)||(r.waypoints||[]).some(p=>!pointOK(p)))return report('Map the start, destination and each stop first.');
+  if(validGaps(r).length)return report('Reconnect skipped driving sections to compare full routes.');
+  if(routes().length>=MAX_ROUTES)return report('Maximum '+MAX_ROUTES+' saved routes per trip.');
+  const originalId=r.id,signature=JSON.stringify({start:r.start,end:r.end,waypoints:r.waypoints,preferences:r.preferences,gaps:validGaps(r)});
+  const prefs={...DEFAULT,...r.preferences},available=MAX_ROUTES-routes().length;
+  const strategies=[prefs.strategy,...STRATEGIES.filter(x=>x!==prefs.strategy)];
+  const candidates=strategies.map(strategy=>({strategy,avoidHighways:prefs.avoidHighways,label:STRATEGY_NAMES[strategy]}));
+  if(!prefs.avoidHighways)candidates.push({strategy:'balanced',avoidHighways:true,label:'Avoid highways'});
+  const choices=[];busy=true;status='Checking for genuinely different driving routes…';render();
+  try{
+   for(const candidate of candidates){
+    if(choices.length>=Math.min(3,available+1))break;
+    let result;
+    if(candidate.strategy===prefs.strategy&&candidate.avoidHighways===prefs.avoidHighways&&r.polyline&&r.distanceM!=null&&r.durationS!=null){
+     result={polyline:r.polyline,distanceM:r.distanceM,durationS:r.durationS,legStats:r.legStats||[]};
+    }else{
+     try{
+      const request={...r,preferences:{...prefs,strategy:candidate.strategy,avoidHighways:candidate.avoidHighways}};
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),18000);
+      let response;try{response=await fetch(routeURL(request,key),{signal:controller.signal});}finally{clearTimeout(timer);}
+      if(!response.ok)throw Error(response.status===429?'Routing quota reached':'Routing HTTP '+response.status);
+      result=parseRoute(await response.json());
+     }catch(error){
+      status='One routing preference was unavailable: '+error.message+'. Trying others…';render();continue;
+     }
+    }
+    if(choices.some(x=>sameRoad(x.result.polyline,result.polyline)))continue;
+    choices.push({candidate,result});
+    status='Found '+choices.length+' distinct route'+(choices.length===1?'':'s')+'…';render();
+   }
+   const latest=selected();
+   if(!latest||latest.id!==originalId||JSON.stringify({start:latest.start,end:latest.end,waypoints:latest.waypoints,preferences:latest.preferences,gaps:validGaps(latest)})!==signature)return report('Route changed during search. No alternatives saved.');
+   if(!choices.length)return report('No drivable routes returned. The original remains unchanged.');
+   const group=config.uid(),original=JSON.parse(JSON.stringify(r)),first=choices[0];
+   // Generating several routes cannot be undone with a single-route Undo.
+   undoStack=[];
+   r.preferences={...r.preferences,compareGroup:group,strategy:first.candidate.strategy,avoidHighways:first.candidate.avoidHighways};
+   applyRouteResult(r,first.result);
+   const order=Math.max(-1,...routes().map(x=>x.routeOrder||0));
+   for(const [index,item] of choices.slice(1).entries()){
+    const variant=JSON.parse(JSON.stringify(r));
+    variant.id=config.uid();variant.routeOrder=order+index+1;
+    variant.name=(original.name+' — '+item.candidate.label).slice(0,160);
+    variant.preferences={...variant.preferences,compareGroup:group,strategy:item.candidate.strategy,avoidHighways:item.candidate.avoidHighways};
+    applyRouteResult(variant,item.result);
+    config.getRoutes().push(variant);
+   }
+   config.persist();selectedSection='';
+   status=choices.length+' distinct route'+(choices.length===1?'':'s')+' ready. Select one, then drag its path to customize it.';
+   render();fitMap();
+  }finally{busy=false;render();}
  }
  async function calculate(){
   const r=selected(),key=root.LAZY_ACRES_GEOAPIFY_KEY;if(!r)return;
@@ -249,6 +467,14 @@ function createController(config){
   $('routeComparison').innerHTML=list.length>1?'<details class="route-compare-details"><summary>Compare saved routes ('+list.length+')</summary>'+
    list.map(x=>'<div class="route-compare-row '+(x.id===currentId?'selected':'')+'"><button type="button" class="quiet small" data-route-select="'+esc(x.id)+'">'+esc(x.name)+'</button>'+
     '<span>'+esc(summary(x))+'</span></div>').join('')+'</details>':'';
+  const group=r?.preferences?.compareGroup;
+  const variants=group?list.filter(x=>x.preferences?.compareGroup===group):[];
+  $('routeAlternativeChoices').innerHTML=variants.length?
+   '<div class="route-variant-title"><strong>Route choices</strong><span>Select a route; its path remains editable.</span></div>'+
+   variants.map((x,index)=>'<button type="button" class="route-variant-choice '+(x.id===currentId?'is-selected':'')+'" data-route-variant="'+esc(x.id)+'" aria-pressed="'+(x.id===currentId)+'">'+
+   '<span class="route-variant-color" style="background:'+ROUTE_COLORS[index%ROUTE_COLORS.length]+'"></span><span><strong>'+esc(x.name)+'</strong><small>'+esc(summary(x))+'</small></span></button>').join(''):'';
+  $('routeShowAlternatives').disabled=!r||variants.length<2;
+  $('routeGenerateAlternatives').disabled=busy||!r||!pointOK(r.start)||!pointOK(r.end)||list.length>=MAX_ROUTES;
   $('routeEmpty').classList.toggle('hidden',!!r);
   $('routeControls').classList.toggle('hidden',!r);
   $('routeDelete').disabled=!r;
@@ -269,9 +495,16 @@ function createController(config){
     '<button type="button" class="quiet small" data-route-move="'+i+':down" '+(i===r.waypoints.length-1?'disabled':'')+'>↓</button>'+
     '<button type="button" class="quiet small" data-route-remove="'+i+'" aria-label="Remove waypoint">×</button></div></div>').join('')||
     '<p class="muted small-details">No road points or stops yet.</p>';
-  $('routeSectionList').innerHTML=sectionRows(r).map(({i,key,from,to,gap})=>'<div class="route-leg-row route-section '+(gap?'route-section-gap ':'')+(selectedSection===key?'route-section-selected':'')+'" data-section-key="'+esc(key)+'" tabindex="0" role="group" aria-label="Driving section '+(i+1)+'">'+
-    '<span><strong>'+esc((i+1)+'. '+(from?.label||'Unmapped start')+' → '+(to?.label||'Unmapped destination'))+'</strong><small>'+esc(gap?'Not driving this section':(r.legStats?.[i]?summary(r.legStats[i]):'Recalculate for road estimate'))+'</small></span>'+
-    '<button type="button" class="quiet small" data-section-toggle="'+esc(key)+'">'+(gap?'Reconnect':'Remove section')+'</button></div>').join('');
+  const sectionList=sectionRows(r),skipped=sectionList.filter(x=>x.gap).length;
+  if(selectedSection&&!sectionList.some(x=>x.key===selectedSection))selectedSection='';
+  const activeRow=sectionList.find(x=>x.key===selectedSection);
+  $('routeSectionSummary').textContent=sectionList.length+' section'+(sectionList.length===1?'':'s')+(skipped?' · '+skipped+' skipped':'');
+  $('routeSectionRemove').disabled=!activeRow||activeRow.gap;
+  $('routeSectionRestore').disabled=!activeRow||!activeRow.gap;
+  $('routeSectionList').innerHTML=sectionList.map(({i,key,from,to,gap})=>'<div class="route-section '+(gap?'route-section-gap ':'')+(selectedSection===key?'route-section-selected':'')+'" data-section-key="'+esc(key)+'">'+
+   '<button type="button" class="route-section-select" data-section-select="'+esc(key)+'" aria-pressed="'+(selectedSection===key)+'" aria-label="Select driving section '+(i+1)+'">'+
+   '<strong>'+esc((i+1)+'. '+(from?.label||'Unmapped start')+' → '+(to?.label||'Unmapped destination'))+'</strong><small>'+esc(gap?'Skipped — not driven':(r.legStats?.[i]?summary(r.legStats[i]):'Driving section · recalculate for estimate'))+'</small></button>'+
+   '<button type="button" class="quiet small route-section-action" data-section-toggle="'+esc(key)+'">'+(gap?'Reconnect':'Skip section')+'</button></div>').join('');
   $('routeLegMetrics').innerHTML=Array.isArray(r.legStats)&&r.legStats.length===r.waypoints.length+1?
     '<details class="route-leg-breakdown"><summary>Driving distance & time between points</summary>'+
     r.legStats.map((leg,i)=>{
@@ -303,6 +536,13 @@ function createController(config){
   $('exploreToolTabs').addEventListener('click',e=>{const b=e.target.closest('[data-explore-tool]');if(b)setTool(b.dataset.exploreTool);});
   $('routeNew').addEventListener('click',()=>addRoute());
   $('routeAlternative').addEventListener('click',()=>addRoute(true));
+  $('routeGenerateAlternatives').addEventListener('click',()=>void generateAlternatives());
+  $('routeShowAlternatives').addEventListener('change',render);
+  $('routeAlternativeChoices').addEventListener('click',e=>{
+   const button=e.target.closest('[data-route-variant]');if(!button)return;
+   currentId=button.dataset.routeVariant;undoStack=[];selectedSection='';pick='';
+   status='Alternative selected. Drag its highlighted road path to customize it.';render();
+  });
   $('routeDelete').addEventListener('click',removeRoute);
   $('routeUndo').addEventListener('click',undo);
   $('routeMoveUp').addEventListener('click',()=>moveRoute(-1));
@@ -317,13 +557,27 @@ function createController(config){
    });
    render();
   });
-  $('routeSectionList').addEventListener('click',e=>{const toggle=e.target.closest('[data-section-toggle]'),row=e.target.closest('[data-section-key]');if(row)selectedSection=row.dataset.sectionKey;if(toggle)toggleSection(toggle.dataset.sectionToggle);else render();});
-  $('routeSectionList').addEventListener('focusin',e=>{const row=e.target.closest('[data-section-key]');if(row)selectedSection=row.dataset.sectionKey;});
-  document.addEventListener('keydown',e=>{if(tool!=='routes'||!selectedSection||!selected()||e.key!=='Delete'||e.target.closest('input,textarea,select,[contenteditable=true],button'))return;e.preventDefault();toggleSection(selectedSection);});
+  $('routeSectionList').addEventListener('click',e=>{
+   const toggle=e.target.closest('[data-section-toggle]'),row=e.target.closest('[data-section-key]');
+   if(!row)return;
+   selectedSection=row.dataset.sectionKey;
+   if(toggle)setSectionConnection(toggle.dataset.sectionToggle,toggle.textContent.trim()==='Reconnect');
+   else render();
+  });
+  $('routeSectionRemove').addEventListener('click',()=>{if(selectedSection)setSectionConnection(selectedSection,false);});
+  $('routeSectionRestore').addEventListener('click',()=>{if(selectedSection)setSectionConnection(selectedSection,true);});
+  document.addEventListener('keydown',e=>{
+   if(tool!=='routes'||!selectedSection||!selected()||!(e.key==='Delete'||e.key==='Backspace'))return;
+   const focusSection=e.target.closest?.('[data-section-select]');
+   if(e.target.closest?.('input,textarea,select,[contenteditable=true]'))return;
+   if(e.target.closest?.('button')&&!focusSection)return;
+   if(e.key==='Backspace'&&!focusSection)return;
+   e.preventDefault();setSectionConnection(selectedSection,false);
+  });
   $('routePicker').addEventListener('change',e=>{currentId=e.target.value;undoStack=[];pick='';selectedSection='';status='';render();});
   $('routeComparison').addEventListener('click',e=>{
    const b=e.target.closest('[data-route-select]');if(!b)return;
-   currentId=b.dataset.routeSelect;undoStack=[];pick='';status='';render();
+   currentId=b.dataset.routeSelect;undoStack=[];selectedSection='';pick='';status='';render();
   });
   $('routeName').addEventListener('change',e=>{const name=e.target.value.trim().slice(0,160);if(!name)return report('Route name required.');
    update(r=>r.name=name);status='Route renamed.';render();});
@@ -371,9 +625,10 @@ function createController(config){
    render();
   });
   $('routeControls').addEventListener('click',e=>{
-   const picker=e.target.closest('[data-route-pick]'),lookup=e.target.closest('[data-route-geocode]');
+   const picker=e.target.closest('[data-route-pick]'),lookup=e.target.closest('[data-route-geocode]'),clear=e.target.closest('[data-route-clear]');
    if(picker)setPick(picker.dataset.routePick);
    else if(lookup)void geocode(lookup.dataset.routeGeocode);
+   else if(clear)clearEndpoint(clear.dataset.routeClear);
   });
   $('routeWaypointList').addEventListener('click',e=>{
    const move=e.target.closest('[data-route-move]'),rm=e.target.closest('[data-route-remove]');
@@ -389,6 +644,6 @@ function createController(config){
  bind();
  return {attachMap,render,onTripChange,consumeMapClick,cancelPick,isPicking:()=>!!pick,getPick:()=>pick,setTool};
 }
-root.VacationRouteDomain=Object.freeze({newRoute,decodePolyline,routeURL,parseRoute,windowError,summary,pointOK});
+root.VacationRouteDomain=Object.freeze({newRoute,decodePolyline,routeURL,parseRoute,windowError,summary,pointOK,sectionGeometry});
 root.createVacationRoutes=createController;
 })(window);
