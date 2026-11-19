@@ -13,6 +13,8 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **v0.6.39 (2026-11-19):** Reworked map-tap identification to read underlying OSM named nodes and building outlines from a small on-demand bounding box in parallel with Overpass and Geoapify. The polygon hit test prioritizes the building actually tapped, addressing the Fika raster-label mismatch without hardcoding it. Live-device/API acceptance remains outstanding; stored data unchanged.
+
 - **v0.6.38 (2026-11-19):** Removed the idle map navigation instruction overlay that obstructed Fika and other businesses while preserving contextual add-place and route-picking prompts. Actual identification of Fika by Geoapify/OSM still requires validation against live provider data; no Supabase changes.
 
 - **v0.6.37 (2026-11-19):** Corrected the retired Overpass hostname used by named-place map taps and Coffee Shops discovery; both share the current Private.coffee provider with fallback and bounded timeouts. Fika has an OSM bakery listing. Live iPhone validation outstanding; no database changes.

@@ -6,6 +6,8 @@ A shared, trip-focused vacation workspace for Tod and Donna. Hosted as a static 
 
 ## Current features
 
+- **v0.6.39 (2026-11-19):** Map taps now retrieve nearby named nodes and building polygons directly from the OpenStreetMap map API, parallel with Geoapify and Overpass. When a tap falls inside a named building footprint, that building's name and exact clicked coordinates are used; no reliance on raster-label text extraction or manually curated Fika records. The direct API reads only a small region around user taps. Removed unreachable reverse-geocode address fallback. No Supabase data changes; real signed-in iPhone acceptance pending.
+
 - **v0.6.38 (2026-11-19):** Removed the always-visible "Drag to explore · Pinch to zoom" overlay from the map. The hint remains hidden during normal map browsing and appears only for active add-place or route-picking instructions. No Supabase changes.
 
 - **v0.6.37 (2026-11-19):** Corrected the retired OpenStreetMap Overpass lookup hostname. The current overpass.private.coffee service is used first and overpass-api.de is the fallback, with independent six-second timeouts. This applies to both map taps and Coffee Shops discovery. Fika's named bakery record exists in OpenStreetMap. Live real-device service verification is still pending. No Supabase changes.

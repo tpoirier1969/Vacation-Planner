@@ -326,6 +326,73 @@ async function requestOsmElements(query,signal){
  throw lastError||Error('Named-place lookup unavailable');
 }
 
+// The OSM basemap is raster imagery: its visible labels aren't DOM objects.
+// Resolve the underlying OSM named nodes and ways in a small area around the
+// clicked point. This works even when commercial place indexes omit the POI.
+function pointInsideOsmWay(point,vertices){
+ if(vertices.length<3)return false;
+ let inside=false;
+ for(let i=0,j=vertices.length-1;i<vertices.length;j=i++){
+  const a=vertices[i],b=vertices[j];
+  if((a.lat>point.lat)!==(b.lat>point.lat)&&
+    point.lng<(b.lng-a.lng)*(point.lat-a.lat)/(b.lat-a.lat)+a.lng)inside=!inside;
+ }
+ return inside;
+}
+async function namedOsmMapAtClick(latlng,signal){
+ const lat=Number(latlng.lat),lng=Number(latlng.lng);
+ if(!Number.isFinite(lat)||!Number.isFinite(lng))return [];
+ // Roughly a 280m square. The OSM read API returns node refs for whole ways
+ // that intersect this small bbox, so building outlines can be reconstructed.
+ const halfLat=.0013,halfLng=.0018;
+ const box=[lng-halfLng,lat-halfLat,lng+halfLng,lat+halfLat].map(n=>n.toFixed(6)).join(',');
+ const controller=new AbortController(),cancel=()=>controller.abort();
+ signal?.addEventListener?.('abort',cancel,{once:true});
+ const timeout=setTimeout(cancel,6500);
+ let data;
+ try{
+  const url='https://api.openstreetmap.org/api/0.6/map.json?'+new URLSearchParams({bbox:box});
+  const response=await fetch(url,{signal:controller.signal,headers:{Accept:'application/json'}});
+  if(!response.ok)throw Error('OpenStreetMap map API HTTP '+response.status);
+  data=await response.json();
+  if(!Array.isArray(data?.elements))throw Error('Unexpected OpenStreetMap map data');
+ }finally{clearTimeout(timeout);signal?.removeEventListener?.('abort',cancel);}
+ const elements=data.elements;
+ const nodes=new Map(elements.filter(e=>e.type==='node'&&Number.isFinite(Number(e.lat))&&Number.isFinite(Number(e.lon)))
+  .map(e=>[e.id,{lat:Number(e.lat),lng:Number(e.lon)}]));
+ const found=[];
+ for(const e of elements){
+  if(e.type!=='node'&&e.type!=='way')continue;
+  const tags=e.tags||{},name=String(tags.name||'').trim();
+  if(!name||!['shop','amenity','building','tourism','leisure','craft','office','historic','healthcare','man_made'].some(k=>tags[k]))continue;
+  let vertices=[];
+  if(e.type==='way')vertices=(e.nodes||[]).map(id=>nodes.get(id)).filter(Boolean);
+  const withinOutline=e.type==='way'&&pointInsideOsmWay(latlng,vertices);
+  const coords=e.type==='node'?nodes.get(e.id):
+   vertices.length?{lat:vertices.reduce((n,v)=>n+v.lat,0)/vertices.length,
+    lng:vertices.reduce((n,v)=>n+v.lng,0)/vertices.length}:null;
+  if(!coords)continue;
+  const distance=withinOutline?0:mapPlaceDistance(latlng,coords);
+  if(distance>180)continue;
+  const categories=tags.amenity==='cafe'?['catering.cafe']:
+   tags.amenity==='restaurant'?['catering.restaurant']:
+   tags.amenity==='fast_food'?['catering.fast_food']:
+   tags.shop==='bakery'?['commercial.food_and_drink.bakery']:
+   tags.shop==='coffee'||tags.shop==='tea'?['commercial.food_and_drink.coffee_and_tea']:
+   tags.shop?['commercial']:tags.tourism?['tourism']:[tags.building||'Other'];
+  // The tapped coordinate is valid when it is inside the building outline;
+  // otherwise keep the actual mapped point.
+  const place={name,lat:withinOutline?lat:coords.lat,lng:withinOutline?lng:coords.lng,
+   kind:tags.shop||tags.amenity||tags.tourism||tags.building||'Point of interest',
+   categories,sourceLabel:'OpenStreetMap building',placeId:'',
+   datasource:{raw:tags},address:[tags['addr:housenumber'],tags['addr:street']].filter(Boolean).join(' '),
+   website:safeExternalURL(tags.website||tags['contact:website']||'')||'',
+   hours:tags.opening_hours||'',category:detectedCategory(categories,name)};
+  found.push(place);
+ }
+ return found;
+}
+
 async function showMapPlaceMenu(latlng,name='',notes=''){
  if(!map)return;
  const token=++mapLookupToken;
@@ -342,9 +409,7 @@ async function showMapPlaceMenu(latlng,name='',notes=''){
   button.onclick=()=>{map?.closePopup();openPlace(latlng.lat,latlng.lng,'','','places','Other')};
   box.append(text,button);popup.setContent(box);
  }
- if(!key||key==='PASTE_YOUR_GEOAPIFY_BROWSER_KEY_HERE'){
-  showManual('Place-name lookup is not configured.');return;
- }
+ const canUseGeoapify=!!key&&key!=='PASTE_YOUR_GEOAPIFY_BROWSER_KEY_HERE';
  const loading=document.createElement('div');
  loading.textContent='Identifying this place…';
  popup.setContent(loading);
@@ -370,14 +435,19 @@ async function showMapPlaceMenu(latlng,name='',notes=''){
    bias:'proximity:'+Number(latlng.lng).toFixed(6)+','+Number(latlng.lat).toFixed(6),
    limit:'80',apiKey:key
   });
-  try{
-   matches=(await request('https://api.geoapify.com/v2/places?'+nearby)).map(mapPlaceFromFeature).filter(Boolean);
-  }catch(e){placeError=e;}
-  if(!alive())return;
-  // Search the underlying OSM map data on EVERY click. A nearby hotel may be
-  // indexed by Geoapify while the tapped bakery is only a named OSM building.
-  try{matches.push(...await openStreetMapNearClick(latlng,controller.signal));}
-  catch{/* Public lookup failure must not block saving the exact clicked point. */}
+  // Do not wait for Geoapify before retrieving the map's actual named OSM
+  // buildings. The sources run in parallel under one user-initiated timeout.
+  const jobs=[
+   (async()=>{try{matches.push(...await namedOsmMapAtClick(latlng,controller.signal));}
+    catch{/* Direct map API unavailable; keep the remaining providers. */}})(),
+   (async()=>{try{matches.push(...await openStreetMapNearClick(latlng,controller.signal));}
+    catch{/* Overpass unavailable; keep the direct map API results. */}})()
+  ];
+  if(canUseGeoapify)jobs.push((async()=>{
+   try{matches.push(...(await request('https://api.geoapify.com/v2/places?'+nearby)).map(mapPlaceFromFeature).filter(Boolean));}
+   catch(e){placeError=e;}
+  })());
+  await Promise.all(jobs);
   if(!alive())return;
   // Nearest results appear first, and duplicate entries are suppressed.
   matches.sort((a,b)=>mapPlaceDistance(latlng,a)-mapPlaceDistance(latlng,b));
@@ -396,16 +466,6 @@ async function showMapPlaceMenu(latlng,name='',notes=''){
    // coordinates and offer a directly editable name instead of fake 0m POIs.
    showManual('No named business was identified here. Enter the name shown on the map to save this exact location.');
    return;
-  }
-  if(!alive())return;
-  if(!matches.length){
-   showManual(placeError?
-    'No place name could be retrieved here. You can still save the exact point.':
-    'No named place or street address found at this point.');
-   return;
-  }
-  if(matches.length===1&&mapPlaceDistance(latlng,matches[0])<=90){
-   select(matches[0]);return;
   }
   const box=document.createElement('div'),heading=document.createElement('strong');
   heading.textContent='Which place did you mean?';box.append(heading);
