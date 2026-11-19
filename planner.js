@@ -428,26 +428,33 @@ async function showMapPlaceMenu(latlng,name='',notes=''){
   void view.load();
  }
  try{
-  let matches=[],placeError=null;
+  let matches=[];
   const nearby=new URLSearchParams({
    categories:'accommodation,catering,commercial,tourism,entertainment,leisure,natural,sport,production.winery',
    filter:'circle:'+Number(latlng.lng).toFixed(6)+','+Number(latlng.lat).toFixed(6)+',220',
    bias:'proximity:'+Number(latlng.lng).toFixed(6)+','+Number(latlng.lat).toFixed(6),
    limit:'80',apiKey:key
   });
-  // Do not wait for Geoapify before retrieving the map's actual named OSM
-  // buildings. The sources run in parallel under one user-initiated timeout.
-  const jobs=[
-   (async()=>{try{matches.push(...await namedOsmMapAtClick(latlng,controller.signal));}
-    catch{/* Direct map API unavailable; keep the remaining providers. */}})(),
-   (async()=>{try{matches.push(...await openStreetMapNearClick(latlng,controller.signal));}
-    catch{/* Overpass unavailable; keep the direct map API results. */}})()
-  ];
-  if(canUseGeoapify)jobs.push((async()=>{
-   try{matches.push(...(await request('https://api.geoapify.com/v2/places?'+nearby)).map(mapPlaceFromFeature).filter(Boolean));}
+  // First use the fast Places index. A remote POI in the 220m search
+  // circle is not the business tapped: require a credible point match.
+  if(canUseGeoapify){
+   try{matches=(await request('https://api.geoapify.com/v2/places?'+nearby)).map(mapPlaceFromFeature).filter(Boolean);}
    catch(e){placeError=e;}
-  })());
-  await Promise.all(jobs);
+  }
+  if(!alive())return;
+  const closeMatches=matches.filter(p=>mapPlaceDistance(latlng,p)<=35);
+  if(closeMatches.length){
+   matches=closeMatches;
+  }else{
+   // Only a miss triggers the heavier OpenStreetMap map/outline lookup.
+   // Direct building polygons and Overpass are fallbacks, not every-tap calls.
+   matches=[];
+   const fallback=await Promise.allSettled([
+    namedOsmMapAtClick(latlng,controller.signal),
+    openStreetMapNearClick(latlng,controller.signal)
+   ]);
+   for(const result of fallback)if(result.status==='fulfilled')matches.push(...result.value);
+  }
   if(!alive())return;
   // Nearest results appear first, and duplicate entries are suppressed.
   matches.sort((a,b)=>mapPlaceDistance(latlng,a)-mapPlaceDistance(latlng,b));

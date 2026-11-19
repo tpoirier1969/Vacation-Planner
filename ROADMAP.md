@@ -13,6 +13,8 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **v0.6.40 (2026-11-19):** Optimized map-tap place identification: Geoapify Places first, direct OpenStreetMap building geometry and Overpass only when there is no candidate within 35m. Two OSM fallbacks run together only on misses. Preserves manual point entry and existing trip records; iPhone lookup acceptance pending.
+
 - **v0.6.39 (2026-11-19):** Reworked map-tap identification to read underlying OSM named nodes and building outlines from a small on-demand bounding box in parallel with Overpass and Geoapify. The polygon hit test prioritizes the building actually tapped, addressing the Fika raster-label mismatch without hardcoding it. Live-device/API acceptance remains outstanding; stored data unchanged.
 
 - **v0.6.38 (2026-11-19):** Removed the idle map navigation instruction overlay that obstructed Fika and other businesses while preserving contextual add-place and route-picking prompts. Actual identification of Fika by Geoapify/OSM still requires validation against live provider data; no Supabase changes.

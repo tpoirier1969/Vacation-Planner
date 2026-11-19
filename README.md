@@ -6,6 +6,8 @@ A shared, trip-focused vacation workspace for Tod and Donna. Hosted as a static 
 
 ## Current features
 
+- **v0.6.40 (2026-11-19):** Map taps first check nearby Geoapify Places records. A match within 35 meters avoids any expensive direct OpenStreetMap building/API request. When there is no credible near-point match, the app then checks OpenStreetMap named buildings and Overpass together, including building polygon hit tests. A distant result such as a resort 217m away does not prevent the fallback. No Supabase changes; live device acceptance outstanding.
+
 - **v0.6.39 (2026-11-19):** Map taps now retrieve nearby named nodes and building polygons directly from the OpenStreetMap map API, parallel with Geoapify and Overpass. When a tap falls inside a named building footprint, that building's name and exact clicked coordinates are used; no reliance on raster-label text extraction or manually curated Fika records. The direct API reads only a small region around user taps. Removed unreachable reverse-geocode address fallback. No Supabase data changes; real signed-in iPhone acceptance pending.
 
 - **v0.6.38 (2026-11-19):** Removed the always-visible "Drag to explore · Pinch to zoom" overlay from the map. The hint remains hidden during normal map browsing and appears only for active add-place or route-picking instructions. No Supabase changes.

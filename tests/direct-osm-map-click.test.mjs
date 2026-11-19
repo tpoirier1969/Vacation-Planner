@@ -35,11 +35,16 @@ test('Outside a building polygon does not receive its name as a zero-distance hi
  assert.equal(api.pointInsideOsmWay({lat:45.047,lng:-87.273},polygon),true);
  assert.equal(api.pointInsideOsmWay({lat:45.0475,lng:-87.273},polygon),false);
 });
-test('Map sources run concurrently and remain available without a Geoapify key',()=>{
+test('Fast nearby Places lookup precedes and gates both OSM fallbacks',()=>{
  const click=section('async function showMapPlaceMenu(latlng,name=\'\'','const placeDetailCache=');
- assert.ok(click.includes('Promise.all(jobs)'));
- assert.ok(click.includes('namedOsmMapAtClick(latlng,controller.signal)'));
+ const primary=click.indexOf("await request('https://api.geoapify.com/v2/places?'+nearby)");
+ const fallback=click.indexOf('namedOsmMapAtClick(latlng,controller.signal)');
+ assert.ok(primary>=0&&fallback>primary);
+ assert.ok(click.includes("const closeMatches=matches.filter(p=>mapPlaceDistance(latlng,p)<=35)"));
+ assert.ok(click.includes('if(closeMatches.length){'));
+ assert.ok(click.includes('matches=closeMatches;'));
+ assert.ok(click.includes('Promise.allSettled(['));
  assert.ok(click.includes('openStreetMapNearClick(latlng,controller.signal)'));
- assert.ok(click.includes('if(canUseGeoapify)jobs.push('));
+ assert.ok(!click.includes('Promise.all(jobs)'));
  assert.ok(!click.includes("showManual('Place-name lookup is not configured."));
 });
