@@ -176,7 +176,8 @@ function itineraryDrivingAssessment(stops,legs){
  const issues=[];
  for(let i=1;i<stops.length;i++){
   const from=stops[i-1],to=stops[i];
-  const begin=minutesOfDay(from.endTime)||minutesOfDay(from.time);
+  const end=minutesOfDay(from.endTime);
+  const begin=end===null?minutesOfDay(from.time):end;
   const appointment=minutesOfDay(to.time);
   if(begin===null||appointment===null)continue;
   const travel=Math.ceil(Number(legs[i-1].durationS)/60);
@@ -628,6 +629,7 @@ function createController(config){
      (option.assessment?.issues||[]).map(msg=>'<small class="route-schedule-warning">'+esc(msg)+'</small>').join('')+
      '</div><button type="button" class="secondary small" data-route-itinerary-accept="'+i+'" '+(itineraryPreviewBusy||list.length>=MAX_ROUTES?'disabled':'')+'>Use this route</button></div>').join(''):
      '<p class="muted">'+esc(itinerarySuggestions.reason)+'</p>')+
+   (itinerarySuggestions.routeNote?'<p class="muted small-details">'+esc(itinerarySuggestions.routeNote)+'</p>':'')+
    (itinerarySuggestions.excluded?'<p class="muted small-details">'+itinerarySuggestions.excluded+' activity/activities have no mapped location and were excluded.</p>':'')+
    '<p class="muted small-details">Timed stops keep their chronological order. Arrival warnings use provided road-leg times only; actual visits, parking, traffic and opening hours must still be checked.</p>':'';
   $('routePicker').innerHTML=list.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+

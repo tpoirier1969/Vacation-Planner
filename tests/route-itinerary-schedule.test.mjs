@@ -17,6 +17,15 @@ test('Known leg travel fits and unknown visit duration cannot be asserted',()=>{
  const noLegs=f.itineraryDrivingAssessment([stop('Museum','10:00'),stop('Lunch','11:00')],[]);
  assert.equal(noLegs.checked,false);
 });
+test('Midnight end time is a valid departure, not a missing end time',()=>{
+ const result=f.itineraryDrivingAssessment([stop('Night stop','23:00','00:00'),stop('Early stop','00:10')],[{durationS:1200}]);
+ assert.equal(result.checked,true);
+ assert.match(result.issues[0],/10 min after 00:10/);
+});
+test('Missing routing key is explained in the suggestion UI',()=>{
+ assert.ok(js.includes("itinerarySuggestions.routeNote='Road estimates unavailable: routing API is not configured.'"));
+ assert.ok(js.includes("itinerarySuggestions.routeNote?'<p class="));
+});
 test('Changed time or coordinates invalidates proposal signature',()=>{
  const a=[stop('Museum','10:00'),stop('Lunch','11:00')];
  const first=f.itinerarySnapshot(a,'2026-12-22');a[1].time='12:00';
