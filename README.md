@@ -6,6 +6,8 @@ A shared, trip-focused vacation workspace for Tod and Donna. Hosted as a static 
 
 ## Current features
 
+- **v0.6.43 (2026-11-19):** Itinerary route previews now request real road distance, total driving time and (when returned) per-leg driving times from the existing Geoapify free routing service, limited to two requests per preview. Timed consecutive stops are checked against provided local start/end times and flagged if travel alone would arrive late. Missing leg times, unknown visit durations, traffic, parking and hours are explicitly not treated as verified. Review remains non-persistent until accepted, and stale itinerary edits invalidate suggestions. No Supabase changes; live routing acceptance pending.
+
 - **v0.6.42 (2026-11-19):** First itinerary-driven route-suggestion workflow. Choose a dated itinerary day in Routes; review a scheduled-order route and, when different, a geographic order of flexible stops. Date/time-constrained stops remain in chronological order. Direct-distance figures are explicitly not driving distances. Accepting an option creates a separate editable saved route referencing the original itinerary activity IDs; existing routes/itinerary remain unchanged. Calculate roads using the existing Geoapify button after acceptance. No database schema changes or new paid integrations; live signed-in browser acceptance pending.
 
 - **v0.6.41 (2026-11-19):** Fixed map result selection on iOS: popup options stop pointer/touch and click propagation, so selecting a named business opens its details instead of triggering another map lookup. Display only the nearest five distinct valid matches, sorted by distance. Corrected the primary Geoapify error catch to preserve fallback behavior. No Supabase changes; field acceptance pending.

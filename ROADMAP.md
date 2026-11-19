@@ -13,6 +13,8 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **v0.6.43 (2026-11-19):** Route proposals now optionally include actual Geoapify road mileage/duration and per-leg schedule conflict warnings for consecutive timed stops. If leg stats are missing, display unverified rather than fabricated schedule safety. Itinerary snapshot checked before acceptance. Next: insertion of flexible activities between appointments, opening hours, trip-wide multi-day evaluation. No database changes.
+
 - **v0.6.42 (2026-11-19):** Began itinerary-driven suggestions: select a trip day, review stop sequences preserving dated/time-ordered appointments, compare flexible-stop order and approximate straight-line distances, then explicitly accept into a new route. The user's existing itinerary and routes are preserved; road calculations remain a separate Geoapify action. Next: smarter scheduling with travel-time feasibility, opening hours, and multi-day suggestions; mobile/device validation required.
 
 - **v0.6.41 (2026-11-19):** Popup choices now prevent event propagation into map click handlers, and business choices are capped at the five closest matches after deduplication. Fixed undefined error variable on Geoapify failures; all existing trip data preserved. iPhone field test outstanding.

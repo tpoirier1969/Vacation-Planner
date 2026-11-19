@@ -162,10 +162,42 @@ function suggestItineraryRoutes(activities,day){
  }))};
 }
 
+// Exact road leg durations come only from the routing service. An entry
+// without an end time is treated as departing at its start time: a lower-bound
+// feasibility check, not a promise that the itinerary will fit.
+function minutesOfDay(value){
+ const v=String(value||'');
+ return /^([01]\d|2[0-3]):[0-5]\d/.test(v)?Number(v.slice(0,2))*60+Number(v.slice(3,5)):null;
+}
+function itineraryDrivingAssessment(stops,legs){
+ const valid=Array.isArray(legs)&&legs.length===stops.length-1&&
+  legs.every(x=>x&&Number.isFinite(Number(x.durationS))&&Number(x.durationS)>=0);
+ if(!valid)return {checked:false,issues:[],message:'Road mileage is available, but stop-by-stop driving times were not provided. Schedule conflicts could not be checked.'};
+ const issues=[];
+ for(let i=1;i<stops.length;i++){
+  const from=stops[i-1],to=stops[i];
+  const begin=minutesOfDay(from.endTime)||minutesOfDay(from.time);
+  const appointment=minutesOfDay(to.time);
+  if(begin===null||appointment===null)continue;
+  const travel=Math.ceil(Number(legs[i-1].durationS)/60);
+  const arrival=begin+travel;
+  if(arrival>appointment){
+   const late=arrival-appointment;
+   issues.push('Driving from '+from.title+' to '+to.title+' would arrive at least '+late+' min after '+to.time+'.');
+  }
+ }
+ return {checked:true,issues,message:issues.length?issues.length+' possible scheduling conflict(s).':'No travel-time conflicts detected between consecutive timed stops. Activity duration, parking and traffic are not included.'};
+}
+function itinerarySnapshot(activities,day){
+ return JSON.stringify((activities||[]).filter(x=>x.date===day)
+  .map(x=>({id:x.id,title:x.title,date:x.date,time:x.time||'',endTime:x.endTime||'',lat:x.lat,lng:x.lng}))
+  .sort((a,b)=>String(a.id).localeCompare(String(b.id))));
+}
+
 function createController(config){
  const $=id=>document.getElementById(id);
  let currentId='',tool='discover',pick='',map=null,layer=null,undoStack=[],busy=false,status='';
- let suggestedDay='',itinerarySuggestions=null;
+ let suggestedDay='',itinerarySuggestions=null,itineraryPreviewBusy=false,itineraryPreviewRequest=0;
  let dragHandle=null,dragHandleLeg=-1,dragHandleRoute='',directDrag=null;
  const routes=()=>{const t=config.getTrip();return t?(config.getRoutes()||[]).filter(r=>r.tripId===t.id).sort((a,b)=>(a.routeOrder||0)-(b.routeOrder||0)):[];};
  const routePoints=r=>[r.start,...(r.waypoints||[]),r.end];
@@ -327,16 +359,56 @@ function createController(config){
  function availableItineraryDays(){
   return [...new Set(config.getActivities().filter(x=>x.date).map(x=>x.date))].sort();
  }
- function previewItinerary(){
+ async function previewItinerary(){
   const day=$('routeItineraryDay').value;
+  if(!day||itineraryPreviewBusy)return;
+  const request=++itineraryPreviewRequest,snapshot=itinerarySnapshot(config.getActivities(),day);
   suggestedDay=day;
-  itinerarySuggestions=day?suggestItineraryRoutes(config.getActivities(),day):null;
-  render();
+  itinerarySuggestions=suggestItineraryRoutes(config.getActivities(),day);
+  itinerarySuggestions.snapshot=snapshot;
+  if(!itinerarySuggestions.options.length){render();return;}
+  const key=root.LAZY_ACRES_GEOAPIFY_KEY;
+  if(!key){
+   itinerarySuggestions.routeNote='Road estimates unavailable: routing API is not configured.';
+   render();return;
+  }
+  itineraryPreviewBusy=true;render();
+  try{
+   const options=itinerarySuggestions.options;
+   // At most two small, intentional requests; no data is persisted here.
+   for(const option of options){
+    if(request!==itineraryPreviewRequest)break;
+    const points=option.stops;
+    const draft={start:points[0],end:points[points.length-1],
+     waypoints:points.slice(1,-1).map(p=>({lat:p.lat,lng:p.lng,kind:'stop'})),preferences:{...DEFAULT}};
+    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000);
+    try{
+     const response=await fetch(routeURL(draft,key),{signal:controller.signal});
+     if(!response.ok)throw Error(response.status===429?'routing quota reached':'HTTP '+response.status);
+     const result=parseRoute(await response.json());
+     option.roadMiles=result.distanceM/1609.344;
+     option.roadMinutes=Math.ceil(result.durationS/60);
+     option.assessment=itineraryDrivingAssessment(points,result.legStats);
+    }catch(error){
+     option.routeError=error.name==='AbortError'?'Request timed out':error.message;
+    }finally{clearTimeout(timeout);}
+   }
+  }finally{
+   itineraryPreviewBusy=false;
+   if(request===itineraryPreviewRequest&&snapshot!==itinerarySnapshot(config.getActivities(),day)){
+    itinerarySuggestions=null;report('Itinerary changed during routing. Generate suggestions again.');
+   }
+   render();
+  }
  }
  function acceptItinerarySuggestion(index){
   if(!itinerarySuggestions||!suggestedDay||index<0||index>=itinerarySuggestions.options.length)return;
   if(routes().length>=MAX_ROUTES)return report('Maximum '+MAX_ROUTES+' routes. Remove one before accepting a suggestion.');
+  if(itineraryPreviewBusy)return report('Finish evaluating the suggestions before accepting one.');
   const proposal=itinerarySuggestions.options[index];
+  if(itinerarySuggestions.snapshot!==itinerarySnapshot(config.getActivities(),suggestedDay)){
+   itinerarySuggestions=null;report('The itinerary changed. Generate suggestions again.');render();return;
+  }
   // Re-check that the source activities have not moved or changed since preview.
   const newest=suggestItineraryRoutes(config.getActivities(),suggestedDay);
   if(!newest.options.some(x=>x.ids.join('|')===proposal.ids.join('|'))||
@@ -351,7 +423,7 @@ function createController(config){
   r.waypoints=stops.slice(1,-1).map(x=>({...place(x),id:config.uid(),kind:'stop'}));
   r.routeOrder=Math.max(-1,...routes().map(x=>x.routeOrder||0))+1;
   config.getRoutes().push(r);currentId=r.id;undoStack=[];selectedSection='';pick='';
-  itinerarySuggestions=null;suggestedDay='';
+  itinerarySuggestions=null;suggestedDay='';itineraryPreviewRequest++;
   config.persist();
   status='Suggested route saved separately. Check the stop order and select Calculate route for real road mileage and driving time.';
   render();fitMap();
@@ -542,16 +614,22 @@ function createController(config){
   daySelect.innerHTML=days.length?days.map(d=>'<option value="'+esc(d)+'">'+esc(d)+'</option>').join(''):
    '<option value="">No dated itinerary activities</option>';
   daySelect.value=chosen;
-  $('routeSuggestItinerary').disabled=!chosen;
+  $('routeSuggestItinerary').disabled=!chosen||itineraryPreviewBusy;
+  $('routeSuggestItinerary').textContent=itineraryPreviewBusy?'Checking road times…':'Suggest from itinerary';
   $('routeItineraryOptions').innerHTML=itinerarySuggestions?.day===chosen?
    (itinerarySuggestions.options.length?itinerarySuggestions.options.map((option,i)=>
      '<div class="route-itinerary-choice"><div><strong>'+esc(option.label)+'</strong>'+
      '<small>'+esc(option.stops.map(x=>(x.time?x.time+' ':'')+x.title).join(' → '))+'</small>'+
-     '<small>Approx. '+option.directMiles.toFixed(1)+' straight-line mi between stops · road time not calculated</small></div>'+
-     '<button type="button" class="secondary small" data-route-itinerary-accept="'+i+'" '+(list.length>=MAX_ROUTES?'disabled':'')+'>Use this route</button></div>').join(''):
+     '<small>'+(option.roadMiles!=null?
+      option.roadMiles.toFixed(1)+' road mi · about '+option.roadMinutes+' min driving':
+      'Approx. '+option.directMiles.toFixed(1)+' straight-line mi · driving time unavailable')+'</small>'+
+     (option.routeError?'<small>Road lookup unavailable: '+esc(option.routeError)+'</small>':'')+
+     (option.assessment?'<small>'+esc(option.assessment.message)+'</small>':'')+
+     (option.assessment?.issues||[]).map(msg=>'<small class="route-schedule-warning">'+esc(msg)+'</small>').join('')+
+     '</div><button type="button" class="secondary small" data-route-itinerary-accept="'+i+'" '+(itineraryPreviewBusy||list.length>=MAX_ROUTES?'disabled':'')+'>Use this route</button></div>').join(''):
      '<p class="muted">'+esc(itinerarySuggestions.reason)+'</p>')+
    (itinerarySuggestions.excluded?'<p class="muted small-details">'+itinerarySuggestions.excluded+' activity/activities have no mapped location and were excluded.</p>':'')+
-   '<p class="muted small-details">Timed stops keep their chronological order. Flexible stops are suggestions, not appointments; check time windows and opening hours before driving.</p>':'';
+   '<p class="muted small-details">Timed stops keep their chronological order. Arrival warnings use provided road-leg times only; actual visits, parking, traffic and opening hours must still be checked.</p>':'';
   $('routePicker').innerHTML=list.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+
    (x.distanceM!=null?' · '+(x.distanceM/1609.344).toFixed(0)+' mi':'')+'</option>').join('');
   $('routePicker').value=currentId;
@@ -624,12 +702,12 @@ function createController(config){
   draw();
  }
  function setTool(next){tool=next==='routes'?'routes':'discover';if(tool!=='routes')pick='';config.onPickChange?.();render();}
- function onTripChange(){currentId='';undoStack=[];pick='';selectedSection='';status='';suggestedDay='';itinerarySuggestions=null;render();}
+ function onTripChange(){currentId='';undoStack=[];pick='';selectedSection='';status='';suggestedDay='';itinerarySuggestions=null;itineraryPreviewRequest++;render();}
  function bind(){
   $('exploreToolTabs').addEventListener('click',e=>{const b=e.target.closest('[data-explore-tool]');if(b)setTool(b.dataset.exploreTool);});
   $('routeNew').addEventListener('click',()=>addRoute());
   $('routeSuggestItinerary').addEventListener('click',previewItinerary);
-  $('routeItineraryDay').addEventListener('change',e=>{suggestedDay=e.target.value;itinerarySuggestions=null;render();});
+  $('routeItineraryDay').addEventListener('change',e=>{itineraryPreviewRequest++;suggestedDay=e.target.value;itinerarySuggestions=null;render();});
   $('routeItineraryOptions').addEventListener('click',e=>{
    const button=e.target.closest('[data-route-itinerary-accept]');
    if(button)acceptItinerarySuggestion(Number(button.dataset.routeItineraryAccept));
@@ -743,6 +821,6 @@ function createController(config){
  bind();
  return {attachMap,render,onTripChange,consumeMapClick,cancelPick,isPicking:()=>!!pick,getPick:()=>pick,setTool};
 }
-root.VacationRouteDomain=Object.freeze({newRoute,decodePolyline,routeURL,parseRoute,windowError,summary,pointOK,sectionGeometry,suggestItineraryRoutes});
+root.VacationRouteDomain=Object.freeze({newRoute,decodePolyline,routeURL,parseRoute,windowError,summary,pointOK,sectionGeometry,suggestItineraryRoutes,itineraryDrivingAssessment,itinerarySnapshot});
 root.createVacationRoutes=createController;
 })(window);
