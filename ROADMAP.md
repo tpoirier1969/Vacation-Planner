@@ -13,6 +13,8 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **v0.6.57 (2026-11-20):** Mobile Explore horizontal drift fix based on iPhone screen recording: explicitly vertical-only nested Route/Discover sheet and workspace panel, constrained route controls, while preserving Leaflet gestures. Regression test and both universal/project rules prohibit accidental horizontal scrolling. Live signed-in iPhone swipe verification still required.
+
 - **v0.6.56 (2026-11-20):** Implemented limited typo-tolerant business-name candidate matching after exact lookup misses, using the visible rectangle or selected route corridor and existing free provider only. Clearly marks approximate names, limits extra requests, and keeps existing save controls explicit. Name fallback cannot guarantee comprehensive results. No Supabase writes.
 
 - **v0.6.55 (2026-11-20):** First stage of search broadening: synonym/typo-aware category intent, including steak houses and related restaurant terms, shared by visible-map, route and top search. Next: bounded similar-name fallback for misspelled specific business names. No new paid APIs or Supabase writes.

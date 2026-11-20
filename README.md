@@ -6,6 +6,8 @@ A shared, trip-focused vacation workspace for Tod and Donna. Hosted as a static 
 
 ## Current features
 
+- **v0.6.57 (2026-11-20):** Removed accidental sideways panning in mobile vertical workspaces by constraining the nested Explore Route/Discover sheet and main panel to vertical scrolling, while giving long route control rows, cards, form fields and trip summaries shrink-to-fit widths. Maps retain their intentional horizontal pan/zoom. Added a project-level no-horizontal-overflow rule, linked to universal Web-App-Standards rule 44. No Supabase changes.
+
 - **v0.6.56 (2026-11-20):** When exact business-name search returns nothing, top map search, Discover Nearby and Along saved route can check a limited same-area/source category sample for near-name matches, including common spelling errors. Every such result is labeled "Similar name" and must be verified by the user; no unrelated broad web searches or automatic saves. No database changes.
 
 - **v0.6.55 (2026-11-20):** Broader free Discover Nearby and Along Route intent matching: steak house, steakhouse, supper club, grill and misspelled restaurant/category terms lead to wider restaurant results rather than literal name searches. Other supported synonyms cover cafés, lodging, attractions, shopping, trails, boating, fishing, wineries and events. Exact business-name searches remain unchanged. No database changes.
