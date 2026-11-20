@@ -13,6 +13,8 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **v0.6.55 (2026-11-20):** First stage of search broadening: synonym/typo-aware category intent, including steak houses and related restaurant terms, shared by visible-map, route and top search. Next: bounded similar-name fallback for misspelled specific business names. No new paid APIs or Supabase writes.
+
 - **v0.6.54 (2026-11-20):** Compact mobile Explore UI: functional map Search control, visible generic results, file-tab collapsed sheet, side-by-side category and search-area selectors, smaller field typography, and white list-only-numbered discovery results. Real-device acceptance still pending; no trip records changed.
 
 - **v0.6.53 (2026-11-19):** Reduced mobile bottom nav height and changed five tabs to compact content-width buttons. Moved listing actions into one short, non-wrapping row in Ideas and Itinerary, allowing label wrapping within each button. No saved record changes; iPhone visual acceptance pending.

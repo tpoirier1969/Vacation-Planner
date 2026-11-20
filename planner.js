@@ -1035,7 +1035,7 @@ async function searchLocation(query,store=false){
  }
  // Send generic business-type queries to the paginated discovery workflow,
  // keeping map search for actual named places, towns, and addresses.
- if(!store&&genericDiscoveryTerm(term)&&DISCOVERY_TERMS.some(x=>x.pattern.test(term))){
+ if(!store&&genericDiscoveryTerm(term)){
   $('#searchMatches').classList.add('hidden');
   const discoverTab=document.querySelector('[data-explore-tool="discover"]');
   if(discoverTab&&!discoverTab.classList.contains('active'))discoverTab.click();
@@ -1183,6 +1183,69 @@ const DISCOVERY_TERMS=[
  {pattern:/waterfall|falls/i,categories:'natural,tourism.sights'},
  {pattern:/lighthouse/i,categories:'tourism.sights'}
 ];
+// Category-intent matching uses free, local vocabulary only. Do not confuse
+// broad terms (steak house, supper club) with actual business names.
+const DISCOVERY_INTENTS=[
+ {label:'restaurants',categories:DISCOVERY_CATEGORIES.restaurants,terms:[
+  'restaurant','restaurants','steak house','steakhouse','steakhouses','steak','supper club',
+  'supper clubs','bar and grill','grill','diners','diner','bistro','eatery','dining','burger',
+  'burgers','fish fry','seafood','bbq','barbecue','pizza','pizzeria','pub','tavern']},
+ {label:'coffee shops',categories:DISCOVERY_CATEGORIES.coffee_shops,terms:[
+  'coffee','coffee shop','coffee shops','cafe','cafes','espresso','roaster','roastery']},
+ {label:'lodging',categories:DISCOVERY_CATEGORIES.lodging,terms:[
+  'hotel','hotels','motel','motels','inn','inns','lodging','accommodation']},
+ {label:'attractions',categories:DISCOVERY_CATEGORIES.attractions,terms:[
+  'attraction','attractions','things to do','sightseeing','museums','museum',
+  'historical site','historic site','historical sites','landmarks','waterfalls','waterfall',
+  'lighthouse','lighthouses']},
+ {label:'shopping',categories:DISCOVERY_CATEGORIES.shopping,terms:[
+  'shopping','shop','shops','antique store','antique shops','thrift shops']},
+ {label:'wineries',categories:DISCOVERY_CATEGORIES.wineries,terms:[
+  'winery','wineries','vineyards','vineyard','wine tasting']},
+ {label:'trails',categories:DISCOVERY_CATEGORIES.hiking,terms:[
+  'hiking','hike','hikes','trail','trails','nature walk','walking trails']},
+ {label:'boating',categories:DISCOVERY_CATEGORIES.boating,terms:[
+  'boating','boat launch','boat launches','marina','marinas','boat ramp','boat ramps']},
+ {label:'fishing',categories:DISCOVERY_CATEGORIES.fishing,terms:[
+  'fishing','fishing access','fishing spots']},
+ {label:'events',categories:DISCOVERY_CATEGORIES.events,terms:[
+  'events','event','concerts','concert','performances']}
+];
+function normalizeSearchPhrase(text){
+ return String(text||'').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'')
+  .replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+}
+function limitedSearchEditDistance(a,b,limit=2){
+ if(Math.abs(a.length-b.length)>limit)return limit+1;
+ let previous=Array.from({length:b.length+1},(_,i)=>i);
+ for(let i=1;i<=a.length;i++){
+  const row=[i];let smallest=i;
+  for(let j=1;j<=b.length;j++){
+   const cost=a[i-1]===b[j-1]?0:1;
+   const next=Math.min(previous[j]+1,row[j-1]+1,previous[j-1]+cost);
+   row.push(next);smallest=Math.min(smallest,next);
+  }
+  if(smallest>limit)return limit+1;
+  previous=row;
+ }
+ return previous[b.length];
+}
+function discoveryIntent(text){
+ const term=normalizeSearchPhrase(text).replace(/^(?:best|top|good|local|nearby)\s+/,'');
+ if(!term||term.length>35)return null;
+ for(const entry of DISCOVERY_INTENTS)
+  if(entry.terms.some(alias=>normalizeSearchPhrase(alias)===term))
+   return {label:entry.label,categories:entry.categories};
+ if(term.length<5)return null;
+ for(const entry of DISCOVERY_INTENTS)
+  if(entry.terms.some(alias=>{
+   const candidate=normalizeSearchPhrase(alias);
+   return candidate.length>=5&&Math.abs(candidate.length-term.length)<=2&&
+    limitedSearchEditDistance(term,candidate,2)<=2;
+  }))return {label:entry.label,categories:entry.categories};
+ return null;
+}
+
 // "catering" is an OpenStreetMap category group. A caterer-for-hire alone
 // does not qualify for Restaurants. A caterer with a separate restaurant/cafe
 // tag DOES qualify; preserve it.
@@ -1250,7 +1313,8 @@ const discoveryCache=new Map();
 let discoveryOffset=0,discoverySignature='',discoveryRequest=0,discoveryArea='';
 const DISCOVERY_PAGE_SIZE=100;
 function genericDiscoveryTerm(term){
- return /^(restaurants?|caf[eé]s?|coffees?|coffee shops?|winer(?:y|ies)|vineyards?|wine tasting|shops?|shopping|antique shops?|thrift stores?|museums?|historical sites?|hiking|trails?|boating|fishing|marinas?|waterfalls?|falls|lighthouses?|attractions?|events?|hotels?|lodging|camping|parks?|scenic drives?|businesses?|nearby)$/i.test(term.trim());
+ return /^(restaurants?|caf[eé]s?|coffees?|coffee shops?|winer(?:y|ies)|vineyards?|wine tasting|shops?|shopping|antique shops?|thrift stores?|museums?|historical sites?|hiking|trails?|boating|fishing|marinas?|waterfalls?|falls|lighthouses?|attractions?|events?|hotels?|lodging|camping|parks?|scenic drives?|businesses?|nearby)$/i.test(term.trim())||
+  !!discoveryIntent(term);
 }
 function discoveryFoundPlace(feature,category,match,restaurantOnly){
  const p=feature?.properties||{},item=mapPlaceFromFeature(feature);if(!item)return null;
@@ -1324,7 +1388,7 @@ async function discoverAlongRoute(loadMore=false){
  const key=window.LAZY_ACRES_GEOAPIFY_KEY;
  if(!key||key==='PASTE_YOUR_GEOAPIFY_BROWSER_KEY_HERE'){status.textContent='Geoapify is not configured.';return;}
  const category=$('#category').value,term=$('#discoverText').value.trim();
- const match=DISCOVERY_TERMS.find(x=>x.pattern.test(term));
+ const intent=discoveryIntent(term),match=intent||DISCOVERY_TERMS.find(x=>x.pattern.test(term));
  const categories=category==='all'||category==='other'?
   match?.categories||DISCOVERY_CATEGORIES[category]||DISCOVERY_CATEGORIES.all:
   DISCOVERY_CATEGORIES[category]||DISCOVERY_CATEGORIES.all;
@@ -1377,6 +1441,7 @@ async function discoverAlongRoute(loadMore=false){
   $('#discoverShowOnMap').textContent='Show all '+found.length+' on map';
   status.textContent=found.length+' route-corridor places loaded · '+maxMinutes+
    '-minute detour target; check each result for actual added road time'+
+   (intent?' · Showing '+intent.label:'')+
    (hasMore?' · more results available':'')+
    (corridorOffset>=CORRIDOR_PAGE_SIZE*CORRIDOR_MAX_PAGES?' · results may be incomplete':'')+'.';
   if(found.length)showDiscoveryResultsOnMap();
@@ -1429,7 +1494,7 @@ async function discover(loadMore=false){
  if(!key||key==='PASTE_YOUR_GEOAPIFY_BROWSER_KEY_HERE'){
   status.textContent='Nearby discovery is not configured yet.';return;
  }
- const match=DISCOVERY_TERMS.find(x=>x.pattern.test(term));
+ const intent=discoveryIntent(term),match=intent||DISCOVERY_TERMS.find(x=>x.pattern.test(term));
  const categories=category==='all'||category==='other'?(match?.categories||DISCOVERY_CATEGORIES[category]||DISCOVERY_CATEGORIES.all):(DISCOVERY_CATEGORIES[category]||DISCOVERY_CATEGORIES.all);
  const restaurantOnly=category==='restaurants'||((category==='all'||category==='other')&&!!match&&/catering\.(restaurant|fast_food|food_court)/.test(categories));
  const coffeeSearch=category==='coffee_shops'||((category==='all'||category==='other')&&!!match&&match.categories.includes('catering.cafe'));
@@ -1541,7 +1606,8 @@ async function discover(loadMore=false){
   moreButton.classList.toggle('hidden',!hasMore);
   status.textContent=found.length+' matching places in '+scope+
    (hasMore?' · use Load more to see the next '+DISCOVERY_PAGE_SIZE:'')+
-   (nameFilter?' · name: '+nameFilter:'')+coffeeCoverageNote+'.';
+   (nameFilter?' · name: '+nameFilter:'')+
+   (intent?' · Showing '+intent.label:'')+coffeeCoverageNote+'.';
   if(found.length)showDiscoveryResultsOnMap();
   else if(window.matchMedia('(max-width:760px)').matches)setMobileSheet('expanded');
  }catch(error){

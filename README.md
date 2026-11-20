@@ -6,6 +6,8 @@ A shared, trip-focused vacation workspace for Tod and Donna. Hosted as a static 
 
 ## Current features
 
+- **v0.6.55 (2026-11-20):** Broader free Discover Nearby and Along Route intent matching: steak house, steakhouse, supper club, grill and misspelled restaurant/category terms lead to wider restaurant results rather than literal name searches. Other supported synonyms cover cafés, lodging, attractions, shopping, trails, boating, fishing, wineries and events. Exact business-name searches remain unchanged. No database changes.
+
 - **v0.6.54 (2026-11-20):** Mobile Explore search moved to the map control row and now opens a compact search field. Empty searches explain what to enter; generic searches expand the results sheet. Nearby Places collapses to a narrow folder tab. Discovery category/scope selectors share a row, inputs are compact, and result cards are white, lightly rounded and numbered only in the list. No Supabase changes.
 
 - **v0.6.53 (2026-11-19):** Compact iPhone bottom navigation uses content-sized tabs rather than equally expanded buttons. Ideas and Itinerary now place all entry actions in one non-wrapping compact row (five actions for mapped Ideas; four for Itinerary); button labels wrap internally as necessary. No trip/database changes.
