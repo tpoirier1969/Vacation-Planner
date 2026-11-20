@@ -6,6 +6,8 @@ A shared, trip-focused vacation workspace for Tod and Donna. Hosted as a static 
 
 ## Current features
 
+- **v0.6.56 (2026-11-20):** When exact business-name search returns nothing, top map search, Discover Nearby and Along saved route can check a limited same-area/source category sample for near-name matches, including common spelling errors. Every such result is labeled "Similar name" and must be verified by the user; no unrelated broad web searches or automatic saves. No database changes.
+
 - **v0.6.55 (2026-11-20):** Broader free Discover Nearby and Along Route intent matching: steak house, steakhouse, supper club, grill and misspelled restaurant/category terms lead to wider restaurant results rather than literal name searches. Other supported synonyms cover cafés, lodging, attractions, shopping, trails, boating, fishing, wineries and events. Exact business-name searches remain unchanged. No database changes.
 
 - **v0.6.54 (2026-11-20):** Mobile Explore search moved to the map control row and now opens a compact search field. Empty searches explain what to enter; generic searches expand the results sheet. Nearby Places collapses to a narrow folder tab. Discovery category/scope selectors share a row, inputs are compact, and result cards are white, lightly rounded and numbered only in the list. No Supabase changes.

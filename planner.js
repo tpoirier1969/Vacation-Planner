@@ -1088,6 +1088,20 @@ async function searchLocation(query,store=false){
     try{geo.push(...await nominatimNamedSearch(term,area));}
     catch{/* Preserve the first source and manual placement if fallback is unavailable. */}
    }
+   if(!store&&!places.length&&!geo.length&&area){
+    // Bounded same-map sample with no literal name filter.
+    const groups=['catering','commercial,accommodation','tourism,entertainment,leisure,natural,production.winery'];
+    const batches=await Promise.allSettled(groups.map(async group=>{
+     const params=new URLSearchParams({categories:group,filter:area,bias,limit:'100',apiKey:key});
+     const res=await fetch('https://api.geoapify.com/v2/places?'+params);
+     if(!res.ok)throw Error('Similar-name lookup HTTP '+res.status);
+     return (await res.json()).features||[];
+    }));
+    if(token!==searchToken)return;
+    places=batches.filter(x=>x.status==='fulfilled').flatMap(x=>x.value)
+     .filter(feature=>feature.properties?.name&&discoveryNameMatches(term,feature.properties.name))
+     .map(feature=>({...feature,properties:{...feature.properties,_similarName:true}}));
+   }
   }else{
    geo=await nominatimNamedSearch(term,area,store?1:8);
   }
@@ -1107,7 +1121,7 @@ async function searchLocation(query,store=false){
    const identity=item.placeId||[item.name.toLowerCase(),item.lat.toFixed(4),item.lng.toFixed(4)].join('|');
    if(seen.has(identity))return;seen.add(identity);
    results.push({...item,address:item.address||p.formatted||'',searchCategory:detectedCategory(item.categories,item.name),
-    sourceKind:kind});
+    sourceKind:kind,similarName:!!p._similarName});
   };
   for(const feature of places)append(feature,'Business');
   for(const feature of geo)append(feature,'Location');
@@ -1121,7 +1135,8 @@ async function searchLocation(query,store=false){
   box.innerHTML='<div class="row"><h3>'+results.length+' matching places / locations</h3><button type="button" class="quiet small" data-search-close>Close</button></div>'+
    (results.length?results.map((x,i)=>'<div class="search-match">'+
     '<button type="button" data-search-choice="'+i+'"><strong>'+esc(x.name)+'</strong>'+
-    '<small>'+esc(x.sourceKind)+(x.address?' · '+esc(x.address):'')+'</small></button>'+
+    '<small>'+esc(x.sourceKind)+(x.address?' · '+esc(x.address):'')+
+     (x.similarName?' · Similar name: verify place':'')+'</small></button>'+
     '<div class="search-match-actions"><button type="button" class="secondary small" data-search-save="'+i+'">+ Idea</button>'+
     '<button type="button" class="primary small" data-search-plan="'+i+'">+ Itinerary</button></div></div>').join(''):
     '<p>No matches within this map view. Try a shorter name, adjust the map, or place a pin manually.</p>');
@@ -1246,6 +1261,20 @@ function discoveryIntent(text){
  return null;
 }
 
+// Fuzzy name matching is restricted to same-area/category candidate records.
+// Require every meaningful query token to match; never auto-save fuzzy hits.
+function discoveryNameMatches(query,name){
+ const wanted=normalizeSearchPhrase(normalizedBusinessName(query));
+ const existing=normalizeSearchPhrase(name);
+ if(!wanted||!existing)return false;
+ if(existing.includes(wanted))return true;
+ const tokens=wanted.split(' ').filter(x=>x.length>=3),words=existing.split(' ');
+ if(!tokens.length)return false;
+ return tokens.every(word=>words.some(other=>
+  other===word||(word.length>=4&&other.length>=4&&Math.abs(word.length-other.length)<=2&&
+   limitedSearchEditDistance(word,other,2)<=2)));
+}
+
 // "catering" is an OpenStreetMap category group. A caterer-for-hire alone
 // does not qualify for Restaurants. A caterer with a separate restaurant/cafe
 // tag DOES qualify; preserve it.
@@ -1355,6 +1384,7 @@ function discoveryCard(item,i){
  return '<article class="poi" id="poi-card-'+i+'" data-discovery-index="'+i+'">'+
   '<div class="poi-heading"><span class="poi-number">'+(i+1)+'.</span><strong>'+esc(item.name)+'</strong></div>'+
   '<p class="poi-meta">'+esc(String(item.kind).replaceAll(/[._]/g,' '))+(item.address?' · '+esc(item.address):'')+'</p>'+
+  (item.similarName?'<small class="poi-similar-hint">Similar name — verify this is the intended place</small>':'')+
   '<p class="poi-description" id="poi-description-'+i+'">'+esc(blurb||'Checking available descriptions…')+'</p>'+
   '<p class="poi-hours" id="poi-hours-'+i+'">'+esc(item.hours?'Hours: '+Discovery.hoursText(item.hours):'Checking hours…')+'</p>'+
   '<div id="poi-contact-'+i+'" class="poi-contact"></div>'+
@@ -1429,12 +1459,31 @@ async function discoverAlongRoute(loadMore=false){
    item.corridor={routeId:route.id,maxMinutes};
    newItems.push(item);
   }
+  let similarFound=false;
+  if(!newItems.length&&!previous.length&&nameFilter&&!loadMore){
+   // No exact name in this corridor: one broader same-corridor sample.
+   const broad={...body};delete broad.name;
+   const response=await fetch('https://api.geoapify.com/v2/places?apiKey='+encodeURIComponent(key),{
+    method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(broad),signal:controller.signal});
+   if(response.ok){
+    const candidates=await response.json();
+    if(token!==discoveryRequest)return;
+    for(const feature of candidates.features||[]){
+     if(restaurantOnly&&!isCustomerFacingRestaurant(feature.properties||{}))continue;
+     const item=discoveryFoundPlace(feature,category,match,restaurantOnly);
+     if(!item||!discoveryNameMatches(nameFilter,item.name)||
+      newItems.some(x=>sameNearbyBusiness(x,item)))continue;
+     item.corridor={routeId:route.id,maxMinutes};item.similarName=true;
+     newItems.push(item);similarFound=true;
+    }
+   }
+  }
   const found=[...previous,...newItems];
   corridorOffset+=CORRIDOR_PAGE_SIZE;window.__tripSuggestions=found;
   results.innerHTML=found.length?found.map(discoveryCard).join(''):
    '<p class="empty">No route-corridor results. Try different categories or a wider detour target.</p>';
   renderDiscoveryMarkers(found);observeDiscoveryCards();
-  const hasMore=data.features.length===CORRIDOR_PAGE_SIZE&&
+  const hasMore=!similarFound&&data.features.length===CORRIDOR_PAGE_SIZE&&
    corridorOffset<CORRIDOR_PAGE_SIZE*CORRIDOR_MAX_PAGES;
   more.classList.toggle('hidden',!hasMore);more.textContent='Load more along route';
   $('#discoverShowOnMap').classList.toggle('hidden',!found.length);
@@ -1442,6 +1491,7 @@ async function discoverAlongRoute(loadMore=false){
   status.textContent=found.length+' route-corridor places loaded · '+maxMinutes+
    '-minute detour target; check each result for actual added road time'+
    (intent?' · Showing '+intent.label:'')+
+   (similarFound?' · Similar names from limited sample; confirm the business':'')+
    (hasMore?' · more results available':'')+
    (corridorOffset>=CORRIDOR_PAGE_SIZE*CORRIDOR_MAX_PAGES?' · results may be incomplete':'')+'.';
   if(found.length)showDiscoveryResultsOnMap();
@@ -1594,6 +1644,30 @@ async function discover(loadMore=false){
     }
    }catch{/* Unavailable public fallback does not break primary results. */}
   }
+  let similarFound=false;
+  if(!found.length&&nameFilter&&!loadMore){
+   // Only sample the current visible rectangle; if exact-name matching
+   // fails, locally compare names against a limited category sample.
+   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
+   try{
+    const batches=await Promise.allSettled(groups.map(async group=>{
+     const params=new URLSearchParams({categories:group,filter:area,
+      bias:'proximity:'+centerPoint,limit:String(DISCOVERY_PAGE_SIZE),apiKey:key});
+     const response=await fetch('https://api.geoapify.com/v2/places?'+params,{signal:controller.signal});
+     if(!response.ok)throw Error('Similar-name lookup HTTP '+response.status);
+     return (await response.json()).features||[];
+    }));
+    if(token!==discoveryRequest)return;
+    for(const feature of batches.filter(x=>x.status==='fulfilled').flatMap(x=>x.value)){
+     if(restaurantOnly&&!isCustomerFacingRestaurant(feature.properties||{}))continue;
+     const item=discoveryFoundPlace(feature,category,match,restaurantOnly);
+     if(!item||!discoveryNameMatches(nameFilter,item.name)||
+      found.some(x=>sameNearbyBusiness(x,item)))continue;
+     item.similarName=true;found.push(item);similarFound=true;
+    }
+   }catch{/* No guessed results if the provider is unavailable. */}
+   finally{clearTimeout(timer);}
+  }
   window.__tripSuggestions=found;discoveryOffset+=DISCOVERY_PAGE_SIZE;
   const scroller=document.querySelector('.explore-side'),oldScroll=scroller?.scrollTop||0;
   results.innerHTML=found.length?found.map(discoveryCard).join(''):
@@ -1603,11 +1677,12 @@ async function discover(loadMore=false){
   const mapButton=$('#discoverShowOnMap');
   mapButton.classList.toggle('hidden',!found.length);
   mapButton.textContent='Show all '+found.length+' on map';
-  moreButton.classList.toggle('hidden',!hasMore);
+  moreButton.classList.toggle('hidden',!hasMore||similarFound);
   status.textContent=found.length+' matching places in '+scope+
-   (hasMore?' · use Load more to see the next '+DISCOVERY_PAGE_SIZE:'')+
-   (nameFilter?' · name: '+nameFilter:'')+
-   (intent?' · Showing '+intent.label:'')+coffeeCoverageNote+'.';
+   (hasMore&&!similarFound?' · use Load more to see the next '+DISCOVERY_PAGE_SIZE:'')+
+   (nameFilter&&!similarFound?' · name: '+nameFilter:'')+
+   (intent?' · Showing '+intent.label:'')+
+   (similarFound?' · Similar names from a limited sample; confirm the business':'')+coffeeCoverageNote+'.';
   if(found.length)showDiscoveryResultsOnMap();
   else if(window.matchMedia('(max-width:760px)').matches)setMobileSheet('expanded');
  }catch(error){
