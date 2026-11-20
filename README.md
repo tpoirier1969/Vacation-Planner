@@ -6,6 +6,8 @@ A shared, trip-focused vacation workspace for Tod and Donna. Hosted as a static 
 
 ## Current features
 
+- **v0.6.54 (2026-11-20):** Mobile Explore search moved to the map control row and now opens a compact search field. Empty searches explain what to enter; generic searches expand the results sheet. Nearby Places collapses to a narrow folder tab. Discovery category/scope selectors share a row, inputs are compact, and result cards are white, lightly rounded and numbered only in the list. No Supabase changes.
+
 - **v0.6.53 (2026-11-19):** Compact iPhone bottom navigation uses content-sized tabs rather than equally expanded buttons. Ideas and Itinerary now place all entry actions in one non-wrapping compact row (five actions for mapped Ideas; four for Itinerary); button labels wrap internally as necessary. No trip/database changes.
 
 - **v0.6.52 (2026-11-19):** An Info popup lacking a website now tries on-demand matched OpenStreetMap business records and exact-ID Wikidata official website (P856) lookups rather than stopping at an empty Geoapify field. Matches require same normalized name and close coordinates. Missing website retains a manual web search using business name and saved address; no website is guessed or scraped. Read-only, no Supabase changes.

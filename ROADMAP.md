@@ -13,6 +13,8 @@ This is the working list to consult whenever Tod asks **what remains outstanding
 
 ## Current implementation checkpoint
 
+- **v0.6.54 (2026-11-20):** Compact mobile Explore UI: functional map Search control, visible generic results, file-tab collapsed sheet, side-by-side category and search-area selectors, smaller field typography, and white list-only-numbered discovery results. Real-device acceptance still pending; no trip records changed.
+
 - **v0.6.53 (2026-11-19):** Reduced mobile bottom nav height and changed five tabs to compact content-width buttons. Moved listing actions into one short, non-wrapping row in Ideas and Itinerary, allowing label wrapping within each button. No saved record changes; iPhone visual acceptance pending.
 
 - **v0.6.52 (2026-11-19):** On-demand website enrichment in Ideas/Itinerary Info: after an empty saved Geoapify website, check named OSM building/node metadata and exact-identifier Wikidata P856 official website, with strict name/proximity matching. Add a name/address-based web search when no structured source provides the link. Do not auto-select search engine hits or alter Supabase. Live verification pending.

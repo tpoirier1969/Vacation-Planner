@@ -5,8 +5,8 @@ if(!Itinerary||!Ideas||!Discovery)throw Error('Trip planning and discovery modul
 const SESSION='lazy-acres-active-trip',TABS=['explore','places','itinerary','notes','packing'];const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c])),uid=()=>crypto?.randomUUID?.()||Date.now()+'-'+Math.random().toString(36).slice(2);
 let state=initialState,ideaFilter='all',ideaQuery='',itineraryView='all',routeUI=null;
 let active=sessionStorage.getItem(SESSION),tab='explore',map,markers,discoveryMarkers,preview,selectedPoint,placeDestination='places',searchToken=0,addingPlace=false,expandedMap=false,tileLayer,tileErrors=0,baseLayers=null,mapStyle=localStorage.getItem('lazy-acres-map-style')==='satellite'?'satellite':'street',pendingActivityLocation=null;const trip=()=>state.trips.find(t=>t.id===active),persist=()=>{cloudSave(state);render()},formatDate=s=>s?new Date(s+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):'Dates flexible',forTrip=(key)=>state[key].filter(x=>x.tripId===active),geo=x=>x.lat!=null&&x.lng!=null&&Number.isFinite(Number(x.lat))&&Number.isFinite(Number(x.lng));
-function showTrip(id){if(!state.trips.some(t=>t.id===id))return;setMobileSheet('collapsed');ideaFilter='all';ideaQuery='';itineraryView='all';$('#ideaSearch').value='';$('#itineraryView').value='all';discoveryMarkers?.clearLayers();window.__tripSuggestions=[];addingPlace=false;expandedMap=false;syncMapMode();syncExpanded();active=id;sessionStorage.setItem(SESSION,id);tab='explore';routeUI?.onTripChange();render();const t=trip();if(t.lat!=null&&t.lng!=null){map?.setView([t.lat,t.lng],10)}else if(t.destination){searchLocation(t.destination,true)}}
-function exitTrip(){setMobileSheet('collapsed');routeUI?.cancelPick();ideaFilter='all';ideaQuery='';itineraryView='all';$('#ideaSearch').value='';$('#itineraryView').value='all';discoveryMarkers?.clearLayers();window.__tripSuggestions=[];active=null;addingPlace=false;expandedMap=false;syncMapMode();syncExpanded();sessionStorage.removeItem(SESSION);render()}
+function showTrip(id){document.body.classList.remove('mobile-search-open');if(!state.trips.some(t=>t.id===id))return;setMobileSheet('collapsed');ideaFilter='all';ideaQuery='';itineraryView='all';$('#ideaSearch').value='';$('#itineraryView').value='all';discoveryMarkers?.clearLayers();window.__tripSuggestions=[];addingPlace=false;expandedMap=false;syncMapMode();syncExpanded();active=id;sessionStorage.setItem(SESSION,id);tab='explore';routeUI?.onTripChange();render();const t=trip();if(t.lat!=null&&t.lng!=null){map?.setView([t.lat,t.lng],10)}else if(t.destination){searchLocation(t.destination,true)}}
+function exitTrip(){document.body.classList.remove('mobile-search-open');setMobileSheet('collapsed');routeUI?.cancelPick();ideaFilter='all';ideaQuery='';itineraryView='all';$('#ideaSearch').value='';$('#itineraryView').value='all';discoveryMarkers?.clearLayers();window.__tripSuggestions=[];active=null;addingPlace=false;expandedMap=false;syncMapMode();syncExpanded();sessionStorage.removeItem(SESSION);render()}
 function editAndRemove(kind,x){
  const info=kind==='places'||kind==='activities'?
   '<button class="quiet small" data-contact-info="'+kind+':'+esc(x.id)+'" aria-label="Contact info for '+esc(x.name||x.title)+'">Info</button>':'';
@@ -100,10 +100,15 @@ function setMobileSheet(next){
   handle.setAttribute('aria-expanded',String(expanded));
   handle.setAttribute('aria-label',expanded?'Collapse results to show the map':'Expand results to full screen');
  }
- const action=document.getElementById('mobileSheetAction');
- if(action)action.textContent=expanded?'Collapse':'Expand';
  const indicator=document.querySelector('#mobileSheetHandle .sheet-indicator');
  if(indicator)indicator.textContent=expanded?'⌄':'⌃';
+}
+function setMobileMapSearch(open,keepMatches=false){
+ const enabled=!!open;
+ document.body.classList.toggle('mobile-search-open',enabled);
+ $('#mobileSearchToggle').setAttribute('aria-expanded',String(enabled));
+ if(!enabled&&!keepMatches)$('#searchMatches').classList.add('hidden');
+ if(enabled)requestAnimationFrame(()=>$('#searchText').focus());
 }
 function initializeMobileWorkspace(){
  const menu=$('#mobileTripMenu');
@@ -112,6 +117,7 @@ function initializeMobileWorkspace(){
   menu.setAttribute('aria-expanded',String(open));
  });
  $('#mobileSignOut').addEventListener('click',()=>$('#cloudSignOut').click());
+ $('#mobileSearchToggle').addEventListener('click',()=>setMobileMapSearch(!document.body.classList.contains('mobile-search-open')));
  $('#mobileMapOptions').addEventListener('click',()=>{
   const open=document.body.classList.toggle('mobile-map-options-open');
   $('#mobileMapOptions').setAttribute('aria-expanded',String(open));
@@ -156,7 +162,7 @@ function initializeMobileWorkspace(){
  });
  setMobileSheet('collapsed');
 }
-function setTab(n){if(!trip()||!TABS.includes(n))return;document.body.classList.remove('mobile-trip-menu-open','mobile-map-options-open');if(n!=='explore')routeUI?.cancelPick();if(n!=='explore'&&expandedMap){expandedMap=false;syncExpanded()}addingPlace=false;syncMapMode();tab=n;render()}
+function setTab(n){if(!trip()||!TABS.includes(n))return;document.body.classList.remove('mobile-trip-menu-open','mobile-map-options-open');if(n!=='explore')setMobileMapSearch(false);if(n!=='explore')routeUI?.cancelPick();if(n!=='explore'&&expandedMap){expandedMap=false;syncExpanded()}addingPlace=false;syncMapMode();tab=n;render()}
 function setTileStatus(message,show){const box=$('#tileStatus');if(!box)return;box.classList.toggle('hidden',!show);$('#tileStatusText').textContent=message;}
 function setMapStyle(style){
  if(!map||!baseLayers||!baseLayers[style])return;
@@ -1018,7 +1024,15 @@ function normalizedBusinessName(term){
 }
 let searchMatches=[];
 async function searchLocation(query,store=false){
- const term=String(query||'').trim();if(!term)return;
+ const term=String(query||'').trim();
+ if(!term){
+  if(!store){
+   const box=$('#searchMatches');box.classList.remove('hidden');
+   box.textContent='Enter a business, town, or address to search the map.';
+   $('#searchText').focus();
+  }
+  return;
+ }
  // Send generic business-type queries to the paginated discovery workflow,
  // keeping map search for actual named places, towns, and addresses.
  if(!store&&genericDiscoveryTerm(term)&&DISCOVERY_TERMS.some(x=>x.pattern.test(term))){
@@ -1028,6 +1042,10 @@ async function searchLocation(query,store=false){
   $('#category').value='all';
   $('#discoverText').value=term;
   await discover(false);
+  if(window.matchMedia('(max-width:760px)').matches){
+   if(typeof setMobileMapSearch==='function')setMobileMapSearch(false);
+   setMobileSheet('expanded');
+  }
   return;
  }
  const token=++searchToken,key=window.LAZY_ACRES_GEOAPIFY_KEY,center=map?.getCenter()||{lat:trip()?.lat??46.55,lng:trip()?.lng??-87.4};
@@ -1107,7 +1125,10 @@ async function searchLocation(query,store=false){
     '<div class="search-match-actions"><button type="button" class="secondary small" data-search-save="'+i+'">+ Idea</button>'+
     '<button type="button" class="primary small" data-search-plan="'+i+'">+ Itinerary</button></div></div>').join(''):
     '<p>No matches within this map view. Try a shorter name, adjust the map, or place a pin manually.</p>');
-  if(window.matchMedia('(max-width:760px)').matches)setMobileSheet('collapsed');
+  if(window.matchMedia('(max-width:760px)').matches){
+   if(typeof setMobileMapSearch==='function')setMobileMapSearch(false,true);
+   setMobileSheet('collapsed');
+  }
  }catch(error){
   if(token!==searchToken)return;
   if(!store)box.innerHTML='<p>Search unavailable: '+esc(error.message||'Request failed')+'</p><button type="button" class="quiet small" data-search-close>Close</button>';
@@ -1268,7 +1289,7 @@ function saveDiscoveredIdea(item){
 function discoveryCard(item,i){
  const saved=placeAlreadySaved(item),review=Discovery.reviewSearchUrl(item),blurb=Discovery.description(item);
  return '<article class="poi" id="poi-card-'+i+'" data-discovery-index="'+i+'">'+
-  '<strong>'+esc(item.name)+'</strong>'+
+  '<div class="poi-heading"><span class="poi-number">'+(i+1)+'.</span><strong>'+esc(item.name)+'</strong></div>'+
   '<p class="poi-meta">'+esc(String(item.kind).replaceAll(/[._]/g,' '))+(item.address?' · '+esc(item.address):'')+'</p>'+
   '<p class="poi-description" id="poi-description-'+i+'">'+esc(blurb||'Checking available descriptions…')+'</p>'+
   '<p class="poi-hours" id="poi-hours-'+i+'">'+esc(item.hours?'Hours: '+Discovery.hoursText(item.hours):'Checking hours…')+'</p>'+

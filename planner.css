@@ -404,8 +404,10 @@ body{
 .ideas-filter select{flex:1 1 170px;max-width:280px;min-height:37px;border:1px solid #cdb999;border-radius:5px;background:#fffdfa;padding:5px 8px}
 .ideas-filter .muted{margin-left:auto;font-size:12px;white-space:nowrap}
 /* Nearby discovery: informative, scannable rows rather than more cards. */
-.suggestions .poi{padding:11px 0;border-bottom:1px solid #ded8c9}
-.suggestions .poi>strong{font-size:15px;line-height:1.3;color:var(--retro-deep)}
+.suggestions .poi{padding:10px 11px;margin:8px 0;background:#fff;border:1px solid #e0d7c7;border-radius:9px;box-shadow:0 1px 3px #233e3a0b}
+.suggestions .poi-heading{display:flex;align-items:baseline;gap:6px;min-width:0}
+.suggestions .poi-heading strong{font-size:15px;line-height:1.3;color:var(--retro-deep);min-width:0;overflow-wrap:anywhere}
+.suggestions .poi-number{font-size:13px;font-weight:800;color:#556b65;flex:0 0 auto}
 .suggestions .poi .poi-meta{font-size:12px;line-height:1.35;color:#65706c;margin:3px 0}
 .suggestions .poi .poi-description{font-size:13px;line-height:1.45;color:#324849;margin:6px 0 4px}
 .suggestions .poi .poi-hours{font-size:12px;color:#3d5450;margin:3px 0 6px}
@@ -552,7 +554,7 @@ footer{
 
 /* Mobile trip workspace: map and results share the viewport instead of the page scroll.
    Desktop, trip-picker, and other applications retain their original layout. */
-.nav-short,#mobileTripMenu,#mobileSignOut,#mobileMapOptions,.mobile-sheet-handle,#mobileShowIdeaForm,#mobileShowActivityForm{display:none}
+.nav-short,#mobileTripMenu,#mobileSignOut,#mobileSearchToggle,#mobileMapOptions,.mobile-sheet-handle,#mobileShowIdeaForm,#mobileShowActivityForm{display:none}
 .search-matches{position:relative;z-index:750;border:1px solid #c6aa82;background:#fffdf5;padding:8px;border-radius:9px;box-shadow:0 9px 28px #132f3040;max-height:55dvh;overflow-y:auto;margin-bottom:8px}
 .search-matches h3{font-size:13px;margin:0 0 7px}
 .search-match{display:flex;align-items:center;gap:7px;border-top:1px solid #e1d7c5;padding:5px 0}
@@ -648,24 +650,26 @@ footer{
    display:flex;flex-direction:column;overflow:hidden;padding:0;position:relative
  }
  body.mobile-workspace #explore>.toolbar{
-   display:flex;flex-wrap:nowrap;align-items:center;flex:0 0 auto;gap:5px;
-   padding:5px 7px;margin:0;background:#f7f1e5;border-bottom:1px solid #d6c4a8;z-index:650
+   display:none;align-items:center;gap:5px;position:absolute;top:53px;left:7px;right:7px;
+   padding:6px;margin:0;background:#fffaf0;border:1px solid #ceb996;border-radius:8px;
+   box-shadow:0 5px 22px #18333333;z-index:820
  }
- body.mobile-workspace #explore>.toolbar .field{flex:1 1 auto;min-width:0;margin:0}
- body.mobile-workspace #explore>.toolbar .field input{min-height:43px}
- body.mobile-workspace #explore>.toolbar .field{font-size:0}
- body.mobile-workspace #explore>.toolbar button{min-height:42px;flex:0 0 auto;padding:5px 8px;font-size:12px}
+ body.mobile-workspace.mobile-search-open #explore>.toolbar{display:flex}
+ body.mobile-workspace #explore>.toolbar .field{flex:1 1 auto;min-width:0;margin:0;font-size:0}
+ body.mobile-workspace #explore>.toolbar .field input{min-height:40px}
+ body.mobile-workspace #explore>.toolbar button{min-height:40px;flex:0 0 auto;padding:5px 9px;font-size:12px}
  body.mobile-workspace #tripCenter{display:none}
  body.mobile-workspace #searchMatches{
    position:absolute;top:55px;left:6px;right:6px;margin:0;z-index:850;max-height:55dvh
  }
+ body.mobile-workspace.mobile-search-open #searchMatches{top:112px}
  body.mobile-workspace .map-layout{display:block;flex:1 1 auto;min-height:0;overflow:hidden}
  body.mobile-workspace .map-layout>div:first-child{position:relative;height:100%;min-height:0}
  body.mobile-workspace .map-frame{height:100%;min-height:0;margin:0;border:0;border-radius:0}
  body.mobile-workspace .map-frame .map{height:100%!important;min-height:0!important;border:0;border-radius:0}
- body.mobile-workspace .map-float{top:7px;left:7px;right:7px;gap:5px;flex-wrap:nowrap;max-width:calc(100% - 14px)}
- body.mobile-workspace .map-float button{min-height:40px;padding:5px 7px;font-size:11px;white-space:nowrap;flex:0 1 auto;border-width:1px}
- body.mobile-workspace #mobileMapOptions{display:block}
+ body.mobile-workspace .map-float{top:7px;left:7px;right:7px;gap:3px;flex-wrap:nowrap;max-width:calc(100% - 14px)}
+ body.mobile-workspace .map-float button{min-height:42px;padding:5px 3px;font-size:10px;line-height:1.12;white-space:normal;flex:1 1 0;min-width:0;border-width:1px}
+ body.mobile-workspace #mobileSearchToggle,body.mobile-workspace #mobileMapOptions{display:block}
  body.mobile-workspace .map-hint{bottom:48%;left:8px;transform:none;max-width:70%;font-size:10px;padding:4px 7px}
  body.mobile-workspace .map-layer-controls,
  body.mobile-workspace .map-category-controls{
@@ -680,33 +684,43 @@ footer{
  body.mobile-workspace .map-flag-legend,
  body.mobile-workspace .map-layout>div:first-child>p.muted{display:none}
  body.mobile-workspace .map-layout>aside{
-   position:fixed;left:0;right:0;bottom:var(--phone-nav);width:100%;height:64px;
-   min-height:70px;max-height:calc(100dvh - var(--phone-header) - var(--phone-nav) - 4px);
-   z-index:690;overflow:hidden;background:#fff9ec;
-   border-top:2px solid #b88457;border-radius:14px 14px 0 0;
-   box-shadow:0 -6px 24px #0c303044;transition:height .18s ease
+   position:fixed;bottom:var(--phone-nav);z-index:690;
+   max-height:calc(100dvh - var(--phone-header) - var(--phone-nav) - 4px);
+   overflow:hidden;transition:height .18s ease
  }
- body.mobile-workspace.sheet-collapsed .map-layout>aside{height:64px}
+ body.mobile-workspace.sheet-collapsed .map-layout>aside{
+   left:8px;right:auto;width:min(185px,calc(100vw - 16px));height:38px;min-height:0;
+   background:transparent;border:0;border-radius:12px 12px 0 0;box-shadow:none
+ }
  body.mobile-workspace.sheet-expanded .map-layout>aside{
-   height:calc(100dvh - var(--phone-header) - var(--phone-nav) - 4px)
+   left:0;right:0;width:100%;height:calc(100dvh - var(--phone-header) - var(--phone-nav) - 4px);
+   min-height:0;background:#fff9ec;border-top:2px solid #b88457;border-radius:14px 14px 0 0;
+   box-shadow:0 -6px 24px #0c303044
  }
  body.mobile-workspace .map-layout>aside .explore-side{
    display:block;height:100%;max-height:100%;padding:0 10px 12px!important;
    overflow-y:auto;overscroll-behavior:contain;border:0;box-shadow:none;margin:0
  }
+ body.mobile-workspace.sheet-collapsed .map-layout>aside .explore-side{
+   padding:0!important;overflow:hidden;background:transparent
+ }
  body.mobile-workspace .mobile-sheet-handle{
-   display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:25;
-   width:calc(100% + 20px);margin:0 -10px 8px;padding:8px 13px;
-   min-height:59px;background:#fff7e5;color:var(--retro-deep);
+   display:flex;align-items:center;gap:6px;position:sticky;top:0;z-index:25;
+   width:calc(100% + 20px);margin:0 -10px 8px;padding:7px 12px;
+   min-height:46px;background:#fff7e5;color:var(--retro-deep);
    border:0;border-bottom:1px solid #debf90;border-radius:14px 14px 0 0;font-weight:800
  }
+ body.mobile-workspace.sheet-collapsed .mobile-sheet-handle{
+   position:static;width:100%;margin:0;padding:5px 10px;min-height:38px;
+   border:1px solid #b88457;border-bottom:0;border-radius:12px 12px 0 0;
+   box-shadow:0 -2px 9px #0c30302a
+ }
  body.mobile-workspace #mobileSheetTitle{flex:1;text-align:left;font-size:13px}
- body.mobile-workspace #mobileSheetAction{font-size:12px;font-weight:800;padding:6px 8px;border:1px solid #bba37e;border-radius:7px;background:#fffdf8}
- body.mobile-workspace .sheet-indicator{font-size:20px}
+ body.mobile-workspace .sheet-indicator{font-size:18px}
  body.mobile-workspace.sheet-collapsed .explore-tool-tabs,
  body.mobile-workspace.sheet-collapsed #exploreDiscoverPanel,
  body.mobile-workspace.sheet-collapsed #exploreRoutePanel{display:none!important}
- body.mobile-workspace .explore-tool-tabs{position:sticky;top:59px;z-index:24;background:#fff9ec;padding:4px 0 7px}
+ body.mobile-workspace .explore-tool-tabs{position:sticky;top:46px;z-index:24;background:#fff9ec;padding:4px 0 7px}
  body.mobile-workspace .explore-tool-tabs button{min-height:42px}
  /* Route panel is a narrow phone workspace, not a 310px desktop sidebar.
     Intrinsic widths of date inputs, long saved names and metric strings must
@@ -789,9 +803,11 @@ footer{
  }
  body.mobile-workspace .explore-side .field{margin:5px 0}
  body.mobile-workspace #exploreDiscoverPanel>label.field{font-size:12px}
- body.mobile-workspace #discover{min-height:44px;width:100%}
+ body.mobile-workspace #exploreDiscoverPanel input[type=search],
+ body.mobile-workspace #exploreDiscoverPanel select{font-size:14px;min-height:35px;padding:4px 6px}
+ body.mobile-workspace #discover{min-height:40px;width:100%}
  body.mobile-workspace .suggestions{max-height:none;overflow:visible}
- body.mobile-workspace .poi{padding:10px 0}
+ body.mobile-workspace .poi{padding:9px 10px}
  body.mobile-workspace .poi-description,
  body.mobile-workspace .poi-hours,
  body.mobile-workspace .poi-contact,
@@ -860,12 +876,16 @@ footer{
 .route-itinerary-controls input[type=time]{min-height:42px}
 
 /* Saved-route corridor discovery */
-.discover-scope-controls{display:grid;gap:5px;margin:8px 0}
+.discover-main-filters{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:7px;align-items:end;margin:5px 0}
+.discover-main-filters .field{min-width:0;margin:0;font-size:12px}
+.discover-main-filters select{min-width:0;max-width:100%;width:100%}
+.discover-scope-controls{display:grid;gap:5px;margin:4px 0}
 .discover-scope-controls .field{margin:4px 0}
-.discover-scope-controls select{width:100%;min-height:41px}
+.discover-scope-controls select{width:100%;min-height:35px}
 #discoverRouteControls{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:7px}
 #discoverRouteControls>p{grid-column:1/-1;margin:2px 0}
 .route-detour{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:7px;margin:6px 0;background:#faf8ef;border:1px solid #d7d6c9;border-radius:7px}
 .route-detour small{flex:1 1 130px;color:#435f5d;font-size:12px}
 .route-detour button{min-height:38px}
 @media(max-width:440px){#discoverRouteControls{grid-template-columns:minmax(0,1fr)}}
+@supports(-webkit-touch-callout:none){body.mobile-workspace #discoverText:focus{font-size:16px}}
