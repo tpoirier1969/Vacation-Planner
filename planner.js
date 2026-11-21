@@ -1091,8 +1091,8 @@ $('#itineraryLocateSave').addEventListener('click',()=>{
  if(!locatingCoords)return;
  if(draftMapTarget){if(draftMapTarget==='places')manualIdeaLocation={...locatingCoords};else pendingActivityLocation={...(pendingActivityLocation||{}),...locatingCoords};updateDraftLocationLabel(draftMapTarget);$('#itineraryLocateDialog').close();return;}
  const x=forTrip('activities').find(a=>a.id===locatingActivityId);if(!x)return;
- x.lat=locatingCoords.lat;x.lng=locatingCoords.lng;x.placeId='';
  const linked=forTrip('places').find(p=>p.id===x.placeId);
+ x.lat=locatingCoords.lat;x.lng=locatingCoords.lng;
  if(linked&&!geo(linked)){linked.lat=x.lat;linked.lng=x.lng;}
  $('#itineraryLocateDialog').close();persist();
 });
