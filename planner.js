@@ -38,6 +38,7 @@ const savedPlaces=forTrip('places').filter(x=>!plannedIdeaIds.has(x.id));
 const categoriesWithIdeas=PLACE_CATEGORIES.filter(c=>savedPlaces.some(x=>normalizedCategory(x.category)===c));
 if(ideaFilter!=='all'&&!categoriesWithIdeas.includes(ideaFilter))ideaFilter='all';
 const filteredIdeas=Ideas.filterForList(savedPlaces.map(x=>({...x,category:normalizedCategory(x.category)})),ideaFilter,ideaQuery);
+if($('#ideaSort')?.value==='interest')filteredIdeas.sort((a,b)=>(Number(b.interestRating)||0)-(Number(a.interestRating)||0));
 $('#ideaCategoryFilter').innerHTML='<option value="all">All categories ('+savedPlaces.length+')</option>'+
  categoriesWithIdeas.map(c=>'<option value="'+esc(c)+'" '+(ideaFilter===c?'selected':'')+'>'+esc(c)+' ('+savedPlaces.filter(x=>normalizedCategory(x.category)===c).length+')</option>').join('');
 $('#ideaCategoryFilter').value=ideaFilter;
