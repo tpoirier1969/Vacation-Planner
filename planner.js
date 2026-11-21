@@ -3,7 +3,7 @@ const PACKING_CATEGORIES=[{"key":"trip-clothing","label":"Clothing"},{"key":"tri
 const Itinerary=window.VacationItinerary,Ideas=window.VacationIdeas,Discovery=window.VacationDiscovery;
 if(!Itinerary||!Ideas||!Discovery)throw Error('Trip planning and discovery modules failed to load.');
 const SESSION='lazy-acres-active-trip',TABS=['explore','places','itinerary','checkins','notes','packing'];const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c])),uid=()=>crypto?.randomUUID?.()||Date.now()+'-'+Math.random().toString(36).slice(2);
-let mapView='smart',editingCheckin=null,checkinPoint=null,checkinPickerMap=null,checkinPickerMarker=null,checkinSearchSeq=0;let state=initialState,ideaFilter='all',ideaQuery='',itineraryView='all',routeUI=null;
+let mapView='smart',editingCheckin=null,checkinPoint=null,checkinPickerMap=null,checkinPickerMarker=null,checkinSearchSeq=0,locatingActivityId=null,locatingCoords=null,locatingMap=null,locatingMarker=null;let state=initialState,ideaFilter='all',ideaQuery='',itineraryView='all',routeUI=null;
 let active=sessionStorage.getItem(SESSION),tab='explore',map,markers,discoveryMarkers,preview,selectedPoint,placeDestination='places',searchToken=0,addingPlace=false,expandedMap=false,tileLayer,tileErrors=0,baseLayers=null,mapStyle=localStorage.getItem('lazy-acres-map-style')==='satellite'?'satellite':'street',pendingActivityLocation=null;const trip=()=>state.trips.find(t=>t.id===active),persist=()=>{cloudSave(state);render()},formatDate=s=>s?new Date(s+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):'Dates flexible',forTrip=(key)=>state[key].filter(x=>x.tripId===active),geo=x=>x.lat!=null&&x.lng!=null&&Number.isFinite(Number(x.lat))&&Number.isFinite(Number(x.lng));
 function showTrip(id){document.body.classList.remove('mobile-search-open');if(!state.trips.some(t=>t.id===id))return;setMobileSheet('collapsed');ideaFilter='all';ideaQuery='';itineraryView='all';$('#ideaSearch').value='';$('#itineraryView').value='all';discoveryMarkers?.clearLayers();window.__tripSuggestions=[];addingPlace=false;expandedMap=false;syncMapMode();syncExpanded();active=id;sessionStorage.setItem(SESSION,id);tab='explore';routeUI?.onTripChange();render();const t=trip();if(t.lat!=null&&t.lng!=null){map?.setView([t.lat,t.lng],10)}else if(t.destination){searchLocation(t.destination,true)}}
 function exitTrip(){document.body.classList.remove('mobile-search-open');setMobileSheet('collapsed');routeUI?.cancelPick();ideaFilter='all';ideaQuery='';itineraryView='all';$('#ideaSearch').value='';$('#itineraryView').value='all';discoveryMarkers?.clearLayers();window.__tripSuggestions=[];active=null;addingPlace=false;expandedMap=false;syncMapMode();syncExpanded();sessionStorage.removeItem(SESSION);render()}
@@ -79,7 +79,7 @@ $('#activityList').innerHTML=activities.length?activityDays.map(day=>
    (x.hours?'<div class="muted small-details">Hours: '+esc(x.hours)+'</div>':'')+
    (x.confirmationCode?'<div class="muted small-details">Confirmation: '+esc(x.confirmationCode)+'</div>':'')+
    (link?'<a class="small-details" href="'+esc(link)+'" target="_blank" rel="noopener noreferrer">Booking / tickets</a>':'')+
-   '<div class="row entry-button-row">'+editAndRemove('activities',x)+'<button class="quiet small" data-unschedule="'+esc(x.id)+'">Move back to Ideas</button></div></div>';
+   '<div class="row entry-button-row">'+editAndRemove('activities',x)+'<button class="quiet small" data-locate-activity="'+esc(x.id)+'">'+(geo(x)?'Change map pin':'Set map location')+'</button><button class="quiet small" data-unschedule="'+esc(x.id)+'">Move back to Ideas</button></div></div>';
  }).join('')+'</section>'
 ).join('') : '<p class="empty">'+(allActivities.length?'No plans match this view. Choose another filter.':'Nothing decided yet. Choose an idea or add a plan directly.')+'</p>';
 $('#noteList').innerHTML=forTrip('notes').length?forTrip('notes').map(x=>'<div class="day"><div class="row entry-head"><strong>'+esc(x.title)+'</strong>'+editAndRemove('notes',x)+'</div><p style="white-space:pre-wrap">'+esc(x.body)+'</p></div>').join(''):'<p class="empty">Save links, questions, reservations, and research here.</p>';
@@ -1005,6 +1005,38 @@ $('#checkinForm').addEventListener('submit',e=>{e.preventDefault();const f=e.cur
 $('#checkinList').addEventListener('click',e=>{const edit=e.target.closest('[data-checkin-edit]'),remove=e.target.closest('[data-checkin-remove]');if(edit){const x=forTrip('checkins').find(x=>x.id===edit.dataset.checkinEdit);if(x)openCheckin(x);}if(remove&&confirm('Remove this check-in?')){state.checkins=state.checkins.filter(x=>x.id!==remove.dataset.checkinRemove);persist();}});
 $('#tripMapView').addEventListener('change',e=>{mapView=e.target.value;refreshMarkers();routeUI?.render();});
 
+
+function openItineraryLocator(id){
+ const x=forTrip('activities').find(a=>a.id===id);if(!x)return;locatingActivityId=id;
+ locatingCoords=geo(x)?{lat:Number(x.lat),lng:Number(x.lng)}:null;
+ $('#itineraryLocateTitle').textContent='Map location: '+x.title;$('#itineraryLocateSearch').value=x.title;$('#itineraryLocateResults').replaceChildren();$('#itineraryLocateSave').disabled=!locatingCoords;
+ $('#itineraryLocateStatus').textContent=locatingCoords?'Existing map pin selected.':'Search for the location or tap the map to place its pin.';
+ $('#itineraryLocateDialog').showModal();
+ const t=trip(),center=locatingCoords?[locatingCoords.lat,locatingCoords.lng]:(t?.lat!=null?[Number(t.lat),Number(t.lng)]:[44.85,-87.25]);
+ if(!locatingMap){locatingMap=L.map('itineraryLocateMap').setView(center,locatingCoords?14:9);L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(locatingMap);locatingMap.on('click',e=>setItineraryPin(e.latlng.lat,e.latlng.lng,'Map point selected. Save to confirm.'));}
+ else locatingMap.setView(center,locatingCoords?14:9);
+ if(locatingMarker){locatingMap.removeLayer(locatingMarker);locatingMarker=null;}
+ if(locatingCoords)locatingMarker=L.marker(center).addTo(locatingMap);
+ setTimeout(()=>locatingMap.invalidateSize(),100);
+}
+function setItineraryPin(lat,lng,status){locatingCoords={lat:Number(lat),lng:Number(lng)};if(locatingMarker)locatingMarker.setLatLng([lat,lng]);else locatingMarker=L.marker([lat,lng]).addTo(locatingMap);$('#itineraryLocateSave').disabled=false;$('#itineraryLocateStatus').textContent=status;}
+async function searchItineraryLocation(){
+ const q=$('#itineraryLocateSearch').value.trim(),host=$('#itineraryLocateResults');host.replaceChildren();if(!q)return;
+ $('#itineraryLocateStatus').textContent='Searching…';
+ try{
+  const params=new URLSearchParams({q:q+', '+(trip()?.destination||'Wisconsin'),format:'json',limit:'6'});
+  let response=await fetch('https://nominatim.openstreetmap.org/search?'+params,{headers:{Accept:'application/json'}});if(!response.ok)throw Error('Search unavailable');let matches=await response.json();
+  if(!matches.length){params.set('q',q);response=await fetch('https://nominatim.openstreetmap.org/search?'+params,{headers:{Accept:'application/json'}});if(response.ok)matches=await response.json();}
+  for(const p of matches){const lat=Number(p.lat),lng=Number(p.lon);if(!Number.isFinite(lat)||!Number.isFinite(lng))continue;const b=document.createElement('button');b.type='button';b.className='quiet checkin-choice';b.textContent=p.display_name;b.onclick=()=>{setItineraryPin(lat,lng,'Selected '+p.display_name);locatingMap.setView([lat,lng],15);host.replaceChildren();};host.append(b);}
+  $('#itineraryLocateStatus').textContent=host.children.length?'Choose the correct search result.':'No results. Try another name or tap the map.';
+ }catch{$('#itineraryLocateStatus').textContent='Search unavailable. Tap the map to set the pin.';}
+}
+$('#activityList').addEventListener('click',e=>{const b=e.target.closest('[data-locate-activity]');if(b)openItineraryLocator(b.dataset.locateActivity);});
+$('#itineraryLocateSearchButton').addEventListener('click',()=>void searchItineraryLocation());
+$('#itineraryLocateSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();void searchItineraryLocation();}});
+$('#itineraryLocateCancel').addEventListener('click',()=>$('#itineraryLocateDialog').close());
+$('#itineraryLocateSave').addEventListener('click',()=>{const x=forTrip('activities').find(a=>a.id===locatingActivityId);if(!x||!locatingCoords)return;x.lat=locatingCoords.lat;x.lng=locatingCoords.lng;x.placeId='';$('#itineraryLocateDialog').close();persist();});
+
 function refreshMarkers(){
  if(!map||!markers)return;markers.clearLayers();
  const places=forTrip('places'),activities=forTrip('activities').filter(plannedInSmart);
@@ -1031,7 +1063,7 @@ function refreshMarkers(){
  for(const x of activities){
    if(!mapLayerVisible.itinerary||!geo(x))continue;
    const key=Number(x.lat).toFixed(5)+','+Number(x.lng).toFixed(5);
-   if(mapLayerVisible.ideas&&((x.placeId&&places.some(p=>p.id===x.placeId&&geo(p)))||savedCoords.has(key)))continue;
+   if(mapLayerVisible.ideas&&((x.placeId&&places.some(p=>p.id===x.placeId&&geo(p)&&plannedInSmart(p)))||savedCoords.has(key)))continue;
    const category=normalizedCategory(x.category);
    if(!visibleCategories.has(category))continue;
    const el=document.createElement('div'),title=document.createElement('strong');
