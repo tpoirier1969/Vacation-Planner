@@ -912,3 +912,6 @@ footer{
 .route-detour button{min-height:38px}
 @media(max-width:440px){#discoverRouteControls{grid-template-columns:minmax(0,1fr)}}
 @supports(-webkit-touch-callout:none){body.mobile-workspace #discoverText:focus{font-size:16px}}
+
+/* Compact optional notes and relative cost ratings in Ideas and Itinerary. */
+.entry-short-note{font-size:.79rem;line-height:1.35;color:#65716c;margin:.22rem 0;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;white-space:pre-line;overflow-wrap:anywhere}.entry-cost{display:inline-block;font-size:.79rem;font-weight:650;letter-spacing:.045em;color:#526b61;margin:.1rem 0 .35rem}
