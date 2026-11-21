@@ -4,7 +4,7 @@ const Itinerary=window.VacationItinerary,Ideas=window.VacationIdeas,Discovery=wi
 if(!Itinerary||!Ideas||!Discovery)throw Error('Trip planning and discovery modules failed to load.');
 const SESSION='lazy-acres-active-trip',TABS=['explore','places','itinerary','checkins','notes','packing'];const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c])),uid=()=>crypto?.randomUUID?.()||Date.now()+'-'+Math.random().toString(36).slice(2);
 let mapView='smart',editingCheckin=null,checkinPoint=null,checkinPickerMap=null,checkinPickerMarker=null,checkinSearchSeq=0,locatingActivityId=null,locatingCoords=null,locatingMap=null,locatingMarker=null;let state=initialState,ideaFilter='all',ideaQuery='',itineraryView='all',routeUI=null;
-let active=sessionStorage.getItem(SESSION),tab='explore',map,markers,discoveryMarkers,preview,selectedPoint,placeDestination='places',searchToken=0,addingPlace=false,expandedMap=false,tileLayer,tileErrors=0,baseLayers=null,mapStyle=localStorage.getItem('lazy-acres-map-style')==='satellite'?'satellite':'street',pendingActivityLocation=null;const trip=()=>state.trips.find(t=>t.id===active),persist=()=>{cloudSave(state);render()},formatDate=s=>s?new Date(s+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):'Dates flexible',forTrip=(key)=>state[key].filter(x=>x.tripId===active),geo=x=>x.lat!=null&&x.lng!=null&&Number.isFinite(Number(x.lat))&&Number.isFinite(Number(x.lng));
+let active=sessionStorage.getItem(SESSION),tab='explore',map,markers,discoveryMarkers,preview,focusedPlaceMarker=null,selectedPoint,placeDestination='places',searchToken=0,addingPlace=false,expandedMap=false,tileLayer,tileErrors=0,baseLayers=null,mapStyle=localStorage.getItem('lazy-acres-map-style')==='satellite'?'satellite':'street',pendingActivityLocation=null;const trip=()=>state.trips.find(t=>t.id===active),persist=()=>{cloudSave(state);render()},formatDate=s=>s?new Date(s+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):'Dates flexible',forTrip=(key)=>state[key].filter(x=>x.tripId===active),geo=x=>x.lat!=null&&x.lng!=null&&Number.isFinite(Number(x.lat))&&Number.isFinite(Number(x.lng));
 function showTrip(id){document.body.classList.remove('mobile-search-open');if(!state.trips.some(t=>t.id===id))return;setMobileSheet('collapsed');ideaFilter='all';ideaQuery='';itineraryView='all';$('#ideaSearch').value='';$('#itineraryView').value='all';discoveryMarkers?.clearLayers();window.__tripSuggestions=[];addingPlace=false;expandedMap=false;syncMapMode();syncExpanded();active=id;sessionStorage.setItem(SESSION,id);tab='explore';routeUI?.onTripChange();render();const t=trip();if(t.lat!=null&&t.lng!=null){map?.setView([t.lat,t.lng],10)}else if(t.destination){searchLocation(t.destination,true)}}
 function exitTrip(){document.body.classList.remove('mobile-search-open');setMobileSheet('collapsed');routeUI?.cancelPick();ideaFilter='all';ideaQuery='';itineraryView='all';$('#ideaSearch').value='';$('#itineraryView').value='all';discoveryMarkers?.clearLayers();window.__tripSuggestions=[];active=null;addingPlace=false;expandedMap=false;syncMapMode();syncExpanded();sessionStorage.removeItem(SESSION);render()}
 function editAndRemove(kind,x){
@@ -928,6 +928,22 @@ function renderDiscoveryMarkers(found){
   marker.bindTooltip(x.name,{direction:'top',offset:[0,-12]});
   marker.on('popupopen',()=>popup.load());
  });
+}
+function focusNamedLocation(x,kind='saved'){
+ if(!map||!geo(x))return;
+ const lat=Number(x.lat),lng=Number(x.lng),name=x.name||x.title||'Selected location';
+ // Explicitly selected locations must remain visible even when Smart View,
+ // category filters, or layer toggles would otherwise hide their normal pins.
+ if(focusedPlaceMarker){map.removeLayer(focusedPlaceMarker);focusedPlaceMarker=null;}
+ const icon=L.divIcon({className:'category-pin-icon',html:'<span class="map-pin map-pin-actual" style="background:#a64a26">●</span>',iconSize:[30,34],iconAnchor:[15,32]});
+ focusedPlaceMarker=L.marker([lat,lng],{icon,title:name,zIndexOffset:1500}).addTo(map);
+ const popup=document.createElement('div'),heading=document.createElement('strong'),details=document.createElement('p');
+ heading.textContent=name;details.textContent=kind==='itinerary'?'Itinerary stop':kind==='discovery'?'Search result':'Saved place';
+ popup.append(heading,details);
+ focusedPlaceMarker.bindPopup(popup);
+ setTab('explore');
+ const reveal=()=>{if(!map||!focusedPlaceMarker)return;map.invalidateSize({pan:false});map.setView([lat,lng],Math.max(map.getZoom(),15),{animate:false});focusedPlaceMarker.openPopup();};
+ requestAnimationFrame(()=>requestAnimationFrame(reveal));
 }
 function showDiscoveryResultsOnMap(){
  const found=(window.__tripSuggestions||[]).filter(geo);
@@ -2052,7 +2068,7 @@ document.addEventListener('click',async e=>{
   return;
  }
  const editButton=e.target.closest('[data-edit]');if(editButton){const [kind,id]=editButton.dataset.edit.split(':');openEdit(kind,id);return;}
- const open=e.target.closest('[data-open]');if(open)showTrip(open.dataset.open);const rm=e.target.closest('[data-remove]');if(rm){const [key,id]=rm.dataset.remove.split(':');if(confirm('Remove this item from the trip?')){state[key]=state[key].filter(x=>x.id!==id);persist()}}const unschedule=e.target.closest('[data-unschedule]');if(unschedule){moveBackToIdeas(unschedule.dataset.unschedule);return;}const loc=e.target.closest('[data-locate]');if(loc){const x=state.places.find(p=>p.id===loc.dataset.locate);if(x&&geo(x)){setTab('explore');setTimeout(()=>map?.setView([x.lat,x.lng],14),100)}}const plan=e.target.closest('[data-plan]');if(plan)planPlace(plan.dataset.plan);const preview=e.target.closest('[data-preview]');if(preview){const x=window.__tripSuggestions?.[Number(preview.dataset.preview)];if(x){setMobileSheet('collapsed');map?.setView([x.lat,x.lng],15);const discovered=discoveryMarkers?.getLayers().find(m=>{const q=m.getLatLng();return Math.abs(q.lat-x.lat)<0.000001&&Math.abs(q.lng-x.lng)<0.000001});if(discovered)discovered.openPopup();else L.popup().setLatLng([x.lat,x.lng]).setContent(mapMenuContent({lat:x.lat,lng:x.lng},x.name,'','',detectedCategory(x.categories||[x.kind],x.name,x.searchCategory))).openOn(map)}}const suggest=e.target.closest('[data-suggest]');if(suggest){const x=window.__tripSuggestions?.[Number(suggest.dataset.suggest)];if(x){const saved=saveDiscoveredIdea(x);if(saved){suggest.disabled=true;suggest.textContent='Saved';}}return;}
+ const open=e.target.closest('[data-open]');if(open)showTrip(open.dataset.open);const rm=e.target.closest('[data-remove]');if(rm){const [key,id]=rm.dataset.remove.split(':');if(confirm('Remove this item from the trip?')){state[key]=state[key].filter(x=>x.id!==id);persist()}}const unschedule=e.target.closest('[data-unschedule]');if(unschedule){moveBackToIdeas(unschedule.dataset.unschedule);return;}const loc=e.target.closest('[data-locate]');if(loc){const x=state.places.find(p=>p.id===loc.dataset.locate);if(x&&geo(x))focusNamedLocation(x,'saved')}const plan=e.target.closest('[data-plan]');if(plan)planPlace(plan.dataset.plan);const preview=e.target.closest('[data-preview]');if(preview){const x=window.__tripSuggestions?.[Number(preview.dataset.preview)];if(x){setMobileSheet('collapsed');focusNamedLocation(x,'discovery')}}const suggest=e.target.closest('[data-suggest]');if(suggest){const x=window.__tripSuggestions?.[Number(suggest.dataset.suggest)];if(x){const saved=saveDiscoveredIdea(x);if(saved){suggest.disabled=true;suggest.textContent='Saved';}}return;}
  const planSuggestion=e.target.closest('[data-suggest-plan]');
  if(planSuggestion){const x=window.__tripSuggestions?.[Number(planSuggestion.dataset.suggestPlan)];if(x)planDiscoveredPlace(x);return;}
 });
