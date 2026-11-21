@@ -976,7 +976,7 @@ async function searchCheckinPlaces(){
 }
 $('#checkinSearchButton').addEventListener('click',()=>void searchCheckinPlaces());
 $('#checkinPlaceSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();void searchCheckinPlaces();}});
-$('#checkinUseGPS').addEventListener('click',()=>{editingCheckin=null;$('#checkinLocationStatus').textContent='Finding current location…';void findCheckinNearby();});
+$('#checkinUseGPS').addEventListener('click',()=>{$('#checkinLocationStatus').textContent='Finding current location…';void findCheckinNearby();});
 $('#checkinPickMap').addEventListener('click',()=>{
  const host=$('#checkinLocationMap');host.classList.remove('hidden');$('#checkinMapHint').classList.remove('hidden');
  if(typeof L==='undefined'){$('#checkinLocationStatus').textContent='Map library unavailable. Try searching for the location.';return;}
