@@ -50,7 +50,7 @@ $('#placeList').innerHTML=filteredIdeas.length?PLACE_CATEGORIES.map(category=>{
   '<div class="day"><div class="row entry-head"><strong>'+esc(x.name)+'</strong>'+
   '<label class="idea-category-inline">Category <select data-idea-category="'+esc(x.id)+'" aria-label="Category for '+esc(x.name)+'">'+
   PLACE_CATEGORIES.map(c=>'<option value="'+esc(c)+'" '+(normalizedCategory(x.category)===c?'selected':'')+'>'+esc(c)+'</option>').join('')+
-  '</select></label></div>'+(x.location?'<div class="muted small-details">'+esc(x.location)+'</div>':'')+ideaTiming(x)+(x.notes?'<p>'+esc(x.notes)+'</p>':'')+'<div class="row entry-button-row">'+editAndRemove('places',x)+(geo(x)?'<button class="quiet small" data-locate="'+esc(x.id)+'">Show on map</button>':'')+'<button class="secondary small" data-plan="'+esc(x.id)+'">Choose for itinerary</button></div></div>'
+  '</select></label></div>'+(x.location?'<div class="muted small-details">'+esc(x.location)+'</div>':'')+ideaTiming(x)+(x.notes?'<p class="entry-short-note">'+esc(x.notes)+'</p>':'')+(x.interestRating?'<span class="entry-interest">'+'★'.repeat(Math.min(5,Number(x.interestRating)))+'</span>':'')+(x.costRating?'<span class="entry-cost">'+'$'.repeat(Math.min(5,Number(x.costRating)))+'</span>':'')+'<div class="row entry-button-row">'+editAndRemove('places',x)+(geo(x)?'<button class="quiet small" data-locate="'+esc(x.id)+'">Show on map</button>':'')+'<button class="secondary small" data-plan="'+esc(x.id)+'">Choose for itinerary</button></div></div>'
  ).join('')+'</div></details>';
 }).join('') : '<p class="empty">'+(savedPlaces.length?'No ideas match these filters. Clear the search or choose another category.':'No ideas under consideration. Add an activity, event, place, or other possibility here.')+'</p>';
 const allActivities=forTrip('activities').slice().sort(Itinerary.compareEntries);
@@ -74,7 +74,7 @@ $('#activityList').innerHTML=activities.length?activityDays.map(day=>
   return '<div class="day"><div class="row entry-head"><strong>'+esc(x.title)+'</strong></div>'+
    (badges?'<div class="itinerary-badges">'+badges+'</div>':'')+
    '<div class="muted small-details">'+esc(x.category||'Activity')+(when?' · '+esc(when):'')+(x.endDate?' · Checkout '+formatDate(x.endDate):'')+'</div>'+
-   (x.notes?'<p>'+esc(x.notes)+'</p>':'')+
+   (x.notes?'<p class="entry-short-note">'+esc(x.notes)+'</p>':'')+(x.interestRating?'<span class="entry-interest">'+'★'.repeat(Math.min(5,Number(x.interestRating)))+'</span>':'')+(x.costRating?'<span class="entry-cost">'+'$'.repeat(Math.min(5,Number(x.costRating)))+'</span>':'')+
    (x.hours?'<div class="muted small-details">Hours: '+esc(x.hours)+'</div>':'')+
    (x.confirmationCode?'<div class="muted small-details">Confirmation: '+esc(x.confirmationCode)+'</div>':'')+
    (link?'<a class="small-details" href="'+esc(link)+'" target="_blank" rel="noopener noreferrer">Booking / tickets</a>':'')+
@@ -1758,7 +1758,7 @@ async function discover(loadMore=false){
 function planPlace(id){
  const x=state.places.find(p=>p.id===id&&p.tripId===active);
  if(!x)return;
- fillActivity({name:x.name,category:x.category,notes:x.notes,placeId:x.id,lat:x.lat??null,lng:x.lng??null,geoapifyId:x.geoapifyId||'',hours:x.hours||'',date:x.date||'',endDate:x.endDate||'',time:x.time||'',endTime:x.endTime||'',fixedDate:!!x.fixedDate});
+ fillActivity({name:x.name,category:x.category,notes:x.notes,interestRating:x.interestRating||'',costRating:x.costRating||'',placeId:x.id,lat:x.lat??null,lng:x.lng??null,geoapifyId:x.geoapifyId||'',hours:x.hours||'',date:x.date||'',endDate:x.endDate||'',time:x.time||'',endTime:x.endTime||'',fixedDate:!!x.fixedDate});
 }
 function form(sel,handler){$(sel).addEventListener('submit',e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.target));if(handler(d)!==false){e.target.reset();persist()}})}
 $('#ideaCategoryFilter').addEventListener('change',e=>{ideaFilter=e.target.value;render();});
@@ -1829,7 +1829,9 @@ const EDIT_FORMS={
   {name:'endTime',label:'End time (local)',type:'time'},
   {name:'fixedDate',label:'Happens on a fixed date',type:'checkbox'},
   {name:'hours',label:'Business hours',maxlength:500},
-  {name:'notes',label:'Notes',type:'textarea'}
+  {name:'notes',label:'Short notes',type:'textarea'},
+  {name:'interestRating',label:'Interest',type:'select',options:[{value:'',label:'Not rated'},...Array.from({length:5},(_,i)=>({value:String(i+1),label:'★'.repeat(i+1)}))]},
+  {name:'costRating',label:'Estimated cost',type:'select',options:[{value:'',label:'Not rated'},...Array.from({length:5},(_,i)=>({value:String(i+1),label:'$'.repeat(i+1)}))]}
  ]},
  activities:{title:'Edit itinerary entry',fields:[
   {name:'title',label:'Activity or stop',required:true,maxlength:160},
@@ -1841,7 +1843,9 @@ const EDIT_FORMS={
   {name:'mustDo',label:'Must do',type:'checkbox'},
   {name:'fixedDate',label:'Fixed-date event',type:'checkbox'},
   {name:'hours',label:'Business hours',maxlength:500},
-  {name:'notes',label:'Details / notes',type:'textarea'},
+  {name:'notes',label:'Short notes',type:'textarea'},
+  {name:'interestRating',label:'Interest',type:'select',options:[{value:'',label:'Not rated'},...Array.from({length:5},(_,i)=>({value:String(i+1),label:'★'.repeat(i+1)}))]},
+  {name:'costRating',label:'Estimated cost',type:'select',options:[{value:'',label:'Not rated'},...Array.from({length:5},(_,i)=>({value:String(i+1),label:'$'.repeat(i+1)}))]},
   {name:'reservationStatus',label:'Reservation',type:'select',options:[
    {value:'none',label:'Not needed / undecided'},
    {value:'needed',label:'Need to book'},
