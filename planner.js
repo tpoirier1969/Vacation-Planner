@@ -51,7 +51,7 @@ $('#placeList').innerHTML=filteredIdeas.length?PLACE_CATEGORIES.map(category=>{
   '<div class="day"><div class="row entry-head"><strong>'+esc(x.name)+'</strong>'+
   '<label class="idea-category-inline">Category <select data-idea-category="'+esc(x.id)+'" aria-label="Category for '+esc(x.name)+'">'+
   PLACE_CATEGORIES.map(c=>'<option value="'+esc(c)+'" '+(normalizedCategory(x.category)===c?'selected':'')+'>'+esc(c)+'</option>').join('')+
-  '</select></label></div>'+(x.location?'<div class="muted small-details">'+esc(x.location)+'</div>':'')+ideaTiming(x)+(x.notes?'<p class="entry-short-note">'+esc(x.notes)+'</p>':'')+(x.interestRating?'<span class="entry-interest">'+'★'.repeat(Math.min(5,Number(x.interestRating)))+'</span>':'')+(x.costRating?'<span class="entry-cost">'+'$'.repeat(Math.min(5,Number(x.costRating)))+'</span>':'')+'<div class="row entry-button-row">'+editAndRemove('places',x)+(geo(x)?'<button class="quiet small" data-locate="'+esc(x.id)+'">Show on map</button>':'')+'<button class="secondary small" data-plan="'+esc(x.id)+'">Choose for itinerary</button></div></div>'
+  '</select></label></div>'+(x.location?'<div class="muted small-details">'+esc(x.location)+'</div>':'')+ideaTiming(x)+(x.notes?'<p class="entry-short-note">'+esc(x.notes)+'</p>':'')+(x.interestRating?'<span class="entry-interest">'+'★'.repeat(Math.min(5,Number(x.interestRating)))+'</span>':'')+(x.costRating?'<span class="entry-cost">'+'$'.repeat(Math.min(5,Number(x.costRating)))+'</span>':'')+'<div class="row entry-button-row">'+editAndRemove('places',x)+'<button class="quiet small" data-checkin-from="places:'+esc(x.id)+'">Check In</button>'+(geo(x)?'<button class="quiet small" data-locate="'+esc(x.id)+'">Show on map</button>':'')+'<button class="secondary small" data-plan="'+esc(x.id)+'">Choose for itinerary</button></div></div>'
  ).join('')+'</div></details>';
 }).join('') : '<p class="empty">'+(savedPlaces.length?'No ideas match these filters. Clear the search or choose another category.':'No ideas under consideration. Add an activity, event, place, or other possibility here.')+'</p>';
 const allActivities=forTrip('activities').slice().sort(Itinerary.compareEntries);
@@ -79,7 +79,7 @@ $('#activityList').innerHTML=activities.length?activityDays.map(day=>
    (x.hours?'<div class="muted small-details">Hours: '+esc(x.hours)+'</div>':'')+
    (x.confirmationCode?'<div class="muted small-details">Confirmation: '+esc(x.confirmationCode)+'</div>':'')+
    (link?'<a class="small-details" href="'+esc(link)+'" target="_blank" rel="noopener noreferrer">Booking / tickets</a>':'')+
-   '<div class="row entry-button-row">'+editAndRemove('activities',x)+'<button class="quiet small" data-locate-activity="'+esc(x.id)+'">'+(geo(x)?'Change map pin':'Set map location')+'</button><button class="quiet small" data-unschedule="'+esc(x.id)+'">Move back to Ideas</button></div></div>';
+   '<div class="row entry-button-row">'+editAndRemove('activities',x)+'<button class="quiet small" data-checkin-from="activities:'+esc(x.id)+'">Check In</button><button class="quiet small" data-locate-activity="'+esc(x.id)+'">'+(geo(x)?'Change map pin':'Set map location')+'</button><button class="quiet small" data-unschedule="'+esc(x.id)+'">Move back to Ideas</button></div></div>';
  }).join('')+'</section>'
 ).join('') : '<p class="empty">'+(allActivities.length?'No plans match this view. Choose another filter.':'Nothing decided yet. Choose an idea or add a plan directly.')+'</p>';
 $('#noteList').innerHTML=forTrip('notes').length?forTrip('notes').map(x=>'<div class="day"><div class="row entry-head"><strong>'+esc(x.title)+'</strong>'+editAndRemove('notes',x)+'</div><p style="white-space:pre-wrap">'+esc(x.body)+'</p></div>').join(''):'<p class="empty">Save links, questions, reservations, and research here.</p>';
@@ -964,7 +964,18 @@ function plannedInSmart(x){if(mapView==='planned')return true;if(mapView==='actu
 function actualInView(){return mapView!=='planned';}
 function renderCheckins(){const host=$('#checkinList');if(!host)return;const visits=forTrip('checkins').slice().sort((a,b)=>new Date(b.visitedAt)-new Date(a.visitedAt));host.innerHTML=visits.length?visits.map(x=>'<article class="day"><div class="row entry-head"><strong>'+esc(x.name)+'</strong><span class="entry-actions"><button type="button" class="quiet small" data-checkin-edit="'+esc(x.id)+'">Edit</button><button type="button" class="quiet small" data-checkin-remove="'+esc(x.id)+'">Remove</button></span></div><div class="muted small-details">'+esc(new Date(x.visitedAt).toLocaleString())+'</div>'+(x.notes?'<p style="white-space:pre-wrap">'+esc(x.notes)+'</p>':'')+'</article>').join(''):'<p class="empty">No check-ins recorded yet.</p>';}
 function chooseCheckinPlace(p){checkinPoint={lat:p.lat??null,lng:p.lng??null,placeId:p.placeId||'',activityId:p.activityId||''};$('#checkinName').value=p.name||'';$('#checkinCoords').textContent=checkinPoint.lat==null?'Location not attached':Number(checkinPoint.lat).toFixed(5)+', '+Number(checkinPoint.lng).toFixed(5);}
-function openCheckin(x=null){editingCheckin=x?.id||null;$('#checkinForm').reset();const dt=localDateTime(x?.visitedAt);$('#checkinForm').elements.date.value=dt.date;$('#checkinForm').elements.time.value=dt.time;$('#checkinForm').elements.notes.value=x?.notes||'';$('#checkinNearby').replaceChildren();$('#checkinSearchResults').replaceChildren();$('#checkinPlaceSearch').value='';$('#checkinLocationMap').classList.add('hidden');$('#checkinMapHint').classList.add('hidden');$('#checkinLocationStatus').textContent=x?'Edit the saved location, or search and choose a different place.':'Choose a nearby place, search for a previous location, or select it on the map.';chooseCheckinPlace(x||{name:''});$('#checkinDialog').showModal();$('#checkinDialog').focus();if(!x)void findCheckinNearby();}
+function openCheckin(x=null,fromSaved=false){editingCheckin=fromSaved?null:(x?.id||null);$('#checkinForm').reset();const dt=localDateTime(x?.visitedAt);$('#checkinForm').elements.date.value=dt.date;$('#checkinForm').elements.time.value=dt.time;$('#checkinForm').elements.notes.value=x?.notes||'';$('#checkinNearby').replaceChildren();$('#checkinSearchResults').replaceChildren();$('#checkinPlaceSearch').value='';$('#checkinLocationMap').classList.add('hidden');$('#checkinMapHint').classList.add('hidden');$('#checkinLocationStatus').textContent=x?'Edit the saved location, or search and choose a different place.':'Choose a nearby place, search for a previous location, or select it on the map.';chooseCheckinPlace(x||{name:''});$('#checkinDialog').showModal();$('#checkinDialog').focus();if(!x)void findCheckinNearby();}
+function checkinFromSaved(kind,id){
+ const x=forTrip(kind).find(p=>p.id===id);if(!x)return;
+ const linked=kind==='activities'?forTrip('places').find(p=>p.id===x.placeId):null;
+ const coords=geo(x)?x:(linked&&geo(linked)?linked:null);
+ openCheckin({name:x.name||x.title,lat:coords?.lat??null,lng:coords?.lng??null,placeId:kind==='places'?x.id:(x.placeId||''),activityId:kind==='activities'?x.id:'',notes:''},true);
+ $('#checkinLocationStatus').textContent=coords?'Using the saved location for '+(x.name||x.title)+'. Change it if necessary.':'This saved entry has no map coordinates. Search for it or choose its location on the map before saving.';
+}
+document.addEventListener('click',e=>{
+ const button=e.target.closest('[data-checkin-from]');if(!button)return;
+ const [kind,id]=button.dataset.checkinFrom.split(':');if(['places','activities'].includes(kind))checkinFromSaved(kind,id);
+});
 async function findCheckinNearby(){if(!navigator.geolocation){$('#checkinLocationStatus').textContent='Location unavailable. Enter a place manually.';return;}navigator.geolocation.getCurrentPosition(async position=>{if(!$('#checkinDialog').open)return;const lat=position.coords.latitude,lng=position.coords.longitude;chooseCheckinPlace({name:'',lat,lng});const key=window.LAZY_ACRES_GEOAPIFY_KEY;let options=[];try{if(key){const params=new URLSearchParams({categories:'catering,commercial,tourism,entertainment,accommodation,leisure,sport',filter:'circle:'+lng+','+lat+',1500',bias:'proximity:'+lng+','+lat,limit:'20',apiKey:key});const response=await fetch('https://api.geoapify.com/v2/places?'+params);if(!response.ok)throw Error('Place search unavailable');const data=await response.json();options=(data.features||[]).map(f=>({name:f.properties?.name,lat:f.properties?.lat??f.geometry?.coordinates?.[1],lng:f.properties?.lon??f.geometry?.coordinates?.[0],placeId:f.properties?.place_id})).filter(p=>p.name&&Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lng)));}}catch{ /* Saved places remain available as fallback. */ }
 const distance=p=>{const r=Math.PI/180,dlat=(p.lat-lat)*r,dlng=(p.lng-lng)*r,a=Math.sin(dlat/2)**2+Math.cos(lat*r)*Math.cos(p.lat*r)*Math.sin(dlng/2)**2;return 12742000*Math.asin(Math.min(1,Math.sqrt(a)));};
 options.push(...forTrip('places').filter(geo).map(p=>({name:p.name,lat:Number(p.lat),lng:Number(p.lng),placeId:p.id})),...forTrip('activities').filter(geo).map(p=>({name:p.title,lat:Number(p.lat),lng:Number(p.lng),activityId:p.id})));
@@ -1055,7 +1066,11 @@ $('#itineraryLocateSave').addEventListener('click',()=>{const x=forTrip('activit
 
 function refreshMarkers(){
  if(!map||!markers)return;markers.clearLayers();
- const places=forTrip('places'),activities=forTrip('activities').filter(plannedInSmart);
+ const places=forTrip('places'),activities=forTrip('activities').filter(plannedInSmart).map(a=>{
+ if(geo(a)||!a.placeId)return a;
+ const linked=places.find(p=>p.id===a.placeId);
+ return linked&&geo(linked)?{...a,lat:linked.lat,lng:linked.lng}:a;
+});
  const plannedIds=new Set(activities.map(x=>x.placeId).filter(Boolean));
  const savedCoords=new Set();
  for(const x of places){
