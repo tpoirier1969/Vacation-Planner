@@ -1,8 +1,8 @@
 
 (()=>{'use strict';
 const URL='https://wntakzfoprthwggkidyq.supabase.co',KEY='sb_publishable_gWu_EQ1J3s0iNjeDeINJwQ_xKy8QgAJ',HOUSE='tod-donna-shared';
-const types={trips:'vacation_trips',routes:'vacation_routes',places:'vacation_places',activities:'vacation_itinerary',notes:'vacation_notes',packing:'vacation_packing'};
-const blank=()=>({trips:[],routes:[],places:[],activities:[],notes:[],packing:[],ideas:[]});
+const types={trips:'vacation_trips',routes:'vacation_routes',places:'vacation_places',activities:'vacation_itinerary',notes:'vacation_notes',packing:'vacation_packing',checkins:'vacation_checkins'};
+const blank=()=>({trips:[],routes:[],places:[],activities:[],notes:[],packing:[],checkins:[],ideas:[]});
 const client=window.supabase?.createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true}});
 let current=blank(),pending=[],busy=false,authorized=false,refreshing=false,refreshAgain=false,refreshTimer=0;
 const $=s=>document.querySelector(s);
@@ -14,6 +14,7 @@ if(kind==='trips')return {...base,name:x.name,destination:x.destination||'',star
 if(kind==='routes')return {...base,trip_id:x.tripId,name:x.name,start_point:x.start||null,end_point:x.end||null,waypoints:x.waypoints||[],preferences:x.preferences||{},start_date:x.startDate||null,start_time:x.startTime||null,end_date:x.endDate||null,end_time:x.endTime||null,polyline:x.polyline||null,distance_m:x.distanceM??null,duration_s:x.durationS??null,leg_stats:x.legStats||[],route_kind:x.routeKind||'day',route_order:Number.isInteger(x.routeOrder)?x.routeOrder:0,route_segments:x.segments||[],disconnected_legs:x.gaps||[],visible:x.visible!==false};
 if(kind==='places')return {...base,trip_id:x.tripId,name:x.name,category:x.category||'',location:x.location||'',notes:x.notes||'',geoapify_id:x.geoapifyId||null,opening_hours:x.hours||null,lat:x.lat??null,lng:x.lng??null,idea_date:x.date||null,idea_end_date:x.endDate||null,idea_start_time:x.time||null,idea_end_time:x.endTime||null,fixed_date:!!x.fixedDate};
 if(kind==='activities')return {...base,trip_id:x.tripId,title:x.title,activity_date:x.date||null,end_date:x.endDate||null,category:x.category||'Other',place_id:x.placeId||null,lat:x.lat??null,lng:x.lng??null,opening_hours:x.hours||null,notes:x.notes||'',start_time:x.time||null,end_time:x.endTime||null,fixed_date:!!x.fixedDate,must_do:!!x.mustDo,reservation_status:x.reservationStatus||'none',confirmation_code:x.confirmationCode||null,booking_url:x.bookingUrl||null};
+if(kind==='checkins')return {...base,trip_id:x.tripId,name:x.name,notes:x.notes||'',visited_at:x.visitedAt,lat:x.lat??null,lng:x.lng??null,place_id:x.placeId||null,activity_id:x.activityId||null,created_by:x.createdBy||null};
 if(kind==='notes')return {...base,trip_id:x.tripId,title:x.title,body:x.body||''};
 return {...base,trip_id:x.tripId,title:x.title,category:x.category||'trip-misc',done:!!x.done};
 }
@@ -21,6 +22,7 @@ function item(kind,r){if(kind==='trips')return {id:r.id,name:r.name,destination:
 if(kind==='routes')return {id:r.id,tripId:r.trip_id,name:r.name,start:r.start_point||null,end:r.end_point||null,waypoints:r.waypoints||[],preferences:r.preferences||{},startDate:r.start_date||'',startTime:r.start_time?.slice(0,5)||'',endDate:r.end_date||'',endTime:r.end_time?.slice(0,5)||'',polyline:r.polyline||'',distanceM:r.distance_m??null,durationS:r.duration_s??null,legStats:r.leg_stats||[],routeKind:r.route_kind||'day',routeOrder:r.route_order||0,segments:r.route_segments||[],gaps:r.disconnected_legs||[],visible:r.visible!==false};
 if(kind==='places')return {id:r.id,tripId:r.trip_id,name:r.name,category:r.category||'',location:r.location||'',notes:r.notes||'',geoapifyId:r.geoapify_id||'',hours:r.opening_hours||'',lat:r.lat,lng:r.lng,date:r.idea_date||'',endDate:r.idea_end_date||'',time:r.idea_start_time?.slice(0,5)||'',endTime:r.idea_end_time?.slice(0,5)||'',fixedDate:!!r.fixed_date};
 if(kind==='activities')return {id:r.id,tripId:r.trip_id,title:r.title,date:r.activity_date||'',endDate:r.end_date||'',category:r.category||'Other',placeId:r.place_id||'',lat:r.lat,lng:r.lng,hours:r.opening_hours||'',notes:r.notes||'',time:r.start_time?.slice(0,5)||'',endTime:r.end_time?.slice(0,5)||'',fixedDate:!!r.fixed_date,mustDo:!!r.must_do,reservationStatus:r.reservation_status||'none',confirmationCode:r.confirmation_code||'',bookingUrl:r.booking_url||''};
+if(kind==='checkins')return {id:r.id,tripId:r.trip_id,name:r.name,notes:r.notes||'',visitedAt:r.visited_at,lat:r.lat,lng:r.lng,placeId:r.place_id||'',activityId:r.activity_id||'',createdBy:r.created_by||''};
 if(kind==='notes')return {id:r.id,tripId:r.trip_id,title:r.title,body:r.body||''};
 return {id:r.id,tripId:r.trip_id,title:r.title,category:r.category,done:r.done};
 }
