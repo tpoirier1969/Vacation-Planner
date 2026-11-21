@@ -1764,6 +1764,7 @@ function planPlace(id){
  fillActivity({name:x.name,category:x.category,notes:x.notes,interestRating:x.interestRating||'',costRating:x.costRating||'',placeId:x.id,lat:x.lat??null,lng:x.lng??null,geoapifyId:x.geoapifyId||'',hours:x.hours||'',date:x.date||'',endDate:x.endDate||'',time:x.time||'',endTime:x.endTime||'',fixedDate:!!x.fixedDate});
 }
 function form(sel,handler){$(sel).addEventListener('submit',e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.target));if(handler(d)!==false){e.target.reset();persist()}})}
+$('#ideaSort').addEventListener('change',()=>render());
 $('#ideaCategoryFilter').addEventListener('change',e=>{ideaFilter=e.target.value;render();});
 $('#ideaSearch').addEventListener('input',e=>{ideaQuery=e.target.value;render();});
 $('#ideaClearSearch').addEventListener('click',()=>{ideaQuery='';$('#ideaSearch').value='';render();$('#ideaSearch').focus();});
