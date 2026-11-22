@@ -916,3 +916,12 @@ footer{
 
 /* Compact optional notes and relative cost ratings in Ideas and Itinerary. */
 .entry-short-note{font-size:.79rem;line-height:1.35;color:#65716c;margin:.22rem 0;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;white-space:pre-line;overflow-wrap:anywhere}.entry-cost{display:inline-block;font-size:.79rem;font-weight:650;letter-spacing:.045em;color:#526b61;margin:.1rem 0 .35rem}
+
+/* Add controls stay at the top of every list and collapse independently. */
+.top-add-card{order:-1}
+.top-add-details>summary{cursor:pointer;font-weight:750;padding:4px 0;list-style-position:inside}
+.top-add-details[open]>summary{margin-bottom:12px}
+body.mobile-workspace .grid>.top-add-card{display:block}
+body.mobile-workspace .grid>.top-add-card.is-open{display:block}
+body.mobile-workspace #mobileShowIdeaForm[hidden],body.mobile-workspace #mobileShowActivityForm[hidden]{display:none}
+.top-add-card .packing-add{margin-top:0}
