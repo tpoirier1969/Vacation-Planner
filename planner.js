@@ -962,7 +962,36 @@ function showDiscoveryResultsOnMap(){
 function localDateTime(iso){const d=iso?new Date(iso):new Date();const pad=n=>String(n).padStart(2,'0');return {date:d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()),time:pad(d.getHours())+':'+pad(d.getMinutes())};}
 function plannedInSmart(x){if(mapView==='planned')return true;if(mapView==='actual')return false;if(forTrip('checkins').some(c=>(c.activityId&&c.activityId===x.id)||(c.placeId&&c.placeId===x.id)||(x.placeId&&c.placeId===x.placeId)||(geo(c)&&geo(x)&&Math.abs(c.lat-x.lat)<0.00015&&Math.abs(c.lng-x.lng)<0.00015)))return false;const now=Date.now(),t=trip();if(t?.end&&new Date(t.end+'T23:59:59').getTime()<now)return false;if(!x.date)return true;const at=new Date(x.date+'T'+(x.time||'23:59')+':00').getTime();return at>=now;}
 function actualInView(){return mapView!=='planned';}
-function renderCheckins(){const host=$('#checkinList');if(!host)return;const visits=forTrip('checkins').slice().sort((a,b)=>new Date(b.visitedAt)-new Date(a.visitedAt));host.innerHTML=visits.length?visits.map(x=>'<article class="day"><div class="row entry-head"><strong>'+esc(x.name)+'</strong><span class="entry-actions"><button type="button" class="quiet small" data-checkin-edit="'+esc(x.id)+'">Edit</button><button type="button" class="quiet small" data-checkin-remove="'+esc(x.id)+'">Remove</button></span></div><div class="muted small-details">'+esc(new Date(x.visitedAt).toLocaleString())+'</div>'+(x.notes?'<p style="white-space:pre-wrap">'+esc(x.notes)+'</p>':'')+'</article>').join(''):'<p class="empty">No check-ins recorded yet.</p>';}
+function renderCheckins(){
+ const host=$('#checkinList');if(!host)return;
+ const tripSelect=$('#journalTrip'),view=$('#journalView')?.value||'timeline',scope=tripSelect?.value||'current';
+ const query=($('#journalSearch')?.value||'').trim().toLowerCase();
+ const trips=state.trips||[];
+ const currentOption=tripSelect?.querySelector('option[value="current"]');if(currentOption)currentOption.textContent='Current trip';
+ const visits=(scope==='all'?state.checkins:forTrip('checkins')).filter(x=>{
+  const tripName=trips.find(t=>t.id===x.tripId)?.name||'';
+  return !query||[x.name,x.notes,tripName].some(v=>String(v||'').toLowerCase().includes(query));
+ }).slice().sort((a,b)=>new Date(b.visitedAt)-new Date(a.visitedAt));
+ $('#journalCount').textContent=visits.length+' check-in'+(visits.length===1?'':'s')+(scope==='all'?' across trips':' on this trip');
+ const dayKey=x=>{const d=new Date(x.visitedAt);return Number.isFinite(d.getTime())?d.toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric',weekday:'long'}):'Unknown date';};
+ const time=x=>{const d=new Date(x.visitedAt);return Number.isFinite(d.getTime())?d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}):'Time unknown';};
+ const card=x=>{
+  const tripName=trips.find(t=>t.id===x.tripId)?.name||'';
+  return '<article class="journal-entry"><div class="journal-entry-main"><strong>'+esc(x.name)+'</strong><span class="muted">'+esc(time(x))+'</span></div>'+
+   (scope==='all'?'<small class="muted">'+esc(tripName)+'</small>':'')+
+   (x.notes?'<p class="journal-activity">'+esc(x.notes)+'</p>':'<p class="muted journal-activity">No activity notes</p>')+
+   '<div class="row wrap journal-actions">'+(geo(x)?'<button type="button" class="quiet small" data-journal-map="'+esc(x.id)+'">Show on map</button>':'')+
+   '<button type="button" class="quiet small" data-checkin-edit="'+esc(x.id)+'">Edit</button><button type="button" class="quiet small" data-checkin-remove="'+esc(x.id)+'">Remove</button></div></article>';
+ };
+ if(!visits.length){host.innerHTML='<p class="empty">No check-ins match this view.</p>';return;}
+ if(view==='list'){
+  host.innerHTML='<div class="journal-list">'+visits.map(x=>'<div class="journal-list-date">'+esc(new Date(x.visitedAt).toLocaleDateString())+'</div>'+card(x)).join('')+'</div>';
+ }else{
+  const groups=new Map();for(const x of visits){const key=dayKey(x);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(x);}
+  host.innerHTML=[...groups].map(([day,entries])=>'<section class="journal-day"><h3>'+esc(day)+'</h3>'+entries.map(card).join('')+'</section>').join('');
+ }
+}
+for(const id of ['journalView','journalTrip','journalSearch'])$('#'+id).addEventListener(id==='journalSearch'?'input':'change',renderCheckins);
 function chooseCheckinPlace(p){checkinPoint={lat:p.lat??null,lng:p.lng??null,placeId:p.placeId||'',activityId:p.activityId||''};$('#checkinName').value=p.name||'';$('#checkinCoords').textContent=checkinPoint.lat==null?'Location not attached':Number(checkinPoint.lat).toFixed(5)+', '+Number(checkinPoint.lng).toFixed(5);}
 function openCheckin(x=null,fromSaved=false){editingCheckin=fromSaved?null:(x?.id||null);$('#checkinForm').reset();const dt=localDateTime(x?.visitedAt);$('#checkinForm').elements.date.value=dt.date;$('#checkinForm').elements.time.value=dt.time;$('#checkinForm').elements.notes.value=x?.notes||'';$('#checkinNearby').replaceChildren();$('#checkinSearchResults').replaceChildren();$('#checkinPlaceSearch').value='';$('#checkinLocationMap').classList.add('hidden');$('#checkinMapHint').classList.add('hidden');$('#checkinLocationStatus').textContent=x?'Edit the saved location, or search and choose a different place.':'Choose a nearby place, search for a previous location, or select it on the map.';chooseCheckinPlace(x||{name:''});$('#checkinDialog').showModal();$('#checkinDialog').focus();if(!x)void findCheckinNearby();}
 function checkinFromSaved(kind,id){
@@ -1029,7 +1058,7 @@ $('#checkinPickMap').addEventListener('click',()=>{
 $('#newCheckin').addEventListener('click',()=>openCheckin());
 $('#cancelCheckin').addEventListener('click',()=>$('#checkinDialog').close());
 $('#checkinForm').addEventListener('submit',e=>{e.preventDefault();const f=e.currentTarget,d=Object.fromEntries(new FormData(f)),when=new Date(d.date+'T'+d.time+':00');if(!Number.isFinite(when.getTime()))return;const old=state.checkins.find(x=>x.id===editingCheckin);const record={id:old?.id||uid(),tripId:active,name:d.name.trim(),notes:d.notes||'',visitedAt:when.toISOString(),lat:checkinPoint?.lat??null,lng:checkinPoint?.lng??null,placeId:checkinPoint?.placeId||'',activityId:checkinPoint?.activityId||'',createdBy:old?.createdBy||''};if(!record.name)return;if(old)Object.assign(old,record);else state.checkins.push(record);$('#checkinDialog').close();persist();});
-$('#checkinList').addEventListener('click',e=>{const edit=e.target.closest('[data-checkin-edit]'),remove=e.target.closest('[data-checkin-remove]');if(edit){const x=forTrip('checkins').find(x=>x.id===edit.dataset.checkinEdit);if(x)openCheckin(x);}if(remove&&confirm('Remove this check-in?')){state.checkins=state.checkins.filter(x=>x.id!==remove.dataset.checkinRemove);persist();}});
+$('#checkinList').addEventListener('click',e=>{const edit=e.target.closest('[data-checkin-edit]'),remove=e.target.closest('[data-checkin-remove]');if(edit){const x=state.checkins.find(x=>x.id===edit.dataset.checkinEdit);if(x)openCheckin(x);}const show=e.target.closest('[data-journal-map]');if(show){const x=state.checkins.find(c=>c.id===show.dataset.journalMap);if(x&&geo(x)){if(x.tripId!==active)showTrip(x.tripId);focusNamedLocation(x,'check-in');}}if(remove&&confirm('Remove this check-in?')){state.checkins=state.checkins.filter(x=>x.id!==remove.dataset.checkinRemove);persist();}});
 $('#tripMapView').addEventListener('change',e=>{mapView=e.target.value;refreshMarkers();routeUI?.render();});
 
 
