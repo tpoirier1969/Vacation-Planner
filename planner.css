@@ -925,3 +925,14 @@ body.mobile-workspace .grid>.top-add-card{display:block}
 body.mobile-workspace .grid>.top-add-card.is-open{display:block}
 body.mobile-workspace #mobileShowIdeaForm[hidden],body.mobile-workspace #mobileShowActivityForm[hidden]{display:none}
 .top-add-card .packing-add{margin-top:0}
+
+/* Compact, searchable check-in journal */
+.journal-controls{display:flex;flex-wrap:wrap;gap:9px;margin:12px 0}
+.journal-controls label{display:flex;flex-direction:column;gap:3px;font-size:13px;flex:1 1 130px;min-width:0}
+.journal-controls input,.journal-controls select{width:100%;min-width:0}
+.journal-day{margin:15px 0}.journal-day h3{font-size:15px;margin:0 0 7px;border-bottom:1px solid #d8c9a8;padding-bottom:6px}
+.journal-entry{padding:10px 0;border-bottom:1px solid #e1d8c7;min-width:0}
+.journal-entry-main{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.journal-entry-main .muted{white-space:nowrap;font-size:12px}
+.journal-activity{white-space:pre-wrap;overflow-wrap:anywhere;margin:5px 0;font-size:13px}
+.journal-actions{gap:5px}.journal-list-date{font-size:12px;font-weight:700;margin-top:12px}
