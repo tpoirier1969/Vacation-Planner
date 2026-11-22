@@ -991,7 +991,7 @@ function renderCheckins(){
   host.innerHTML=[...groups].map(([day,entries])=>'<section class="journal-day"><h3>'+esc(day)+'</h3>'+entries.map(card).join('')+'</section>').join('');
  }
 }
-for(const id of ['journalView','journalTrip','journalSearch'])$('#'+id).addEventListener(id==='journalSearch'?'input':'change',renderCheckins);
+for(const id of ['journalView','journalTrip','journalSearch']){const el=$('#'+id);if(el)el.addEventListener(id==='journalSearch'?'input':'change',renderCheckins);}
 function chooseCheckinPlace(p){checkinPoint={lat:p.lat??null,lng:p.lng??null,placeId:p.placeId||'',activityId:p.activityId||''};$('#checkinName').value=p.name||'';$('#checkinCoords').textContent=checkinPoint.lat==null?'Location not attached':Number(checkinPoint.lat).toFixed(5)+', '+Number(checkinPoint.lng).toFixed(5);}
 function openCheckin(x=null,fromSaved=false){editingCheckin=fromSaved?null:(x?.id||null);$('#checkinForm').reset();const dt=localDateTime(x?.visitedAt);$('#checkinForm').elements.date.value=dt.date;$('#checkinForm').elements.time.value=dt.time;$('#checkinForm').elements.notes.value=x?.notes||'';$('#checkinNearby').replaceChildren();$('#checkinSearchResults').replaceChildren();$('#checkinPlaceSearch').value='';$('#checkinLocationMap').classList.add('hidden');$('#checkinMapHint').classList.add('hidden');$('#checkinLocationStatus').textContent=x?'Edit the saved location, or search and choose a different place.':'Choose a nearby place, search for a previous location, or select it on the map.';chooseCheckinPlace(x||{name:''});$('#checkinDialog').showModal();$('#checkinDialog').focus();if(!x)void findCheckinNearby();}
 function checkinFromSaved(kind,id){
