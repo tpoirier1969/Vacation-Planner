@@ -2126,5 +2126,34 @@ routeUI=window.createVacationRoutes({
  getPlaces:()=>forTrip('places'),getActivities:()=>forTrip('activities'),
  persist,uid,onPickChange:()=>{addingPlace=false;syncMapMode();if(routeUI?.isPicking())setMobileSheet('collapsed');}
 });
-initializeMobileWorkspace();if(!trip())active=null;render();if(active){const t=trip();if(t?.lat==null&&t?.destination)searchLocation(t.destination,true)}
+function initializeTopAddSections(){
+ const specs=[
+  {panel:'#places',form:'#manualPlace',title:'Add an idea',card:true,button:'#mobileShowIdeaForm'},
+  {panel:'#itinerary',form:'#activityForm',title:'Add a plan',card:true,button:'#mobileShowActivityForm'},
+  {panel:'#notes',form:'#noteForm',title:'Add a research note'},
+  {panel:'#packing',form:'#packForm',title:'Add packing item'}
+ ];
+ for(const spec of specs){
+  const panel=$(spec.panel),form=$(spec.form);if(!panel||!form)continue;
+  const grid=panel.querySelector('.grid'),parent=spec.card?form.closest('.mobile-add-card'):form;
+  if(!parent)continue;
+  const card=spec.card?parent:document.createElement('div');
+  if(!spec.card){card.className='card top-add-card';form.parentElement.insertBefore(card,form);card.append(form);}
+  else card.classList.add('top-add-card');
+  const details=document.createElement('details');details.className='top-add-details';
+  const summary=document.createElement('summary');summary.textContent=spec.title;details.append(summary);
+  if(spec.card){
+   const heading=card.querySelector(':scope > h2');if(heading)heading.remove();
+  }
+  details.append(form);card.prepend(details);
+  if(spec.card){card.classList.add('is-open');const mobileButton=$(spec.button);if(mobileButton)mobileButton.hidden=true;}
+  const target=grid||panel;
+  target.prepend(card);
+  details.addEventListener('toggle',()=>{
+   if(spec.card){card.classList.add('is-open');const button=$(spec.button);if(button)button.setAttribute('aria-expanded',String(details.open));}
+  });
+  form.addEventListener('submit',()=>{if(!form.checkValidity())return;setTimeout(()=>{details.open=false;},0);});
+ }
+}
+initializeTopAddSections();initializeMobileWorkspace();if(!trip())active=null;render();if(active){const t=trip();if(t?.lat==null&&t?.destination)searchLocation(t.destination,true)}
 };
