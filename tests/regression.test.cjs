@@ -46,3 +46,14 @@ test('saved place check-in preserves links and coordinates',()=>{
  assert.match(js,/function checkinFromSaved\(kind,id\)/);
  assert.match(js,/const coords=geo\(x\)\?x:\(linked&&geo\(linked\)\?linked:null\)/);
 });
+
+test('offline queue is durable and scoped to authenticated user',()=>{
+ const js=read('cloud.js');
+ assert.match(js,/lazy-acres-vacation-pending-v1:/);
+ assert.match(js,/localStorage\.setItem\(queueKey,JSON\.stringify\(pending\)\)/);
+ assert.match(js,/localStorage\.removeItem\(queueKey\)/);
+ assert.match(js,/loadQueue\(user\.id\)/);
+ assert.match(js,/current=applyPending\(remote\)/);
+ assert.match(js,/pending\.shift\(\);\s*saveQueue\(\)/);
+ assert.match(js,/if\(pending\.length\)void flush\(\)/);
+});
