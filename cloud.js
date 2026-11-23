@@ -11,7 +11,7 @@ const retry=document.createElement('button');
 retry.type='button';retry.className='quiet small hidden';retry.textContent='Retry save';$('#cloudSignOut').before(retry);
 const resolve=document.createElement('button');resolve.type='button';resolve.className='quiet small hidden';resolve.textContent='Resolve conflicting edit';retry.after(resolve);
 const versionKey=(kind,id)=>kind+':'+id;
-function captureVersions(kind,rows){for(const r of rows)versions.set(versionKey(kind,r.id),r.updated_at||null);}
+function captureVersions(kind,rows){if(pending.length||busy)return;for(const r of rows)versions.set(versionKey(kind,r.id),r.updated_at||null);}
 function markConflict(op,reason){conflict={op,reason};retry.classList.add('hidden');resolve.classList.remove('hidden');status('SYNC CONFLICT: '+op.kind+' was changed on another device. Your changes remain on this device. Select Resolve conflicting edit.');}
 
 function status(s){$('#cloudStatus').textContent=s;}
