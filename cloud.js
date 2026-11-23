@@ -4,12 +4,40 @@ const URL='https://wntakzfoprthwggkidyq.supabase.co',KEY='sb_publishable_gWu_EQ1
 const types={trips:'vacation_trips',routes:'vacation_routes',places:'vacation_places',activities:'vacation_itinerary',notes:'vacation_notes',packing:'vacation_packing',checkins:'vacation_checkins'};
 const blank=()=>({trips:[],routes:[],places:[],activities:[],notes:[],packing:[],checkins:[],ideas:[]});
 const client=window.supabase?.createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true}});
-let current=blank(),pending=[],busy=false,authorized=false,refreshing=false,refreshAgain=false,refreshTimer=0;
+let current=blank(),pending=[],busy=false,authorized=false,refreshing=false,refreshAgain=false,refreshTimer=0,queueKey='',queueDurable=true;
 const $=s=>document.querySelector(s);
 const rating=x=>x===''||x==null?null:(Number.isInteger(Number(x))&&Number(x)>=1&&Number(x)<=5?Number(x):null);
 const retry=document.createElement('button');
 retry.type='button';retry.className='quiet small hidden';retry.textContent='Retry save';$('#cloudSignOut').before(retry);
 function status(s){$('#cloudStatus').textContent=s;}
+function saveQueue(){
+ if(!queueKey)return false;
+ try{
+  if(pending.length)localStorage.setItem(queueKey,JSON.stringify(pending));
+  else localStorage.removeItem(queueKey);
+  queueDurable=true;return true;
+ }catch(e){queueDurable=false;status('WARNING: Offline changes could not be stored on this device ('+e.message+'). Keep this page open and retry.');return false;}
+}
+function loadQueue(userId){
+ queueKey='lazy-acres-vacation-pending-v1:'+HOUSE+':'+userId;
+ try{
+  const saved=JSON.parse(localStorage.getItem(queueKey)||'[]');
+  if(!Array.isArray(saved))throw Error('Invalid saved changes');
+  pending=saved.filter(op=>types[op.kind]&&typeof op.id==='string'&&['upsert','delete'].includes(op.action)&&(op.action==='delete'||op.value?.id===op.id));
+  if(pending.length!==saved.length)status('Some locally stored changes could not be restored. Review your entries.');
+  saveQueue();
+ }catch(e){pending=[];queueDurable=false;status('WARNING: Stored offline changes could not be read: '+e.message);}
+}
+function applyPending(remote){
+ const restored=structuredClone(remote);
+ for(const op of pending){
+  const items=restored[op.kind],i=items.findIndex(x=>x.id===op.id);
+  if(op.action==='delete'){if(i>=0)items.splice(i,1);}
+  else if(i>=0)items[i]=structuredClone(op.value);
+  else items.push(structuredClone(op.value));
+ }
+ return restored;
+}
 function row(kind,x){const base={id:x.id,household_id:HOUSE};
 if(kind==='trips')return {...base,name:x.name,destination:x.destination||'',start_date:x.start||null,end_date:x.end||null,lat:x.lat??null,lng:x.lng??null};
 if(kind==='routes')return {...base,trip_id:x.tripId,name:x.name,start_point:x.start||null,end_point:x.end||null,waypoints:x.waypoints||[],preferences:x.preferences||{},start_date:x.startDate||null,start_time:x.startTime||null,end_date:x.endDate||null,end_time:x.endTime||null,polyline:x.polyline||null,distance_m:x.distanceM??null,duration_s:x.durationS??null,leg_stats:x.legStats||[],route_kind:x.routeKind||'day',route_order:Number.isInteger(x.routeOrder)?x.routeOrder:0,route_segments:x.segments||[],disconnected_legs:x.gaps||[],visible:x.visible!==false};
@@ -34,7 +62,7 @@ function changed(next){
   for(const [id] of old)if(!now.has(id))pending.push({kind,id,action:'delete'});
  }
  current=structuredClone(next);
- if(pending.length){status('Saving to Supabase…');flush();}
+ if(pending.length){if(saveQueue())status('Changes saved on this device; syncing to Supabase…');flush();}
 }
 async function fetchAll(){
  const state=blank();
@@ -94,7 +122,7 @@ function beginCollaboration(){
 async function flush(){
  if(busy||!authorized||!pending.length)return;
  if(!navigator.onLine){
-  status('Not saved to Supabase — you are offline. Reconnect and retry before closing this page.');
+  status(queueDurable?'Offline: changes saved on this device. They will sync when you reconnect.':'Offline: changes NOT safely stored. Keep this page open until they sync.');
   retry.classList.remove('hidden');return;
  }
  busy=true;retry.classList.add('hidden');
@@ -107,6 +135,7 @@ async function flush(){
    if(result.error)throw result.error;
    if(op.action==='upsert'&&result.data?.length!==1)throw Error('Database did not confirm the saved record.');
    pending.shift();
+   saveQueue();
   }
   status('Saved to Supabase');
   requestRefresh(350);
@@ -125,10 +154,13 @@ async function start(){
  if(member?.household_id!==HOUSE){$('#cloudGate').classList.remove('hidden');$('#cloudEmail').value=user.email||'';status('Signed in as '+(user.email||'an unrecognized account')+', but this account is not a member of the shared planner. Use Sign out above to switch accounts.');return;}
  authorized=true;$('#cloudGate').classList.add('hidden');$('#cloudReady').classList.remove('hidden');$('#cloudSetPassword').classList.remove('hidden');
  try{
-  current=await fetchAll();
-  status('Connected to Supabase');
+  const remote=await fetchAll();
+  loadQueue(user.id);
+  current=applyPending(remote);
+  status(pending.length?'Recovered '+pending.length+' locally saved change(s). Syncing to Supabase…':'Connected to Supabase');
   window.startVacationPlanner(structuredClone(current),changed);
   beginCollaboration();
+  if(pending.length)void flush();
  }catch(e){$('#cloudReady').classList.add('hidden');status('Cannot load trips from Supabase: '+e.message);}
 }
 let authRequestBusy=false;
@@ -181,9 +213,9 @@ $('#cloudPasswordUpdate').addEventListener('submit',async e=>{
  }catch(error){status('Could not save password: '+error.message);}
  finally{authRequestBusy=false;$('#cloudPasswordUpdateSubmit').disabled=false;}
 });
-$('#cloudSignOut').addEventListener('click',async()=>{if(pending.length&&!confirm('Changes are NOT saved to Supabase. Sign out and discard them?'))return;await client.auth.signOut();location.reload()});
+$('#cloudSignOut').addEventListener('click',async()=>{if(pending.length&&!confirm('Changes are not yet synced. Signing out will leave them stored on this device for this account. Sign out anyway?'))return;await client.auth.signOut();location.reload()});
 retry.addEventListener('click',flush);
 window.addEventListener('online',()=>{if(pending.length)flush();else if(authorized)requestRefresh(0)});
-window.addEventListener('beforeunload',e=>{if(pending.length){e.preventDefault();e.returnValue='Unsaved changes';}});
+window.addEventListener('beforeunload',e=>{if(pending.length&&!queueDurable){e.preventDefault();e.returnValue='Unsaved changes';}});
 start().catch(e=>status('Sign-in error: '+e.message));
 })();
