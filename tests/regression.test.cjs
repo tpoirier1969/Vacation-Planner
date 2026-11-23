@@ -57,3 +57,11 @@ test('offline queue is durable and scoped to authenticated user',()=>{
  assert.match(js,/pending\.shift\(\);\s*saveQueue\(\)/);
  assert.match(js,/if\(pending\.length\)void flush\(\)/);
 });
+
+test('concurrent edits use conditional updated_at writes, not unconditional upserts',()=>{
+ const js=read('cloud.js');
+ assert.match(js,/\.eq\('updated_at',op\.baseVersion\)/);
+ assert.match(js,/markConflict\(op,'Remote record changed or was deleted'\)/);
+ assert.match(js,/resolve\.addEventListener\('click'/);
+ assert.doesNotMatch(js,/\.upsert\(row\(op\.kind,op\.value\)/);
+});
