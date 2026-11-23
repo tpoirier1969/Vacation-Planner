@@ -4,11 +4,16 @@ const URL='https://wntakzfoprthwggkidyq.supabase.co',KEY='sb_publishable_gWu_EQ1
 const types={trips:'vacation_trips',routes:'vacation_routes',places:'vacation_places',activities:'vacation_itinerary',notes:'vacation_notes',packing:'vacation_packing',checkins:'vacation_checkins'};
 const blank=()=>({trips:[],routes:[],places:[],activities:[],notes:[],packing:[],checkins:[],ideas:[]});
 const client=window.supabase?.createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true}});
-let current=blank(),pending=[],busy=false,authorized=false,refreshing=false,refreshAgain=false,refreshTimer=0,queueKey='',queueDurable=true;
+let current=blank(),pending=[],busy=false,authorized=false,refreshing=false,refreshAgain=false,refreshTimer=0,queueKey='',queueDurable=true,versions=new Map(),conflict=null;
 const $=s=>document.querySelector(s);
 const rating=x=>x===''||x==null?null:(Number.isInteger(Number(x))&&Number(x)>=1&&Number(x)<=5?Number(x):null);
 const retry=document.createElement('button');
 retry.type='button';retry.className='quiet small hidden';retry.textContent='Retry save';$('#cloudSignOut').before(retry);
+const resolve=document.createElement('button');resolve.type='button';resolve.className='quiet small hidden';resolve.textContent='Resolve conflicting edit';retry.after(resolve);
+const versionKey=(kind,id)=>kind+':'+id;
+function captureVersions(kind,rows){for(const r of rows)versions.set(versionKey(kind,r.id),r.updated_at||null);}
+function markConflict(op,reason){conflict={op,reason};retry.classList.add('hidden');resolve.classList.remove('hidden');status('SYNC CONFLICT: '+op.kind+' was changed on another device. Your changes remain on this device. Select Resolve conflicting edit.');}
+
 function status(s){$('#cloudStatus').textContent=s;}
 function saveQueue(){
  if(!queueKey)return false;
@@ -58,8 +63,8 @@ return {id:r.id,tripId:r.trip_id,title:r.title,category:r.category,done:r.done};
 function changed(next){
  for(const kind of Object.keys(types)){
   const old=new Map(current[kind].map(x=>[x.id,x])),now=new Map(next[kind].map(x=>[x.id,x]));
-  for(const [id,x] of now)if(JSON.stringify(x)!==JSON.stringify(old.get(id)))pending.push({kind,id,action:'upsert',value:structuredClone(x)});
-  for(const [id] of old)if(!now.has(id))pending.push({kind,id,action:'delete'});
+  for(const [id,x] of now)if(JSON.stringify(x)!==JSON.stringify(old.get(id)))pending.push({kind,id,action:'upsert',value:structuredClone(x),baseVersion:versions.get(versionKey(kind,id))??null});
+  for(const [id] of old)if(!now.has(id))pending.push({kind,id,action:'delete',baseVersion:versions.get(versionKey(kind,id))??null});
  }
  current=structuredClone(next);
  if(pending.length){if(saveQueue())status('Changes saved on this device; syncing to Supabase…');flush();}
@@ -69,6 +74,7 @@ async function fetchAll(){
  const entries=await Promise.all(Object.entries(types).map(async ([kind,table])=>{
   const {data,error}=await client.from(table).select('*').eq('household_id',HOUSE).order('updated_at',{ascending:false});
   if(error)throw error;
+  captureVersions(kind,data||[]);
   return [kind,(data||[]).map(r=>item(kind,r))];
  }));
  for(const [kind,items] of entries)state[kind]=items;
@@ -120,7 +126,7 @@ function beginCollaboration(){
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)requestRefresh(0);});
 }
 async function flush(){
- if(busy||!authorized||!pending.length)return;
+ if(busy||!authorized||!pending.length||conflict)return;
  if(!navigator.onLine){
   status(queueDurable?'Offline: changes saved on this device. They will sync when you reconnect.':'Offline: changes NOT safely stored. Keep this page open until they sync.');
   retry.classList.remove('hidden');return;
@@ -129,16 +135,32 @@ async function flush(){
  try{
   while(pending.length){
    const op=pending[0],table=types[op.kind];
-   const result=op.action==='delete'
-    ?await client.from(table).delete().eq('id',op.id).eq('household_id',HOUSE).select('id')
-    :await client.from(table).upsert(row(op.kind,op.value),{onConflict:'id'}).select('id');
-   if(result.error)throw result.error;
+   let result;
+   if(op.baseVersion){
+    const query=client.from(table);
+    result=op.action==='delete'
+     ?await query.delete().eq('id',op.id).eq('household_id',HOUSE).eq('updated_at',op.baseVersion).select('id,updated_at')
+     :await query.update(row(op.kind,op.value)).eq('id',op.id).eq('household_id',HOUSE).eq('updated_at',op.baseVersion).select('id,updated_at');
+   }else if(op.action==='delete'){
+    result={data:[],error:null};
+   }else{
+    result=await client.from(table).insert(row(op.kind,op.value)).select('id,updated_at');
+   }
+   if(result.error){
+    if(result.error.code==='23505'){markConflict(op,'Record already exists');break;}
+    throw result.error;
+   }
+   if(op.baseVersion&&result.data?.length!==1){markConflict(op,'Remote record changed or was deleted');break;}
    if(op.action==='upsert'&&result.data?.length!==1)throw Error('Database did not confirm the saved record.');
+   const savedVersion=result.data?.[0]?.updated_at||null;
+   if(op.action==='delete')versions.delete(versionKey(op.kind,op.id));
+   else versions.set(versionKey(op.kind,op.id),savedVersion);
    pending.shift();
+   // Later queued edits to this record must follow the version just written.
+   for(const later of pending)if(later.kind===op.kind&&later.id===op.id)later.baseVersion=savedVersion;
    saveQueue();
   }
-  status('Saved to Supabase');
-  requestRefresh(350);
+  if(!conflict){status('Saved to Supabase');requestRefresh(350);}
  }catch(e){
   status('NOT SAVED to Supabase — '+e.message+'. Retry before leaving this page.');
   retry.classList.remove('hidden');
@@ -215,6 +237,30 @@ $('#cloudPasswordUpdate').addEventListener('submit',async e=>{
 });
 $('#cloudSignOut').addEventListener('click',async()=>{if(pending.length&&!confirm('Changes are not yet synced. Signing out will leave them stored on this device for this account. Sign out anyway?'))return;await client.auth.signOut();location.reload()});
 retry.addEventListener('click',flush);
+resolve.addEventListener('click',async()=>{
+ if(!conflict||busy)return;
+ const op=conflict.op;
+ const {data,error}=await client.from(types[op.kind]).select('*').eq('id',op.id).eq('household_id',HOUSE).maybeSingle();
+ if(error){status('Cannot inspect conflicting record: '+error.message);return;}
+ const name=op.value?.name||op.value?.title||op.id;
+ const choice=confirm('CONFLICT: '+name+' was changed on another device.\n\nOK: Keep your local edit and overwrite the newer server version.\nCancel: Keep the newer server version and discard only your conflicting local edit.\n\nNeither choice affects other queued changes.');
+ if(choice){
+  if(!data&&op.action==='delete'){pending.shift();}
+  else if(!data&&op.action==='upsert')op.baseVersion=null;
+  else op.baseVersion=data.updated_at;
+ }else{
+  pending.shift();
+  const next=structuredClone(current);
+  const arr=next[op.kind],i=arr.findIndex(x=>x.id===op.id);
+  if(i>=0)arr.splice(i,1);
+  if(data)arr.push(item(op.kind,data));
+  current=next;
+  window.applyVacationPlannerRemoteState?.(structuredClone(next));
+ }
+ if(data)versions.set(versionKey(op.kind,op.id),data.updated_at);
+ else versions.delete(versionKey(op.kind,op.id));
+ conflict=null;resolve.classList.add('hidden');saveQueue();if(pending.length)void flush();else{status('Conflict resolved. Changes synchronized.');requestRefresh(0);}
+});
 window.addEventListener('online',()=>{if(pending.length)flush();else if(authorized)requestRefresh(0)});
 window.addEventListener('beforeunload',e=>{if(pending.length&&!queueDurable){e.preventDefault();e.returnValue='Unsaved changes';}});
 start().catch(e=>status('Sign-in error: '+e.message));
