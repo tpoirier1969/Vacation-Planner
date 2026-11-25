@@ -473,9 +473,10 @@ function createController(config){
    if(end&&!same(points.at(-1),end))points.push(end);previous=end||previous;
    if(points.length<2)continue;
    const saved=routes().filter(r=>r.visible!==false&&r.startDate===day&&r.endDate===day&&r.preferences?.dailySource===(items.some(x=>x.actual)?'actual':'planned'));
-   if(saved.length){result.push(...saved);continue;}
+   const legacy=saved.filter(r=>r.preferences.dailyPart==null);if(legacy.length){result.push(...legacy);continue;}
    for(let i=0;i<points.length-1;i+=MAX_WAYPOINTS+1){
-    const part=points.slice(i,i+MAX_WAYPOINTS+2),r=newRoute('auto-'+t.id+'-'+day+'-'+i,t.id,day+' · Daily journey');r.startDate=r.endDate=day;r.start=part[0];r.end=part.at(-1);r.waypoints=part.slice(1,-1).map((p,j)=>({...p,id:'auto-'+j,kind:'stop'}));r.autoDaily=true;
+    const override=saved.find(r=>r.preferences.dailyPart===i);if(override){result.push(override);continue;}
+    const part=points.slice(i,i+MAX_WAYPOINTS+2),r=newRoute('auto-'+t.id+'-'+day+'-'+i,t.id,day+' · Daily journey');r.startDate=r.endDate=day;r.start=part[0];r.end=part.at(-1);r.waypoints=part.slice(1,-1).map((p,j)=>({...p,id:'auto-'+j,kind:'stop'}));r.autoDaily=true;r.preferences.dailySource=items.some(x=>x.actual)?'actual':'planned';r.preferences.dailyPart=i;
     const key=JSON.stringify(part.map(p=>[p.lat,p.lng])),cached=dailyRoadCache.get(key);
     if(cached?.result)Object.assign(r,cached.result);
     else if(!cached&&root.LAZY_ACRES_GEOAPIFY_KEY&&(!$('routeMapDay').value||$('routeMapDay').value===day)){
@@ -488,12 +489,11 @@ function createController(config){
   return result;
  }
  function visibleRoutes(){
-  if(!editing()){
+  {
    const daily=dailyMapRoutes();
    if(daily.length||config.getActivities().some(x=>x.date)||config.getCheckins().length)return daily.filter(matchesFilter);
   }
   const list=routes().filter(r=>r.visible!==false&&matchesFilter(r));
-  if(editing()&&!$('routeMapDay').value&&!$('routeMapFrom').value&&!$('routeMapTo').value)return comparedRoutes().filter(r=>r.visible!==false);
   return list;
  }
  const selected=()=>routes().find(r=>r.id===currentId)||null;
@@ -545,6 +545,7 @@ function createController(config){
   dragHandle=marker;
  }
  function chooseSection(route,row){
+  if(route.autoDaily){if(routes().length>=MAX_ROUTES)return report('Saved route limit reached.');const saved=JSON.parse(JSON.stringify(route));saved.id=config.uid();delete saved.autoDaily;saved.routeOrder=Math.max(-1,...routes().map(r=>r.routeOrder||0))+1;config.getRoutes().push(saved);route=saved;config.persist();}
   if(currentId!==route.id){currentId=route.id;undoStack=[];}
   selectedSection=row.key;pick='';status='Editing section '+(row.i+1)+': '+(row.from?.label||'Start')+' → '+(row.to?.label||'End');
   map.closePopup();render();
@@ -692,7 +693,7 @@ function createController(config){
   return [...new Set(config.getActivities().filter(x=>x.date).map(x=>x.date))].sort();
  }
  async function previewItinerary(){
-  const day=$('routeItineraryDay').value;
+  const day=$('routeMapDay').value;
   if(!day||itineraryPreviewBusy)return;
   const request=++itineraryPreviewRequest,snapshot=itinerarySnapshot(config.getActivities(),day);
   suggestedDay=day;
@@ -779,39 +780,6 @@ function createController(config){
   if(!confirm('Use the selected starting point as home for all trips?'))return;
   for(const item of config.getRoutes())if(item.preferences?.homePoint)delete item.preferences.homePoint;
   r.preferences={...r.preferences,homePoint:home};config.persist();report('Home saved for future trips.');
- }
- async function generateDaily(){
-  if(busy)return;
-  const t=config.getTrip(),home=homePoint(),actual=$('routeDailySource').value==='actual';
-  if(!t||!home)return report('Set home using a route starting point first.');
-  const source=actual?config.getCheckins():config.getActivities();
-  const localDay=v=>{const d=new Date(v);return Number.isFinite(d.getTime())?d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'):'';};
-  const stops=source.filter(x=>pointOK(x)&&(actual?x.visitedAt:x.date)).map(x=>({day:actual?localDay(x.visitedAt):x.date,time:actual?new Date(x.visitedAt).toTimeString().slice(0,5):x.time||'',point:{lat:Number(x.lat),lng:Number(x.lng),label:x.name||x.title||'Stop',sourceType:actual?'checkins':'activities',sourceId:x.id},endDay:!actual&&x.category==='Lodging'?x.endDate:''})).filter(x=>x.day).sort((a,b)=>a.day.localeCompare(b.day)||a.time.localeCompare(b.time));
-  if(!stops.length)return report('No dated, mapped '+(actual?'check-ins':'itinerary stops')+' found.');
-  const groups=new Map();for(const stop of stops){if(!groups.has(stop.day))groups.set(stop.day,[]);groups.get(stop.day).push(stop);}
-  const finalDay=t.end&&t.end>=stops.at(-1).day?t.end:stops.at(-1).day;
-  if(!groups.has(finalDay))groups.set(finalDay,[]);
-  const mode=actual?'actual':'planned',drafts=[];let previous=home,lodging=null;
-  const same=(a,b)=>Math.abs(a.lat-b.lat)<.00005&&Math.abs(a.lng-b.lng)<.00005;
-  for(const [day,items] of groups){
-   if(lodging&&lodging.endDay&&day>lodging.endDay)lodging=null;
-   const points=[previous];for(const stop of items){if(!same(points.at(-1),stop.point))points.push(stop.point);if(stop.endDay)lodging=stop;}
-   const end=day===finalDay?home:lodging&&day<lodging.endDay?lodging.point:points.at(-1);
-   if(!same(points.at(-1),end))points.push(end);previous=end;
-   if(points.length<2)continue;
-   if(points.length>MAX_WAYPOINTS+2)return report('Too many stops on '+day+'. Split this day manually.');
-   if(routes().some(r=>r.preferences?.dailySource===mode&&r.startDate===day))continue;
-   const r=newRoute(config.uid(),t.id,day+' · '+(actual?'Actual visits':'Itinerary'));
-   r.startDate=r.endDate=day;r.start=points[0];r.end=points.at(-1);r.waypoints=points.slice(1,-1).map(p=>({...p,id:config.uid(),kind:'stop'}));r.preferences={...r.preferences,dailySource:mode,homePoint:home};drafts.push(r);
-  }
-  if(!drafts.length)return report('Daily routes already exist or no driving is needed. Existing edits preserved.');
-  if(routes().length+drafts.length>MAX_ROUTES)return report('Too many saved routes. Remove unused routes first.');
-  if(!confirm('Create '+drafts.length+' daily routes? Existing routes and manual edits will be kept.'))return;
-  let order=Math.max(-1,...routes().map(r=>r.routeOrder||0));
-  for(const r of drafts){r.routeOrder=++order;config.getRoutes().push(r);}
-  config.persist();
-  for(const r of drafts){if(config.getTrip()?.id!==t.id)break;currentId=r.id;selectedSection='';undoStack=[];render();await calculate();}
-  report('Daily routes created. Existing routes retained; hide older whole-trip routes if needed.');
  }
  function addRoute(copy=false){
   const t=config.getTrip();if(!t||routes().length>=MAX_ROUTES)return report('Maximum '+MAX_ROUTES+' saved routes per trip.');
@@ -993,14 +961,10 @@ function createController(config){
    button.setAttribute('aria-selected',String(button.dataset.exploreTool===tool));
   }
   const r=selected(),list=routes();
-  const days=availableItineraryDays(),daySelect=$('routeItineraryDay');
-  const chosen=suggestedDay&&days.includes(suggestedDay)?suggestedDay:(days[0]||'');
-  if(suggestedDay&&chosen!==suggestedDay)itinerarySuggestions=null;
+  const chosen=$('routeMapDay').value;
+  if(suggestedDay!==chosen){itinerarySuggestions=null;itineraryPreviewRequest++;}
   suggestedDay=chosen;
-  daySelect.innerHTML=days.length?days.map(d=>'<option value="'+esc(d)+'">'+esc(d)+'</option>').join(''):
-   '<option value="">No dated itinerary activities</option>';
-  daySelect.value=chosen;
-  $('routeSuggestItinerary').disabled=!chosen||itineraryPreviewBusy;
+  $('routeSuggestItinerary').disabled=!availableItineraryDays().includes(chosen)||itineraryPreviewBusy;
   $('routeSuggestItinerary').textContent=itineraryPreviewBusy?'Checking road times…':'Suggest from itinerary';
   const overviewRows=itineraryTripOverview(config.getActivities());
   $('routeTripOverviewRows').innerHTML=overviewRows.length?
@@ -1115,19 +1079,18 @@ function createController(config){
  function bind(){
   $('routeEditMode').addEventListener('change',e=>setEdit(e.target.checked));
   $('routeEditSection').addEventListener('change',e=>{selectedSection=e.target.value;render();});
-  $('routeMapClear').addEventListener('click',()=>{for(const id of ['routeMapDay','routeMapFrom','routeMapTo'])$(id).value='';draw();});
-  for(const id of ['routeMapDay','routeMapFrom','routeMapTo'])$(id).addEventListener('change',()=>{if($('routeMapDay').value&&$('routeMapFrom').value&&$('routeMapTo').value&&$('routeMapFrom').value>$('routeMapTo').value){$('routeMapTo').value=$('routeMapFrom').value;}draw();});
+  $('routeMapClear').addEventListener('click',()=>{for(const id of ['routeMapDay','routeMapFrom','routeMapTo'])$(id).value='';render();});
+  for(const id of ['routeMapDay','routeMapFrom','routeMapTo'])$(id).addEventListener('change',()=>{if($('routeMapDay').value&&$('routeMapFrom').value&&$('routeMapTo').value&&$('routeMapFrom').value>$('routeMapTo').value){$('routeMapTo').value=$('routeMapFrom').value;}selectedSection='';render();});
   $('exploreToolTabs').addEventListener('click',e=>{const b=e.target.closest('[data-explore-tool]');if(b)setTool(b.dataset.exploreTool);});
   $('routeNew').addEventListener('click',()=>addRoute());
   $('routeSuggestItinerary').addEventListener('click',previewItinerary);
-  $('routeItineraryDay').addEventListener('change',e=>{itineraryPreviewRequest++;suggestedDay=e.target.value;itinerarySuggestions=null;render();});
   $('routeTripOverviewRows').addEventListener('click',e=>{
    const button=e.target.closest('[data-route-review-day]');
    if(!button||itineraryPreviewBusy)return;
    const day=button.dataset.routeReviewDay;
    if(!availableItineraryDays().includes(day))return;
    itineraryPreviewRequest++;itinerarySuggestions=null;suggestedDay=day;
-   $('routeItineraryDay').value=day;
+   $('routeMapDay').value=day;render();
    void previewItinerary();
   });
   for(const id of ['routeVisitEstimate','routeDayStart','routeDayEnd'])$(id).addEventListener('change',()=>{
@@ -1178,7 +1141,6 @@ function createController(config){
    e.preventDefault();setSectionConnection(selectedSection,false);
   });
   $('routeSetHome').addEventListener('click',saveHome);
-  $('routeGenerateDaily').addEventListener('click',()=>void generateDaily());
   $('routeDailySource').addEventListener('change',()=>draw());
   $('routePicker').addEventListener('change',e=>{currentId=e.target.value;undoStack=[];pick='';selectedSection='';status='';render();});
   $('routeComparison').addEventListener('click',e=>{
