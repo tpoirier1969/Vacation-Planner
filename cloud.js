@@ -185,30 +185,45 @@ async function start(){
   if(pending.length)void flush();
  }catch(e){$('#cloudReady').classList.add('hidden');status('Cannot load trips from Supabase: '+e.message);}
 }
+const loginFeedback=document.createElement('p');
+loginFeedback.id='cloudLoginFeedback';
+loginFeedback.setAttribute('role','status');
+loginFeedback.setAttribute('aria-live','polite');
+loginFeedback.style.cssText='padding:12px;border-radius:6px;margin:12px 0 0;font-weight:600;line-height:1.4;overflow-wrap:anywhere';
+loginFeedback.hidden=true;
+$('#cloudLinkAlternative').after(loginFeedback);
+function loginStatus(message,type='pending'){
+ status(message);
+ loginFeedback.hidden=false;
+ loginFeedback.textContent=message;
+ loginFeedback.style.background=type==='error'?'#fce8e6':type==='success'?'#e4f3e9':'#e5f1f5';
+ loginFeedback.style.color=type==='error'?'#922b21':type==='success'?'#205b38':'#174d60';
+}
 let authRequestBusy=false;
 $('#cloudPasswordLogin').addEventListener('submit',async e=>{
  e.preventDefault();
  if(authRequestBusy)return;
  const email=$('#cloudEmail').value.trim(),password=$('#cloudPassword').value;
  if(!email||!password)return;
- authRequestBusy=true;$('#cloudPasswordSubmit').disabled=true;status('Signing in…');
+ authRequestBusy=true;$('#cloudPasswordSubmit').disabled=true;loginStatus('Signing in…');
  try{
   const {error}=await client.auth.signInWithPassword({email,password});
   if(error)throw error;
   $('#cloudPassword').value='';
+  loginStatus('Signed in. Loading your trips…','success');
   await start();
- }catch(error){status('Sign-in failed: '+error.message);}
+ }catch(error){loginStatus('Sign-in failed: '+error.message,'error');}
  finally{authRequestBusy=false;$('#cloudPasswordSubmit').disabled=false;}
 });
 $('#cloudLogin').addEventListener('submit',async e=>{
  e.preventDefault();if(authRequestBusy)return;
- const email=$('#cloudEmail').value.trim();if(!email){status('Enter an email address above.');return;}
- authRequestBusy=true;$('#cloudLinkSubmit').disabled=true;status('Sending sign-in link…');
+ const email=$('#cloudEmail').value.trim();if(!email){loginStatus('Enter an email address above.','error');return;}
+ authRequestBusy=true;$('#cloudLinkSubmit').disabled=true;loginStatus('Sending sign-in link…');
  try{
   const {error}=await client.auth.signInWithOtp({email,options:{shouldCreateUser:false,emailRedirectTo:location.origin+location.pathname}});
   if(error)throw error;
-  status('Check your email for the sign-in link. To use the iPhone shortcut without email, set a password after signing in through Safari.');
- }catch(error){status('Sign-in link failed: '+error.message);}
+  loginStatus('Sign-in link requested successfully. Check your email (including spam) for the link.','success');
+ }catch(error){loginStatus('Sign-in link failed: '+error.message,'error');}
  finally{authRequestBusy=false;$('#cloudLinkSubmit').disabled=false;}
 });
 function closePasswordSettings(){
