@@ -437,7 +437,7 @@ function createController(config){
  const sectionKey=(points,i)=>String(i===0?'start':points[i].id||'point-'+i)+'>'+String(i===points.length-2?'end':points[i+1].id||'point-'+(i+1));
  const validGaps=r=>{const points=routePoints(r),keys=new Set(points.slice(0,-1).map((_,i)=>sectionKey(points,i)));return (r.gaps||[]).filter(k=>keys.has(k));};
  const sectionRows=r=>{const p=routePoints(r),gaps=new Set(validGaps(r));return p.slice(0,-1).map((from,i)=>({i,key:sectionKey(p,i),from,to:p[i+1],gap:gaps.has(sectionKey(p,i))}));};
- let selectedSection='';
+ let selectedSection='',hitSections=[];
  const editing=()=>tool==='routes';
  function matchesFilter(r){
   const day=$('routeMapDay').value,from=$('routeMapFrom').value,to=$('routeMapTo').value;
@@ -501,9 +501,36 @@ function createController(config){
   marker.on('dragend',e=>{map.dragging?.enable?.();addViaAt(routeId,leg,e.target.getLatLng());});
   dragHandle=marker;
  }
+ function chooseSection(route,row){
+  if(currentId!==route.id){currentId=route.id;undoStack=[];}
+  selectedSection=row.key;pick='';status='Editing section '+(row.i+1)+': '+(row.from?.label||'Start')+' → '+(row.to?.label||'End');
+  map.closePopup();render();
+ }
+ function selectNear(p){
+  if(!editing()||pick||busy||!map)return false;
+  const at=map.latLngToContainerPoint(p),matches=new Map();
+  for(const hit of hitSections){
+   const points=hit.part.map(q=>map.latLngToContainerPoint(q));
+   if(points.some((q,i)=>i>0&&L.LineUtil.pointToSegmentDistance(at,points[i-1],q)<=15)){
+    matches.set(hit.route.id+'|'+hit.row.key,hit);
+   }
+  }
+  const choices=[...matches.values()];
+  if(!choices.length)return false;
+  if(choices.length===1){chooseSection(choices[0].route,choices[0].row);return true;}
+  const box=document.createElement('div');box.className='route-choice-popup';
+  const title=document.createElement('strong');title.textContent='Choose driving section';box.append(title);
+  for(const {route,row} of choices){
+   const b=document.createElement('button');b.type='button';b.className='route-choice-button';
+   const label=document.createElement('strong');label.textContent=(row.i+1)+'. '+(row.from?.label||'Start')+' → '+(row.to?.label||'End');
+   const detail=document.createElement('small');detail.textContent=[route.name,route.startDate,route.startTime,route.endDate&&route.endDate!==route.startDate?route.endDate:'',route.endTime?'to '+route.endTime:''].filter(Boolean).join(' · ');
+   b.append(label,detail);b.addEventListener('click',()=>chooseSection(route,row));box.append(b);
+  }
+  L.DomEvent.disableClickPropagation(box);L.popup({maxWidth:300,autoPan:false}).setLatLng(p).setContent(box).openOn(map);return true;
+ }
  function draw(){
   if(!layer)return;
-  layer.clearLayers();dragHandle=null;dragHandleLeg=-1;dragHandleRoute='';
+  hitSections=[];layer.clearLayers();dragHandle=null;dragHandleLeg=-1;dragHandleRoute='';
   const r=selected();if(!r||document.getElementById('mapShowRoutes')?.checked===false)return;
   const shown=visibleRoutes();
   const ordered=[...shown.filter(x=>x.id!==currentId),...shown.filter(x=>x.id===currentId)];
@@ -519,20 +546,19 @@ function createController(config){
     for(const [index,part] of parts.entries()){
      if(part.length<2)continue;
      const row=rows[start+index];if(!row)continue;
+     hitSections.push({route,row,part});
      const focused=active&&selectedSection===row.key;
      const locked=editing()&&!!selectedSection;
      const editable=editing()&&active&&focused&&!row.gap;
      const dimmed=locked&&!focused;
      const line=L.polyline(part,{color:focused?'#187b79':color,weight:focused?11:active?7:5,opacity:dimmed?.22:active?1:.69,interactive:editing()&&!locked||editable,bubblingMouseEvents:false}).addTo(layer);
-     line.on('click',e=>{
-      L.DomEvent.stopPropagation(e.originalEvent);if(!active){currentId=route.id;undoStack=[];selectedSection='';pick='';status='Alternative selected. Drag its path to customize it.';render();return;}
-      selectedSection=row.key;render();showDragHandle(e.latlng||{lat:part[Math.floor(part.length/2)][0],lng:part[Math.floor(part.length/2)][1]},row.i,route.id);
-
-     });
-     if(editing()&&active&&!dimmed){
-      const midIndex=Math.max(0,Math.min(part.length-2,Math.floor(part.length/2)-1)),a=part[midIndex],b=part[midIndex+1];
+     line.on('click',e=>{L.DomEvent.stopPropagation(e.originalEvent);if(!pick)selectNear(e.latlng);});
+     if(editing()&&!dimmed){
+      for(const fraction of (part.length>12?[.2,.5,.8]:[.5])){
+      const midIndex=Math.max(0,Math.min(part.length-2,Math.floor(part.length*fraction)-1)),a=part[midIndex],b=part[midIndex+1];
       const bearing=Math.atan2((b[1]-a[1])*Math.cos(a[0]*Math.PI/180),b[0]-a[0])*180/Math.PI;
       L.marker([(a[0]+b[0])/2,(a[1]+b[1])/2],{interactive:false,keyboard:false,icon:L.divIcon({className:'route-direction-wrap',html:'<span class="route-direction" style="--bearing:'+bearing+'deg">↑</span><b>'+(row.i+1)+'</b>',iconSize:[38,26],iconAnchor:[19,13]})}).addTo(layer);
+      }
      }
      if(editable){
       if(!busy&&!pick){const mid=part[Math.floor(part.length/2)];const handle=L.marker(mid,{draggable:true,autoPan:false,zIndexOffset:1500,icon:L.divIcon({className:'route-drag-handle-wrap',html:'<span class="route-drag-handle">↕</span>',iconSize:[30,30],iconAnchor:[15,15]})}).addTo(layer);handle.bindTooltip('Drag to reshape this section');handle.on('dragend',e=>addViaAt(route.id,row.i,e.target.getLatLng()));}
@@ -1126,7 +1152,7 @@ function createController(config){
   });
  }
  bind();
- return {attachMap,render,onTripChange,consumeMapClick,cancelPick,isPicking:()=>!!pick,getPick:()=>pick,isEditing:editing,setTool};
+ return {attachMap,render,onTripChange,consumeMapClick,cancelPick,isPicking:()=>!!pick,getPick:()=>pick,selectNear,isEditing:editing,setTool};
 }
 root.VacationRouteDomain=Object.freeze({newRoute,decodePolyline,routeURL,parseRoute,routeDiscoveryGeometry,nearestRoadWindow,windowError,summary,pointOK,sectionGeometry,suggestItineraryRoutes,smartDailyItinerary,tentativeDayTimeline,itineraryTripOverview,itineraryDrivingAssessment,itinerarySnapshot});
 root.createVacationRoutes=createController;
