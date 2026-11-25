@@ -998,7 +998,10 @@ function createController(config){
     r.legStats.map((leg,i)=>{
      const from=i===0?r.start?.label:r.waypoints[i-1]?.label;
      const to=i===r.waypoints.length?r.end?.label:r.waypoints[i]?.label;
-     return '<div class="route-leg-row"><span>'+esc(from||'Start')+' → '+esc(to||'End')+'</span>'+
+     const prior=r.legStats.slice(0,i+1);const seconds=prior.every(x=>x&&Number.isFinite(x.durationS))?prior.reduce((sum,x)=>sum+x.durationS,0):null;
+     const start=r.startDate&&r.startTime?new Date(r.startDate+'T'+r.startTime):null;
+     const eta=start&&Number.isFinite(start.getTime())&&seconds!=null?new Date(start.getTime()+seconds*1000).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';
+     return '<div class="route-leg-row"><span>'+esc(from||'Start')+' → '+esc(to||'End')+(eta?'<small> · Driving-only arrival '+esc(eta)+'</small>':'')+'</span>'+
        '<strong>'+esc(leg?summary({distanceM:leg.distanceM,durationS:leg.durationS}):'Not driven')+'</strong></div>';
     }).join('')+'</details>':'';
   const options=[...config.getPlaces().filter(pointOK).map(x=>({type:'places',id:x.id,label:'Idea: '+x.name})),
