@@ -450,7 +450,48 @@ function createController(config){
   if(day<start||day>end)return false;
   return !(from&&day===end&&r.endTime&&r.endTime<from||to&&day===start&&r.startTime&&r.startTime>to);
  }
+ const dailyRoadCache=new Map();
+ function dailyMapRoutes(){
+  const t=config.getTrip();if(!t)return [];
+  const mode=$('routeDailySource').value,places=config.getPlaces(),localDay=v=>{const d=new Date(v);return Number.isFinite(+d)?d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'):'';};
+  const actual=config.getCheckins().map(x=>({...x,day:localDay(x.visitedAt),clock:new Date(x.visitedAt).toTimeString().slice(0,5),actual:true}));
+  const planned=config.getActivities().map(x=>({...x,day:x.date,clock:x.time||'23:59',actual:false}));
+  const actualDays=new Set(actual.filter(x=>x.day).map(x=>x.day));
+  const records=(mode==='actual'?actual:mode==='planned'?planned:[...actual,...planned.filter(x=>!actualDays.has(x.day))]).map(x=>{const linked=places.find(p=>p.id===x.placeId);return pointOK(x)?x:pointOK(linked)?{...x,lat:linked.lat,lng:linked.lng}:x;}).filter(x=>x.day&&pointOK(x)).sort((a,b)=>a.day.localeCompare(b.day)||a.clock.localeCompare(b.clock));
+  if(!records.length)return [];
+  const home=homePoint()||routes().filter(r=>pointOK(r.start)&&!r.preferences?.dailySource).sort((a,b)=>(a.startDate||'9999').localeCompare(b.startDate||'9999')||(a.routeOrder||0)-(b.routeOrder||0))[0]?.start;
+  const groups=new Map();for(const x of records){if(!groups.has(x.day))groups.set(x.day,[]);groups.get(x.day).push(x);}
+  const last=records.at(-1).day,finalDay=t.end&&t.end>=last?t.end:last;
+  if(!groups.has(finalDay))groups.set(finalDay,[]);
+  let previous=home||null,lodging=null;const result=[];
+  const same=(a,b)=>a&&b&&Math.abs(Number(a.lat)-Number(b.lat))<.00005&&Math.abs(Number(a.lng)-Number(b.lng))<.00005;
+  for(const [day,items] of groups){
+   if(lodging&&day>lodging.endDate)lodging=null;
+   const points=previous?[previous]:[];
+   for(const x of items){const p={lat:Number(x.lat),lng:Number(x.lng),label:x.name||x.title||'Stop'};if(!same(points.at(-1),p))points.push(p);if(!x.actual&&String(x.category).toLowerCase()==='lodging'&&x.endDate)lodging={...p,endDate:x.endDate};}
+   const end=day===finalDay&&home?home:lodging&&day<lodging.endDate?lodging:points.at(-1);
+   if(end&&!same(points.at(-1),end))points.push(end);previous=end||previous;
+   if(points.length<2)continue;
+   const saved=routes().filter(r=>r.visible!==false&&r.startDate===day&&r.endDate===day&&r.preferences?.dailySource===(items.some(x=>x.actual)?'actual':'planned'));
+   if(saved.length){result.push(...saved);continue;}
+   for(let i=0;i<points.length-1;i+=MAX_WAYPOINTS+1){
+    const part=points.slice(i,i+MAX_WAYPOINTS+2),r=newRoute('auto-'+t.id+'-'+day+'-'+i,t.id,day+' · Daily journey');r.startDate=r.endDate=day;r.start=part[0];r.end=part.at(-1);r.waypoints=part.slice(1,-1).map((p,j)=>({...p,id:'auto-'+j,kind:'stop'}));r.autoDaily=true;
+    const key=JSON.stringify(part.map(p=>[p.lat,p.lng])),cached=dailyRoadCache.get(key);
+    if(cached?.result)Object.assign(r,cached.result);
+    else if(!cached&&root.LAZY_ACRES_GEOAPIFY_KEY&&(!$('routeMapDay').value||$('routeMapDay').value===day)){
+     dailyRoadCache.set(key,{pending:true});
+     fetch(routeURL(r,root.LAZY_ACRES_GEOAPIFY_KEY)).then(response=>{if(!response.ok)throw Error('Routing unavailable');return response.json();}).then(data=>{dailyRoadCache.set(key,{result:parseRoute(data)});draw();}).catch(()=>{dailyRoadCache.set(key,{failed:true});draw();});
+    }
+    result.push(r);
+   }
+  }
+  return result;
+ }
  function visibleRoutes(){
+  if(!editing()){
+   const daily=dailyMapRoutes();
+   if(daily.length||config.getActivities().some(x=>x.date)||config.getCheckins().length)return daily.filter(matchesFilter);
+  }
   const list=routes().filter(r=>r.visible!==false&&matchesFilter(r));
   if(editing()&&!$('routeMapDay').value&&!$('routeMapFrom').value&&!$('routeMapTo').value)return comparedRoutes().filter(r=>r.visible!==false);
   return list;
@@ -533,7 +574,7 @@ function createController(config){
  function draw(){
   if(!layer)return;
   hitSections=[];layer.clearLayers();dragHandle=null;dragHandleLeg=-1;dragHandleRoute='';
-  const r=selected();if(!r||document.getElementById('mapShowRoutes')?.checked===false)return;
+  const r=selected();if(document.getElementById('mapShowRoutes')?.checked===false)return;
   const shown=visibleRoutes();
   const ordered=[...shown.filter(x=>x.id!==currentId),...shown.filter(x=>x.id===currentId)];
   for(const route of ordered){
@@ -541,6 +582,7 @@ function createController(config){
    if(route.visible===false)continue;
    const active=route.id===currentId,rows=sectionRows(route),points=routePoints(route);
    const color=ROUTE_COLORS[variantIndex%ROUTE_COLORS.length];
+   if(route.autoDaily&&!route.polyline){L.polyline(routePoints(route).map(p=>[p.lat,p.lng]),{color,weight:4,dashArray:'6 8',interactive:false}).addTo(layer);continue;}
    for(const segment of routeGeometry(route)){
     const coords=decodePolyline(segment.polyline),start=segment.startIndex||0,end=segment.endIndex??rows.length-1;
     if(coords.length<2||end<start)continue;
@@ -587,7 +629,7 @@ function createController(config){
     }
    }
   }
-  if(!editing()||!shown.some(x=>x.id===r.id))return;
+  if(!editing()||!r||!shown.some(x=>x.id===r.id))return;
   for(const [role,p,color] of [['start',r.start,'#28766f'],['end',r.end,'#b45237']]){
    if(!pointOK(p))continue;
    if(typeof L.marker==='function'&&typeof L.divIcon==='function'){
@@ -1137,6 +1179,7 @@ function createController(config){
   });
   $('routeSetHome').addEventListener('click',saveHome);
   $('routeGenerateDaily').addEventListener('click',()=>void generateDaily());
+  $('routeDailySource').addEventListener('change',()=>draw());
   $('routePicker').addEventListener('change',e=>{currentId=e.target.value;undoStack=[];pick='';selectedSection='';status='';render();});
   $('routeComparison').addEventListener('click',e=>{
    const b=e.target.closest('[data-route-select]');if(!b)return;
