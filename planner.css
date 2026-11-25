@@ -947,3 +947,5 @@ button{overflow-wrap:normal!important;word-break:normal!important;hyphens:none!i
 .route-direction-wrap{display:flex;align-items:center;justify-content:center;gap:3px;background:#fff8e5;border:1px solid #205d60;border-radius:12px;color:#205d60;font-size:12px;pointer-events:none}.route-direction{display:inline-block;transform:rotate(var(--bearing));font-weight:900;font-size:18px;line-height:1}.route-direction-wrap b{font-size:12px}#routeEditSection{width:100%;min-width:0}
 
 .route-choice-popup{display:grid;gap:7px;max-width:100%;max-height:240px;overflow-y:auto}.route-choice-button{display:grid;text-align:left;gap:3px;white-space:normal;overflow-wrap:anywhere;width:100%;padding:8px;border:1px solid #b9c8c4;border-radius:8px;background:#fffdf5;color:#205d60}.route-choice-button small{font-size:11px;color:#526561}
+
+.route-edit-mode{display:flex;align-items:center;gap:8px;padding:8px 0;font-weight:600}.route-edit-mode input{width:20px;height:20px;flex:none}.editing-route .leaflet-placeMarkers-pane,.editing-route .leaflet-placeMarkers-pane *{pointer-events:none!important}

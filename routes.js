@@ -438,7 +438,9 @@ function createController(config){
  const validGaps=r=>{const points=routePoints(r),keys=new Set(points.slice(0,-1).map((_,i)=>sectionKey(points,i)));return (r.gaps||[]).filter(k=>keys.has(k));};
  const sectionRows=r=>{const p=routePoints(r),gaps=new Set(validGaps(r));return p.slice(0,-1).map((from,i)=>({i,key:sectionKey(p,i),from,to:p[i+1],gap:gaps.has(sectionKey(p,i))}));};
  let selectedSection='',hitSections=[];
- const editing=()=>tool==='routes';
+ let editEnabled=false;
+ const editing=()=>tool==='routes'&&editEnabled;
+ function setEdit(value){editEnabled=!!value;$('routeEditMode').checked=editEnabled;if(!editEnabled){pick='';selectedSection='';if(directDrag&&map){map.off('mousemove',directDrag.move);map.off('mouseup',directDrag.finish);map.dragging?.enable?.();directDrag=null;}}config.onPickChange?.();render();}
  function matchesFilter(r){
   const day=$('routeMapDay').value,from=$('routeMapFrom').value,to=$('routeMapTo').value;
   if(!day){if(!from&&!to)return true;if(!r.startTime&&!r.endTime)return true;if(r.startDate&&r.endDate&&r.startDate!==r.endDate)return true;return !(from&&r.endTime&&r.endTime<from||to&&r.startTime&&r.startTime>to);}
@@ -547,7 +549,7 @@ function createController(config){
      if(part.length<2)continue;
      const row=rows[start+index];if(!row)continue;
      hitSections.push({route,row,part});
-     const focused=active&&selectedSection===row.key;
+     const focused=editing()&&active&&selectedSection===row.key;
      const locked=editing()&&!!selectedSection;
      const editable=editing()&&active&&focused&&!row.gap;
      const dimmed=locked&&!focused;
@@ -622,6 +624,7 @@ function createController(config){
  }
  function setPick(which){
   if(!selected())return;
+  if(!editing())setEdit(true);
   pick=pick===which?'':which;config.onPickChange?.();render();
  }
  function cancelPick(){
@@ -1065,9 +1068,10 @@ function createController(config){
   $('routeStatus').textContent=status||'Save points, then calculate the route. Changes are shared via Supabase.';
   draw();
  }
- function setTool(next){tool=next==='routes'?'routes':'discover';if(tool!=='routes')pick='';config.onPickChange?.();render();}
- function onTripChange(){for(const id of ['routeMapDay','routeMapFrom','routeMapTo'])$(id).value='';currentId='';undoStack=[];pick='';selectedSection='';status='';suggestedDay='';itinerarySuggestions=null;itineraryPreviewRequest++;render();}
+ function setTool(next){tool=next==='routes'?'routes':'discover';if(tool!=='routes'){setEdit(false);return;}config.onPickChange?.();render();}
+ function onTripChange(){editEnabled=false;$('routeEditMode').checked=false;config.onPickChange?.();for(const id of ['routeMapDay','routeMapFrom','routeMapTo'])$(id).value='';currentId='';undoStack=[];pick='';selectedSection='';status='';suggestedDay='';itinerarySuggestions=null;itineraryPreviewRequest++;render();}
  function bind(){
+  $('routeEditMode').addEventListener('change',e=>setEdit(e.target.checked));
   $('routeEditSection').addEventListener('change',e=>{selectedSection=e.target.value;render();});
   $('routeMapClear').addEventListener('click',()=>{for(const id of ['routeMapDay','routeMapFrom','routeMapTo'])$(id).value='';draw();});
   for(const id of ['routeMapDay','routeMapFrom','routeMapTo'])$(id).addEventListener('change',()=>{if($('routeMapDay').value&&$('routeMapFrom').value&&$('routeMapTo').value&&$('routeMapFrom').value>$('routeMapTo').value){$('routeMapTo').value=$('routeMapFrom').value;}draw();});
@@ -1201,7 +1205,7 @@ function createController(config){
   });
  }
  bind();
- return {attachMap,render,onTripChange,consumeMapClick,cancelPick,isPicking:()=>!!pick,getPick:()=>pick,selectNear,isEditing:editing,setTool};
+ return {attachMap,render,onTripChange,consumeMapClick,cancelPick,isPicking:()=>!!pick,getPick:()=>pick,selectNear,isEditing:editing,setEdit,setTool};
 }
 root.VacationRouteDomain=Object.freeze({newRoute,decodePolyline,routeURL,parseRoute,routeDiscoveryGeometry,nearestRoadWindow,windowError,summary,pointOK,sectionGeometry,suggestItineraryRoutes,smartDailyItinerary,tentativeDayTimeline,itineraryTripOverview,itineraryDrivingAssessment,itinerarySnapshot});
 root.createVacationRoutes=createController;

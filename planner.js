@@ -163,7 +163,7 @@ function initializeMobileWorkspace(){
  });
  setMobileSheet('collapsed');
 }
-function setTab(n){if(!trip()||!TABS.includes(n))return;document.body.classList.remove('mobile-trip-menu-open','mobile-map-options-open');if(n!=='explore')setMobileMapSearch(false);if(n!=='explore')routeUI?.cancelPick();if(n!=='explore'&&expandedMap){expandedMap=false;syncExpanded()}addingPlace=false;syncMapMode();tab=n;render()}
+function setTab(n){if(!trip()||!TABS.includes(n))return;document.body.classList.remove('mobile-trip-menu-open','mobile-map-options-open');if(n!=='explore')setMobileMapSearch(false);if(n!=='explore')routeUI?.setEdit(false);if(n!=='explore'&&expandedMap){expandedMap=false;syncExpanded()}addingPlace=false;syncMapMode();tab=n;render()}
 function setTileStatus(message,show){const box=$('#tileStatus');if(!box)return;box.classList.toggle('hidden',!show);$('#tileStatusText').textContent=message;}
 function setMapStyle(style){
  if(!map||!baseLayers||!baseLayers[style])return;
@@ -186,12 +186,12 @@ function registerBaseLayer(layer){
 }
 $('#mapStyle').addEventListener('click',()=>setMapStyle(mapStyle==='street'?'satellite':'street'));
 $('#retryTiles').addEventListener('click',()=>{if(!tileLayer)return;tileErrors=0;setTileStatus('Retrying map tiles…',true);map?.invalidateSize({pan:false});tileLayer.redraw()});
-function syncMapMode(){const btn=$('#mapAdd'),frame=$('#mapFrame');btn.setAttribute('aria-pressed',String(addingPlace));btn.textContent=addingPlace?'✕ Cancel adding':'＋ Add a place';frame.classList.toggle('placing',addingPlace);frame.classList.toggle('placing-route',!!routeUI?.isPicking());const routeMode=routeUI?.getPick();$('#mapHint').classList.toggle('hidden',!routeMode&&!addingPlace);$('#mapHint').textContent=routeMode?(routeMode==='start'?'Click your route starting point':routeMode==='end'?'Click your destination':routeMode==='stop'?'Click map to add route stops · select button again to finish':'Click roads to guide the route · select button again to finish'):addingPlace?'Tap the map where you want to save a place':'';}
+function syncMapMode(){const btn=$('#mapAdd'),frame=$('#mapFrame');btn.setAttribute('aria-pressed',String(addingPlace));btn.textContent=addingPlace?'✕ Cancel adding':'＋ Add a place';frame.classList.toggle('placing',addingPlace);frame.classList.toggle('placing-route',!!routeUI?.isPicking());frame.classList.toggle('editing-route',!!routeUI?.isEditing());btn.disabled=!!routeUI?.isEditing();if(routeUI?.isEditing())map?.closePopup();const routeMode=routeUI?.getPick();$('#mapHint').classList.toggle('hidden',!routeMode&&!addingPlace);$('#mapHint').textContent=routeMode?(routeMode==='start'?'Click your route starting point':routeMode==='end'?'Click your destination':routeMode==='stop'?'Click map to add route stops · select button again to finish':'Click roads to guide the route · select button again to finish'):addingPlace?'Tap the map where you want to save a place':'';}
 function syncExpanded(){const frame=$('#mapFrame'),btn=$('#mapFullscreen');frame.classList.toggle('expanded',expandedMap);document.body.classList.toggle('map-expanded',expandedMap);btn.setAttribute('aria-pressed',String(expandedMap));btn.textContent=expandedMap?'↙ Close map':'⛶ Expand map';setTimeout(()=>map?.invalidateSize({pan:false,debounceMoveend:true}),100);}
 $('#mapAdd').addEventListener('click',()=>{routeUI?.cancelPick();addingPlace=!addingPlace;syncMapMode();if(addingPlace)setMobileSheet('collapsed');});
 $('#mapFullscreen').addEventListener('click',()=>{expandedMap=!expandedMap;syncExpanded()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&expandedMap){expandedMap=false;syncExpanded()}});
-function initMap(){if(!trip()||tab!=='explore')return;if(typeof L==='undefined'){$('#map').textContent='Map could not load. Check your connection.';return}if(!map){map=L.map('map',{zoomControl:false,tap:false,scrollWheelZoom:true,wheelPxPerZoomLevel:180,wheelDebounceTime:80,zoomSnap:0.5,touchZoom:'center',bounceAtZoomLimits:false,zoomAnimation:false,fadeAnimation:false,markerZoomAnimation:false}).setView([46.55,-87.4],8);L.control.zoom({position:'bottomright'}).addTo(map);baseLayers={street:L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19,keepBuffer:6,updateWhenIdle:false,updateWhenZooming:false}),satellite:L.tileLayer('https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}',{attribution:'Imagery: USDA, USGS The National Map',maxZoom:19,maxNativeZoom:16,keepBuffer:6,updateWhenIdle:false,updateWhenZooming:false})};Object.values(baseLayers).forEach(registerBaseLayer);setMapStyle(mapStyle);map.on('moveend zoomend',()=>{if(tileErrors)setTileStatus('Some map tiles may be missing. Retry if needed.',true)});markers=L.layerGroup().addTo(map);discoveryMarkers=L.layerGroup().addTo(map);if(typeof ResizeObserver!=='undefined'){new ResizeObserver(()=>{if(map&&trip()&&tab==='explore')map.invalidateSize({pan:false,debounceMoveend:true})}).observe($('#map'))};map.on('click',e=>{if(routeUI?.consumeMapClick(e.latlng))return;if(routeUI?.isEditing()&&!addingPlace){routeUI.selectNear(e.latlng);return;}if(addingPlace){addingPlace=false;syncMapMode()}showMapPlaceMenu(e.latlng)});map.on('contextmenu',e=>{if(!routeUI?.isEditing()||addingPlace)showMapPlaceMenu(e.latlng)});const t=trip();if(t?.lat!=null&&t?.lng!=null)map.setView([t.lat,t.lng],10)}setTimeout(()=>map?.invalidateSize({pan:false,debounceMoveend:true}),100);refreshMarkers();routeUI?.attachMap(map)}
+function initMap(){if(!trip()||tab!=='explore')return;if(typeof L==='undefined'){$('#map').textContent='Map could not load. Check your connection.';return}if(!map){map=L.map('map',{zoomControl:false,tap:false,scrollWheelZoom:true,wheelPxPerZoomLevel:180,wheelDebounceTime:80,zoomSnap:0.5,touchZoom:'center',bounceAtZoomLimits:false,zoomAnimation:false,fadeAnimation:false,markerZoomAnimation:false}).setView([46.55,-87.4],8);L.control.zoom({position:'bottomright'}).addTo(map);baseLayers={street:L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19,keepBuffer:6,updateWhenIdle:false,updateWhenZooming:false}),satellite:L.tileLayer('https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}',{attribution:'Imagery: USDA, USGS The National Map',maxZoom:19,maxNativeZoom:16,keepBuffer:6,updateWhenIdle:false,updateWhenZooming:false})};Object.values(baseLayers).forEach(registerBaseLayer);setMapStyle(mapStyle);map.on('moveend zoomend',()=>{if(tileErrors)setTileStatus('Some map tiles may be missing. Retry if needed.',true)});map.createPane('placeMarkers');map.getPane('placeMarkers').style.zIndex=600;markers=L.layerGroup().addTo(map);discoveryMarkers=L.layerGroup().addTo(map);if(typeof ResizeObserver!=='undefined'){new ResizeObserver(()=>{if(map&&trip()&&tab==='explore')map.invalidateSize({pan:false,debounceMoveend:true})}).observe($('#map'))};map.on('click',e=>{if(routeUI?.consumeMapClick(e.latlng))return;if(routeUI?.isEditing()&&!addingPlace){routeUI.selectNear(e.latlng);return;}if(addingPlace){addingPlace=false;syncMapMode()}showMapPlaceMenu(e.latlng)});map.on('contextmenu',e=>{if(!routeUI?.isEditing()||addingPlace)showMapPlaceMenu(e.latlng)});const t=trip();if(t?.lat!=null&&t?.lng!=null)map.setView([t.lat,t.lng],10)}setTimeout(()=>map?.invalidateSize({pan:false,debounceMoveend:true}),100);refreshMarkers();routeUI?.attachMap(map)}
 const PLACE_CATEGORIES=['Lodging','Restaurants','Coffee Shops','Wineries','Shopping','Hiking','Boating','Fishing','Events','Attractions','Activities','Scenic Drives','Other'];
 const collapsedPlaceCategories=new Set();
 const FLAG_COLORS={Lodging:'#845ec2',Restaurants:'#d65a44','Coffee Shops':'#80633e',Wineries:'#8e396f',Shopping:'#ca8422',Hiking:'#307d4d',Boating:'#187a9b',Fishing:'#2675c9',Events:'#d13f79',Attractions:'#4d8f83',Activities:'#637a94','Scenic Drives':'#a16f44',Other:'#717885'};
@@ -938,7 +938,7 @@ function renderDiscoveryMarkers(found){
   if(!geo(x))return;
   const icon=L.divIcon({className:'discovery-marker-icon',html:'<span class="discovery-map-pin" aria-hidden="true"></span>',iconSize:[18,18],iconAnchor:[9,9],popupAnchor:[0,-12]});
   const popup=makeDiscoveryPopup(x);
-  const marker=L.marker([x.lat,x.lng],{icon,title:x.name,alt:x.name}).addTo(discoveryMarkers).bindPopup(popup.content);
+  const marker=L.marker([x.lat,x.lng],{pane:'placeMarkers',icon,title:x.name,alt:x.name}).addTo(discoveryMarkers).bindPopup(popup.content);
   marker.bindTooltip(x.name,{direction:'top',offset:[0,-12]});
   marker.on('popupopen',()=>popup.load());
  });
@@ -950,7 +950,7 @@ function focusNamedLocation(x,kind='saved'){
  // category filters, or layer toggles would otherwise hide their normal pins.
  if(focusedPlaceMarker){map.removeLayer(focusedPlaceMarker);focusedPlaceMarker=null;}
  const icon=L.divIcon({className:'category-pin-icon',html:'<span class="map-pin map-pin-actual" style="background:#a64a26">●</span>',iconSize:[30,34],iconAnchor:[15,32]});
- focusedPlaceMarker=L.marker([lat,lng],{icon,title:name,zIndexOffset:1500}).addTo(map);
+ focusedPlaceMarker=L.marker([lat,lng],{pane:'placeMarkers',icon,title:name,zIndexOffset:1500}).addTo(map);
  const popup=document.createElement('div'),heading=document.createElement('strong'),details=document.createElement('p');
  heading.textContent=name;details.textContent=kind==='itinerary'?'Itinerary stop':kind==='discovery'?'Search result':'Saved place';
  popup.append(heading,details);
@@ -1167,7 +1167,7 @@ function refreshMarkers(){
    if(!visibleCategories.has(category))continue;
    savedCoords.add(key);
    const both=mapLayerVisible.itinerary&&(plannedIds.has(x.id)||activities.some(a=>a.lat!=null&&a.lng!=null&&Math.abs(Number(a.lat)-Number(x.lat))<0.00005&&Math.abs(Number(a.lng)-Number(x.lng))<0.00005));
-   const marker=L.marker([x.lat,x.lng],{icon:flagIcon(category,both?'both':'saved')}).addTo(markers);
+   const marker=L.marker([x.lat,x.lng],{pane:'placeMarkers',icon:flagIcon(category,both?'both':'saved')}).addTo(markers);
    if(x.geoapifyId){
     const view=makeDiscoveryPopup({name:x.name,lat:x.lat,lng:x.lng,category,kind:category,
      categories:[category],placeId:x.geoapifyId,address:x.location||'',
@@ -1187,9 +1187,9 @@ function refreshMarkers(){
    const el=document.createElement('div'),title=document.createElement('strong');
    title.textContent=x.title;el.append(title,document.createElement('br'));
    const info=document.createElement('span');info.textContent='Itinerary · '+formatDate(x.date)+(x.endDate?' – '+formatDate(x.endDate):'');el.append(info);
-   L.marker([x.lat,x.lng],{icon:flagIcon(category,'itinerary')}).addTo(markers).bindPopup(el);
+   L.marker([x.lat,x.lng],{pane:'placeMarkers',icon:flagIcon(category,'itinerary')}).addTo(markers).bindPopup(el);
  }
- if(actualInView())for(const x of forTrip('checkins').slice().sort((a,b)=>new Date(a.visitedAt)-new Date(b.visitedAt))){if(!geo(x))continue;const el=document.createElement('div');const title=document.createElement('strong');title.textContent=x.name;const info=document.createElement('p');info.textContent=new Date(x.visitedAt).toLocaleString();const note=document.createElement('p');note.textContent=x.notes||'';el.append(title,info,note);L.marker([x.lat,x.lng],{icon:L.divIcon({className:'category-pin-icon',html:'<span class="map-pin map-pin-actual">✓</span>',iconSize:[28,32],iconAnchor:[14,30]})}).addTo(markers).bindPopup(el);}
+ if(actualInView())for(const x of forTrip('checkins').slice().sort((a,b)=>new Date(a.visitedAt)-new Date(b.visitedAt))){if(!geo(x))continue;const el=document.createElement('div');const title=document.createElement('strong');title.textContent=x.name;const info=document.createElement('p');info.textContent=new Date(x.visitedAt).toLocaleString();const note=document.createElement('p');note.textContent=x.notes||'';el.append(title,info,note);L.marker([x.lat,x.lng],{pane:'placeMarkers',icon:L.divIcon({className:'category-pin-icon',html:'<span class="map-pin map-pin-actual">✓</span>',iconSize:[28,32],iconAnchor:[14,30]})}).addTo(markers).bindPopup(el);}
  buildMapFilters();
 }
 function openPlace(lat,lng,name,notes,destination='places',category='Other',source=null){
