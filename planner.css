@@ -936,3 +936,8 @@ body.mobile-workspace #mobileShowIdeaForm[hidden],body.mobile-workspace #mobileS
 .journal-entry-main .muted{white-space:nowrap;font-size:12px}
 .journal-activity{white-space:pre-wrap;overflow-wrap:anywhere;margin:5px 0;font-size:13px}
 .journal-actions{gap:5px}.journal-list-date{font-size:12px;font-weight:700;margin-top:12px}
+
+/* Action labels must wrap between words, never inside them. */
+button{overflow-wrap:normal!important;word-break:normal!important;hyphens:none!important}
+.entry-button-row,body.mobile-workspace #placeList .entry-button-row,body.mobile-workspace #activityList .entry-button-row{flex-wrap:wrap;gap:5px}
+.entry-button-row button,body.mobile-workspace #placeList .entry-button-row button,body.mobile-workspace #activityList .entry-button-row button{flex:0 1 auto;min-width:max-content;max-width:100%;width:auto;white-space:nowrap;padding:7px 9px;font-size:12px;line-height:1.2}
