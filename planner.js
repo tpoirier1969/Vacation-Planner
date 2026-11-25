@@ -1903,6 +1903,28 @@ $('#ideaCategoryFilter').addEventListener('change',e=>{ideaFilter=e.target.value
 $('#ideaSearch').addEventListener('input',e=>{ideaQuery=e.target.value;render();});
 $('#ideaClearSearch').addEventListener('click',()=>{ideaQuery='';$('#ideaSearch').value='';render();$('#ideaSearch').focus();});
 $('#itineraryView').addEventListener('change',e=>{itineraryView=['all','unscheduled','booking','mustdo'].includes(e.target.value)?e.target.value:'all';render();});
+// Clear transient discovery results only; invalidate any outstanding search.
+const clearDiscoveryButton=document.createElement('button');
+clearDiscoveryButton.type='button';
+clearDiscoveryButton.id='clearDiscoveryResults';
+clearDiscoveryButton.className='quiet small';
+clearDiscoveryButton.textContent='Clear results';
+clearDiscoveryButton.style.marginInlineStart='6px';
+$('#discover').after(clearDiscoveryButton);
+clearDiscoveryButton.addEventListener('click',()=>{
+ ++discoveryRequest;
+ discoveryObserver?.disconnect();
+ discoveryMarkers?.clearLayers();
+ window.__tripSuggestions=[];
+ discoveryOffset=0;discoverySignature='';discoveryArea='';
+ corridorOffset=0;corridorSignature='';corridorRouteVersion='';
+ $('#suggestions').replaceChildren();
+ $('#discoverStatus').textContent='';
+ $('#discoverShowOnMap').classList.add('hidden');
+ $('#discoverMore').classList.add('hidden');
+ $('#discoverMore').disabled=false;
+ refreshDiscoveryScope();
+});
 $('#discoverScope').addEventListener('change',()=>{refreshDiscoveryScope();$('#discoverMore').classList.add('hidden');});
 $('#discoverRoute').addEventListener('change',()=>$('#discoverMore').classList.add('hidden'));
 $('#discoverDetourMinutes').addEventListener('change',()=>$('#discoverMore').classList.add('hidden'));
