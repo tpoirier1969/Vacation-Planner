@@ -993,7 +993,7 @@ function renderCheckins(){
  const visits=(scope==='all'?state.checkins:forTrip('checkins')).filter(x=>{
   const tripName=trips.find(t=>t.id===x.tripId)?.name||'';
   return !query||[x.name,x.notes,tripName].some(v=>String(v||'').toLowerCase().includes(query));
- }).slice().sort((a,b)=>new Date(b.visitedAt)-new Date(a.visitedAt));
+ }).slice().sort((a,b)=>{const at=Date.parse(a.visitedAt),bt=Date.parse(b.visitedAt);return (Number.isFinite(at)?at:Infinity)-(Number.isFinite(bt)?bt:Infinity);});
  $('#journalCount').textContent=visits.length+' check-in'+(visits.length===1?'':'s')+(scope==='all'?' across trips':' on this trip');
  const dayKey=x=>{const d=new Date(x.visitedAt);return Number.isFinite(d.getTime())?d.toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric',weekday:'long'}):'Unknown date';};
  const time=x=>{const d=new Date(x.visitedAt);return Number.isFinite(d.getTime())?d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}):'Time unknown';};
@@ -1006,11 +1006,9 @@ function renderCheckins(){
    '<button type="button" class="quiet small" data-checkin-edit="'+esc(x.id)+'">Edit</button><button type="button" class="quiet small" data-checkin-remove="'+esc(x.id)+'">Remove</button></div></article>';
  };
  if(!visits.length){host.innerHTML='<p class="empty">No check-ins match this view.</p>';return;}
- if(view==='list'){
-  host.innerHTML='<div class="journal-list">'+visits.map(x=>'<div class="journal-list-date">'+esc(new Date(x.visitedAt).toLocaleDateString())+'</div>'+card(x)).join('')+'</div>';
- }else{
+ {
   const groups=new Map();for(const x of visits){const key=dayKey(x);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(x);}
-  host.innerHTML=[...groups].map(([day,entries])=>'<section class="journal-day"><h3>'+esc(day)+'</h3>'+entries.map(card).join('')+'</section>').join('');
+  host.innerHTML=[...groups].map(([day,entries])=>'<section class="journal-day'+(view==='list'?' journal-day-compact':'')+'"><h3>'+esc(day)+'</h3>'+entries.map(card).join('')+'</section>').join('');
  }
 }
 for(const id of ['journalView','journalTrip','journalSearch']){const el=$('#'+id);if(el)el.addEventListener(id==='journalSearch'?'input':'change',renderCheckins);}
