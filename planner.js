@@ -79,7 +79,7 @@ $('#activityList').innerHTML=activities.length?activityDays.map(day=>
    (x.hours?'<div class="muted small-details">Hours: '+esc(x.hours)+'</div>':'')+
    (x.confirmationCode?'<div class="muted small-details">Confirmation: '+esc(x.confirmationCode)+'</div>':'')+
    (link?'<a class="small-details" href="'+esc(link)+'" target="_blank" rel="noopener noreferrer">Booking / tickets</a>':'')+
-   '<div class="row entry-button-row">'+editAndRemove('activities',x)+'<button class="quiet small" data-checkin-from="activities:'+esc(x.id)+'">Check In</button><button class="quiet small" data-locate-activity="'+esc(x.id)+'">'+(geo(x)?'Change map pin':'Set map location')+'</button><button class="quiet small" data-unschedule="'+esc(x.id)+'">Move back to Ideas</button></div></div>';
+   '<div class="row entry-button-row">'+editAndRemove('activities',x)+'<button class="quiet small" data-checkin-from="activities:'+esc(x.id)+'">Check In</button><button class="quiet small" data-locate-activity="'+esc(x.id)+'">'+(geo(x)?'Change map pin':'Set map location')+'</button><button class="quiet small" data-unschedule="'+esc(x.id)+'">Move to Ideas</button></div></div>';
  }).join('')+'</section>'
 ).join('') : '<p class="empty">'+(allActivities.length?'No plans match this view. Choose another filter.':'Nothing decided yet. Choose an idea or add a plan directly.')+'</p>';
 $('#noteList').innerHTML=forTrip('notes').length?forTrip('notes').map(x=>'<div class="day"><div class="row entry-head"><strong>'+esc(x.title)+'</strong>'+editAndRemove('notes',x)+'</div><p style="white-space:pre-wrap">'+esc(x.body)+'</p></div>').join(''):'<p class="empty">Save links, questions, reservations, and research here.</p>';
@@ -229,7 +229,7 @@ function fillActivity({name,category='Other',notes='',interestRating='',costRati
  f.elements.time.value=Itinerary.canonicalTime(time);
  f.elements.endTime.value=Itinerary.canonicalTime(endTime);
  f.elements.fixedDate.checked=!!fixedDate;
- pendingActivityLocation={placeId,lat,lng,geoapifyId};
+ pendingActivityLocation={placeId,lat:lat==null?null:Number(lat),lng:lng==null?null:Number(lng),geoapifyId};
  updateDraftLocationLabel('activities');
  syncActivityCategory();
  f.elements.date.focus();
@@ -270,8 +270,9 @@ function mapMenuContent(latlng,name='',notes='',savedId='',category='Other',sour
  const actions=savedId?
   [[decided?'View itinerary':'Choose for itinerary',()=>decided?setTab('itinerary'):planPlace(savedId)]]:[
    ['Save idea',()=>openPlace(latlng.lat,latlng.lng,name,notes,'places',category,source)],
-   ['Add to itinerary',()=>openPlace(latlng.lat,latlng.lng,name,notes,'itinerary',category,source)]
+   ['Add to itinerary',()=>name&&geo(latlng)?fillActivity({name,category,notes,lat:Number(latlng.lat),lng:Number(latlng.lng),geoapifyId:source?.placeId||'',hours:source?.hours||''}):openPlace(latlng.lat,latlng.lng,name,notes,'itinerary',category,source)]
   ];
+ if(geo(latlng))actions.push(['Check In',()=>openCheckin({name:name||'',lat:Number(latlng.lat),lng:Number(latlng.lng),placeId:savedId||'',notes:''},true)]);
  for(const [label,action] of actions){
   const btn=document.createElement('button');btn.type='button';btn.className='secondary small';btn.textContent=label;
   btn.style.margin='5px 5px 0 0';btn.onclick=()=>{map?.closePopup();action()};el.append(btn);
@@ -896,6 +897,17 @@ function makeDiscoveryPopup(place,savedId=''){
   if(place.placeId){
    try{details=await getDiscoveryPlaceDetails(place);}catch{}
   }
+  // Look beyond the original provider when contact details are incomplete.
+  if(geo(place)&&(!placeWebsite(details)&&!placeWebsite(place)||!placePhone(details)&&!placePhone(place)||!Discovery.combined(place,details).hours)){
+   try{
+    const candidates=await namedOsmMapAtClick(place);
+    const match=candidates.find(x=>contactMatch(x,place.name,place));
+    if(match)details={...match,...details,website:placeWebsite(details)||placeWebsite(place)||placeWebsite(match),phone:placePhone(details)||placePhone(place)||placePhone(match),opening_hours:Discovery.combined(place,details).hours||Discovery.combined(match,{}).hours};
+   }catch{}
+  }
+  if(!placeWebsite(details)&&!placeWebsite(place)){
+   try{const extra=await enrichBusinessWebsite({...place,geoapifyId:place.placeId||''},null,contactViewDetails(place,place,details));if(extra.website)details.website=extra.website;}catch{}
+  }
   const overview=await discoveryOverview(place,details);
   const merged=Discovery.combined(place,details);
   info.replaceChildren();
@@ -907,6 +919,7 @@ function makeDiscoveryPopup(place,savedId=''){
    info.append(hours);
   }
   appendContactInfo(info,Object.assign({},place,details));
+  if(!placeWebsite(details)&&!placeWebsite(place)||!placePhone(details)&&!placePhone(place)||!merged.hours){const link=document.createElement('a');link.href='https://www.google.com/search?q='+encodeURIComponent([place.name,place.address||trip()?.destination||'', 'official website hours phone'].join(' '));link.target='_blank';link.rel='noopener noreferrer';link.textContent='Search web for more information';const row=document.createElement('p');row.append(link);info.append(row);}
   if(merged.hours&&!place.hours)place.hours=merged.hours;
   const url=Discovery.reviewSearchUrl(place);
   if(url){
