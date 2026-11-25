@@ -209,7 +209,7 @@ function buildMapFilters(){
  host.innerHTML=PLACE_CATEGORIES.map(c=>'<label class="map-filter"><input type="checkbox" data-map-category="'+esc(c)+'" '+(visibleCategories.has(c)?'checked':'')+'><span class="map-filter-dot" style="background:'+FLAG_COLORS[c]+'"></span>'+esc(c)+'</label>').join('');
 }
 $('#mapCategoryFilters').addEventListener('change',e=>{const input=e.target.closest('[data-map-category]');if(!input)return;if(input.checked)visibleCategories.add(input.dataset.mapCategory);else visibleCategories.delete(input.dataset.mapCategory);refreshMarkers()});
-document.querySelectorAll('[data-map-layer]').forEach(input=>input.addEventListener('change',()=>{mapLayerVisible[input.dataset.mapLayer]=input.checked;refreshMarkers();routeUI?.render();}));
+document.querySelectorAll('[data-map-layer]').forEach(input=>input.addEventListener('change',()=>{mapLayerVisible[input.dataset.mapLayer]=input.checked;if(input.checked&&['ideas','itinerary'].includes(input.dataset.mapLayer)&&mapView!=='planned'){mapView='all';$('#tripMapView').value='all';}refreshMarkers();routeUI?.render();}));
 function syncActivityCategory(){const f=$('#activityForm'),c=f.elements.category.value,lodging=c==='Lodging';$('#activityDateLabel').textContent=(lodging?'Check-in date':c==='Events'?'Event date':c==='Restaurants'?'Dining date':c==='Coffee Shops'?'Coffee stop date':c==='Wineries'?'Winery visit date':c==='Shopping'?'Shopping date':c==='Hiking'?'Hiking date':c==='Boating'?'Boating date':c==='Fishing'?'Fishing date':'Visit date')+(lodging?'':' (optional)');$('#activityEndField').hidden=!lodging;f.elements.endDate.required=lodging;f.elements.date.required=lodging||f.elements.fixedDate.checked;if(!lodging)f.elements.endDate.value='';$('#activityEndTimeField').hidden=lodging;if(lodging)f.elements.endTime.value='';$('#activityHoursField').hidden=lodging||c==='Hiking'||c==='Boating'||c==='Fishing';}
 $('#activityCategory').addEventListener('change',syncActivityCategory);
 $('#activityForm').elements.fixedDate.addEventListener('change',syncActivityCategory);
@@ -974,7 +974,7 @@ function showDiscoveryResultsOnMap(){
 }
 
 function localDateTime(iso){const d=iso?new Date(iso):new Date();const pad=n=>String(n).padStart(2,'0');return {date:d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()),time:pad(d.getHours())+':'+pad(d.getMinutes())};}
-function plannedInSmart(x){if(mapView==='planned')return true;if(mapView==='actual')return false;if(forTrip('checkins').some(c=>(c.activityId&&c.activityId===x.id)||(c.placeId&&c.placeId===x.id)||(x.placeId&&c.placeId===x.placeId)||(geo(c)&&geo(x)&&Math.abs(c.lat-x.lat)<0.00015&&Math.abs(c.lng-x.lng)<0.00015)))return false;const now=Date.now(),t=trip();if(t?.end&&new Date(t.end+'T23:59:59').getTime()<now)return false;if(!x.date)return true;const at=new Date(x.date+'T'+(x.time||'23:59')+':00').getTime();return at>=now;}
+function plannedInSmart(x){if(mapView==='planned'||mapView==='all')return true;if(mapView==='actual')return false;if(forTrip('checkins').some(c=>(c.activityId&&c.activityId===x.id)||(c.placeId&&c.placeId===x.id)||(x.placeId&&c.placeId===x.placeId)||(geo(c)&&geo(x)&&Math.abs(c.lat-x.lat)<0.00015&&Math.abs(c.lng-x.lng)<0.00015)))return false;const now=Date.now(),t=trip();if(t?.end&&new Date(t.end+'T23:59:59').getTime()<now)return false;if(!x.date)return true;const at=new Date(x.date+'T'+(x.time||'23:59')+':00').getTime();return at>=now;}
 function actualInView(){return mapView!=='planned';}
 function applyTripMapDefaults(){const ended=!!trip()?.end&&trip().end<localDateTime().date;mapView=ended?'actual':'smart';$('#tripMapView').value=mapView;for(const input of document.querySelectorAll('[data-map-layer]')){input.checked=!ended;mapLayerVisible[input.dataset.mapLayer]=!ended;}if(focusedPlaceMarker&&map){map.removeLayer(focusedPlaceMarker);focusedPlaceMarker=null;}}
 function defaultJournalMode(){const today=localDateTime().date,t=trip();return t?.start&&t?.end&&today>=t.start&&today<=t.end?'checkin':'journal';}
@@ -1084,7 +1084,7 @@ $('#newCheckin').addEventListener('click',()=>openCheckin());
 $('#cancelCheckin').addEventListener('click',()=>$('#checkinDialog').close());
 $('#checkinForm').addEventListener('submit',e=>{e.preventDefault();const f=e.currentTarget,d=Object.fromEntries(new FormData(f)),when=new Date(d.date+'T'+d.time+':00');if(!Number.isFinite(when.getTime()))return;const old=state.checkins.find(x=>x.id===editingCheckin);let departedAt=null;if(d.departureDate||d.departureTime){if(!d.departureDate||!d.departureTime){alert('Enter both departure date and time.');return;}const end=new Date(d.departureDate+'T'+d.departureTime+':00');if(!Number.isFinite(end.getTime())||end<when){alert('Departure must be at or after arrival.');return;}departedAt=end.toISOString();}const record={id:old?.id||uid(),tripId:old?.tripId||active,name:d.name.trim(),notes:d.notes||'',visitedAt:when.toISOString(),departedAt,lat:checkinPoint?.lat??null,lng:checkinPoint?.lng??null,placeId:checkinPoint?.placeId||'',activityId:checkinPoint?.activityId||'',createdBy:old?.createdBy||''};if(!record.name)return;if(!geo(record)){alert('Choose a map location before saving this check-in.');return;}if(old)Object.assign(old,record);else state.checkins.push(record);$('#checkinDialog').close();persist();});
 $('#checkinList').addEventListener('click',e=>{const out=e.target.closest('[data-checkin-out]');if(out){const x=state.checkins.find(x=>x.id===out.dataset.checkinOut);if(x){if(x.tripId!==active)showTrip(x.tripId);openCheckin(x);const end=localDateTime();$('#checkinForm').elements.departureDate.value=end.date;$('#checkinForm').elements.departureTime.value=end.time;}return;}const edit=e.target.closest('[data-checkin-edit]'),remove=e.target.closest('[data-checkin-remove]');if(edit){const x=state.checkins.find(x=>x.id===edit.dataset.checkinEdit);if(x){if(x.tripId!==active)showTrip(x.tripId);openCheckin(x);}}const show=e.target.closest('[data-journal-map]');if(show){const x=state.checkins.find(c=>c.id===show.dataset.journalMap);if(x&&geo(x)){if(x.tripId!==active)showTrip(x.tripId);focusNamedLocation(x,'check-in');}}if(remove&&confirm('Remove this check-in?')){state.checkins=state.checkins.filter(x=>x.id!==remove.dataset.checkinRemove);persist();}});
-$('#tripMapView').addEventListener('change',e=>{mapView=e.target.value;refreshMarkers();routeUI?.render();});
+$('#tripMapView').addEventListener('change',e=>{mapView=e.target.value;for(const input of document.querySelectorAll('[data-map-layer]')){if(['ideas','itinerary'].includes(input.dataset.mapLayer)){input.checked=mapView!=='actual';mapLayerVisible[input.dataset.mapLayer]=input.checked;}}refreshMarkers();routeUI?.render();});
 
 
 function updateDraftLocationLabel(kind){
@@ -1163,9 +1163,9 @@ function refreshMarkers(){
  for(const x of places){
    if(!mapLayerVisible.ideas||!geo(x)||!plannedInSmart(x))continue;
    const key=Number(x.lat).toFixed(5)+','+Number(x.lng).toFixed(5);
-   savedCoords.add(key);
    const category=normalizedCategory(x.category);
    if(!visibleCategories.has(category))continue;
+   savedCoords.add(key);
    const both=mapLayerVisible.itinerary&&(plannedIds.has(x.id)||activities.some(a=>a.lat!=null&&a.lng!=null&&Math.abs(Number(a.lat)-Number(x.lat))<0.00005&&Math.abs(Number(a.lng)-Number(x.lng))<0.00005));
    const marker=L.marker([x.lat,x.lng],{icon:flagIcon(category,both?'both':'saved')}).addTo(markers);
    if(x.geoapifyId){
@@ -1181,7 +1181,7 @@ function refreshMarkers(){
  for(const x of activities){
    if(!mapLayerVisible.itinerary||!geo(x))continue;
    const key=Number(x.lat).toFixed(5)+','+Number(x.lng).toFixed(5);
-   if(mapLayerVisible.ideas&&((x.placeId&&places.some(p=>p.id===x.placeId&&geo(p)&&plannedInSmart(p)))||savedCoords.has(key)))continue;
+   if(mapLayerVisible.ideas&&((x.placeId&&places.some(p=>p.id===x.placeId&&geo(p)&&plannedInSmart(p)&&visibleCategories.has(normalizedCategory(p.category))&&Math.abs(Number(p.lat)-Number(x.lat))<0.00005&&Math.abs(Number(p.lng)-Number(x.lng))<0.00005))||savedCoords.has(key)))continue;
    const category=normalizedCategory(x.category);
    if(!visibleCategories.has(category))continue;
    const el=document.createElement('div'),title=document.createElement('strong');
