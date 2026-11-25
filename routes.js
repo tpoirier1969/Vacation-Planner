@@ -724,6 +724,50 @@ function createController(config){
   status='Suggested route saved separately. Check the stop order and select Calculate route for real road mileage and driving time.';
   render();fitMap();
  }
+ function homePoint(){
+  for(const r of config.getRoutes())if(pointOK(r.preferences?.homePoint))return r.preferences.homePoint;
+  return null;
+ }
+ function saveHome(){
+  const r=selected();if(!pointOK(r?.start))return report('Set the selected route starting point to your home first.');
+  const home={lat:Number(r.start.lat),lng:Number(r.start.lng),label:'Home'};
+  if(!confirm('Use the selected starting point as home for all trips?'))return;
+  for(const item of config.getRoutes())if(item.preferences?.homePoint)delete item.preferences.homePoint;
+  r.preferences={...r.preferences,homePoint:home};config.persist();report('Home saved for future trips.');
+ }
+ async function generateDaily(){
+  if(busy)return;
+  const t=config.getTrip(),home=homePoint(),actual=$('routeDailySource').value==='actual';
+  if(!t||!home)return report('Set home using a route starting point first.');
+  const source=actual?config.getCheckins():config.getActivities();
+  const localDay=v=>{const d=new Date(v);return Number.isFinite(d.getTime())?d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'):'';};
+  const stops=source.filter(x=>pointOK(x)&&(actual?x.visitedAt:x.date)).map(x=>({day:actual?localDay(x.visitedAt):x.date,time:actual?new Date(x.visitedAt).toTimeString().slice(0,5):x.time||'',point:{lat:Number(x.lat),lng:Number(x.lng),label:x.name||x.title||'Stop',sourceType:actual?'checkins':'activities',sourceId:x.id},endDay:!actual&&x.category==='Lodging'?x.endDate:''})).filter(x=>x.day).sort((a,b)=>a.day.localeCompare(b.day)||a.time.localeCompare(b.time));
+  if(!stops.length)return report('No dated, mapped '+(actual?'check-ins':'itinerary stops')+' found.');
+  const groups=new Map();for(const stop of stops){if(!groups.has(stop.day))groups.set(stop.day,[]);groups.get(stop.day).push(stop);}
+  const finalDay=t.end&&t.end>=stops.at(-1).day?t.end:stops.at(-1).day;
+  if(!groups.has(finalDay))groups.set(finalDay,[]);
+  const mode=actual?'actual':'planned',drafts=[];let previous=home,lodging=null;
+  const same=(a,b)=>Math.abs(a.lat-b.lat)<.00005&&Math.abs(a.lng-b.lng)<.00005;
+  for(const [day,items] of groups){
+   if(lodging&&lodging.endDay&&day>lodging.endDay)lodging=null;
+   const points=[previous];for(const stop of items){if(!same(points.at(-1),stop.point))points.push(stop.point);if(stop.endDay)lodging=stop;}
+   const end=day===finalDay?home:lodging&&day<lodging.endDay?lodging.point:points.at(-1);
+   if(!same(points.at(-1),end))points.push(end);previous=end;
+   if(points.length<2)continue;
+   if(points.length>MAX_WAYPOINTS+2)return report('Too many stops on '+day+'. Split this day manually.');
+   if(routes().some(r=>r.preferences?.dailySource===mode&&r.startDate===day))continue;
+   const r=newRoute(config.uid(),t.id,day+' · '+(actual?'Actual visits':'Itinerary'));
+   r.startDate=r.endDate=day;r.start=points[0];r.end=points.at(-1);r.waypoints=points.slice(1,-1).map(p=>({...p,id:config.uid(),kind:'stop'}));r.preferences={...r.preferences,dailySource:mode,homePoint:home};drafts.push(r);
+  }
+  if(!drafts.length)return report('Daily routes already exist or no driving is needed. Existing edits preserved.');
+  if(routes().length+drafts.length>MAX_ROUTES)return report('Too many saved routes. Remove unused routes first.');
+  if(!confirm('Create '+drafts.length+' daily routes? Existing routes and manual edits will be kept.'))return;
+  let order=Math.max(-1,...routes().map(r=>r.routeOrder||0));
+  for(const r of drafts){r.routeOrder=++order;config.getRoutes().push(r);}
+  config.persist();
+  for(const r of drafts){if(config.getTrip()?.id!==t.id)break;currentId=r.id;selectedSection='';undoStack=[];render();await calculate();}
+  report('Daily routes created. Existing routes retained; hide older whole-trip routes if needed.');
+ }
  function addRoute(copy=false){
   const t=config.getTrip();if(!t||routes().length>=MAX_ROUTES)return report('Maximum '+MAX_ROUTES+' saved routes per trip.');
   const base=selected(),n=routes().length;
@@ -1087,6 +1131,8 @@ function createController(config){
    if(e.key==='Backspace'&&!focusSection)return;
    e.preventDefault();setSectionConnection(selectedSection,false);
   });
+  $('routeSetHome').addEventListener('click',saveHome);
+  $('routeGenerateDaily').addEventListener('click',()=>void generateDaily());
   $('routePicker').addEventListener('change',e=>{currentId=e.target.value;undoStack=[];pick='';selectedSection='';status='';render();});
   $('routeComparison').addEventListener('click',e=>{
    const b=e.target.closest('[data-route-select]');if(!b)return;

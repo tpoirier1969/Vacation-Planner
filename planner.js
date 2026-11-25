@@ -2202,7 +2202,7 @@ document.addEventListener('click',async e=>{
 $('#packList').addEventListener('change',e=>{if(e.target.dataset.pack){const x=state.packing.find(p=>p.id===e.target.dataset.pack&&p.tripId===active);if(x){x.done=e.target.checked;persist()}}});
 routeUI=window.createVacationRoutes({
  getTrip:()=>trip(),getRoutes:()=>state.routes||[],
- getPlaces:()=>forTrip('places'),getActivities:()=>forTrip('activities'),
+ getPlaces:()=>forTrip('places'),getActivities:()=>forTrip('activities'),getCheckins:()=>forTrip('checkins'),
  persist,uid,onPickChange:()=>{addingPlace=false;syncMapMode();if(routeUI?.isPicking())setMobileSheet('collapsed');}
 });
 function initializeTopAddSections(){
