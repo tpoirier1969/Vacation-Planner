@@ -218,13 +218,30 @@ $('#cloudPasswordLogin').addEventListener('submit',async e=>{
 $('#cloudLogin').addEventListener('submit',async e=>{
  e.preventDefault();if(authRequestBusy)return;
  const email=$('#cloudEmail').value.trim();if(!email){loginStatus('Enter an email address above.','error');return;}
- authRequestBusy=true;$('#cloudLinkSubmit').disabled=true;loginStatus('Sending sign-in link…');
+ authRequestBusy=true;$('#cloudLinkSubmit').disabled=true;loginStatus('Sending sign-in email…');
  try{
   const {error}=await client.auth.signInWithOtp({email,options:{shouldCreateUser:false,emailRedirectTo:location.origin+location.pathname}});
   if(error)throw error;
-  loginStatus('Sign-in link requested successfully. Check your email (including spam) for the link.','success');
+  loginStatus('Email requested successfully. Enter the sign-in code from your email below, or use the link if available.','success');
  }catch(error){loginStatus('Sign-in link failed: '+error.message,'error');}
  finally{authRequestBusy=false;$('#cloudLinkSubmit').disabled=false;}
+});
+const otpForm=document.createElement('form');
+otpForm.id='cloudOtpLogin';
+otpForm.innerHTML='<label class="field">Email sign-in code<input id="cloudOtpCode" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}" required></label><button class="primary" type="submit">Verify code</button>';
+$('#cloudLinkAlternative').append(otpForm);
+otpForm.addEventListener('submit',async e=>{
+ e.preventDefault();if(authRequestBusy)return;
+ const email=$('#cloudEmail').value.trim(),token=$('#cloudOtpCode').value.trim();
+ if(!email){loginStatus('Enter the email address that received the code.','error');return;}
+ authRequestBusy=true;const button=otpForm.querySelector('button');button.disabled=true;
+ loginStatus('Verifying sign-in code…');
+ try{
+  const {error}=await client.auth.verifyOtp({email,token,type:'email'});
+  if(error)throw error;
+  otpForm.reset();loginStatus('Signed in. Loading your trips…','success');await start();
+ }catch(error){loginStatus('Code verification failed: '+error.message,'error');}
+ finally{authRequestBusy=false;button.disabled=false;}
 });
 function closePasswordSettings(){
  $('#cloudPasswordSettings').classList.add('hidden');
