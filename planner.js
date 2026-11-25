@@ -79,7 +79,7 @@ $('#activityList').innerHTML=activities.length?activityDays.map(day=>
    (x.hours?'<div class="muted small-details">Hours: '+esc(x.hours)+'</div>':'')+
    (x.confirmationCode?'<div class="muted small-details">Confirmation: '+esc(x.confirmationCode)+'</div>':'')+
    (link?'<a class="small-details" href="'+esc(link)+'" target="_blank" rel="noopener noreferrer">Booking / tickets</a>':'')+
-   '<div class="row entry-button-row">'+editAndRemove('activities',x)+'<button class="quiet small" data-checkin-from="activities:'+esc(x.id)+'">Check In</button><button class="quiet small" data-locate-activity="'+esc(x.id)+'">'+(geo(x)?'Change map pin':'Set map location')+'</button><button class="quiet small" data-unschedule="'+esc(x.id)+'">Move to Ideas</button></div></div>';
+   '<div class="row entry-button-row">'+editAndRemove('activities',x)+'<button class="quiet small" data-checkin-from="activities:'+esc(x.id)+'">Check In</button><button class="quiet small" data-locate-activity="'+esc(x.id)+'">'+(geo(x)?'Change map pin':'Set map location')+'</button><button class="quiet small" data-delete-activity="'+esc(x.id)+'">Delete</button></div></div>';
  }).join('')+'</section>'
 ).join('') : '<p class="empty">'+(allActivities.length?'No plans match this view. Choose another filter.':'Nothing decided yet. Choose an idea or add a plan directly.')+'</p>';
 $('#noteList').innerHTML=forTrip('notes').length?forTrip('notes').map(x=>'<div class="day"><div class="row entry-head"><strong>'+esc(x.title)+'</strong>'+editAndRemove('notes',x)+'</div><p style="white-space:pre-wrap">'+esc(x.body)+'</p></div>').join(''):'<p class="empty">Save links, questions, reservations, and research here.</p>';
@@ -2160,7 +2160,7 @@ function moveBackToIdeas(id){
  state.activities=state.activities.filter(x=>x.id!==item.id);
  ideaFilter='all';ideaQuery='';$('#ideaSearch').value='';collapsedPlaceCategories.delete(normalizedCategory(restored.category));
  persist();
- setTab('places');
+ // Stay in the itinerary so multiple unvisited stops can be removed easily.
 }
 $('#contactClose').addEventListener('click',()=>$('#contactDialog').close());
 $('#contactDialog').addEventListener('close',()=>{contactInfoRequest++;});
@@ -2192,7 +2192,7 @@ document.addEventListener('click',async e=>{
   return;
  }
  const editButton=e.target.closest('[data-edit]');if(editButton){const [kind,id]=editButton.dataset.edit.split(':');openEdit(kind,id);return;}
- const open=e.target.closest('[data-open]');if(open)showTrip(open.dataset.open);const rm=e.target.closest('[data-remove]');if(rm){const [key,id]=rm.dataset.remove.split(':');if(confirm('Remove this item from the trip?')){state[key]=state[key].filter(x=>x.id!==id);persist()}}const unschedule=e.target.closest('[data-unschedule]');if(unschedule){moveBackToIdeas(unschedule.dataset.unschedule);return;}const loc=e.target.closest('[data-locate]');if(loc){const x=state.places.find(p=>p.id===loc.dataset.locate);if(x&&geo(x))focusNamedLocation(x,'saved')}const plan=e.target.closest('[data-plan]');if(plan)planPlace(plan.dataset.plan);const preview=e.target.closest('[data-preview]');if(preview){const x=window.__tripSuggestions?.[Number(preview.dataset.preview)];if(x){setMobileSheet('collapsed');focusNamedLocation(x,'discovery')}}const suggest=e.target.closest('[data-suggest]');if(suggest){const x=window.__tripSuggestions?.[Number(suggest.dataset.suggest)];if(x){const saved=saveDiscoveredIdea(x);if(saved){suggest.disabled=true;suggest.textContent='Saved';}}return;}
+ const open=e.target.closest('[data-open]');if(open)showTrip(open.dataset.open);const rm=e.target.closest('[data-remove]');if(rm){const [key,id]=rm.dataset.remove.split(':');if(key==='activities'){moveBackToIdeas(id);return;}if(confirm('Remove this item from the trip?')){state[key]=state[key].filter(x=>x.id!==id);persist()}return;}const delActivity=e.target.closest('[data-delete-activity]');if(delActivity){const item=forTrip('activities').find(x=>x.id===delActivity.dataset.deleteActivity);if(item&&confirm('Delete this itinerary stop instead of moving it to Ideas? Existing linked ideas and check-ins will be kept.')){state.activities=state.activities.filter(x=>x.id!==item.id);persist();}return;}const unschedule=e.target.closest('[data-unschedule]');if(unschedule){moveBackToIdeas(unschedule.dataset.unschedule);return;}const loc=e.target.closest('[data-locate]');if(loc){const x=state.places.find(p=>p.id===loc.dataset.locate);if(x&&geo(x))focusNamedLocation(x,'saved')}const plan=e.target.closest('[data-plan]');if(plan)planPlace(plan.dataset.plan);const preview=e.target.closest('[data-preview]');if(preview){const x=window.__tripSuggestions?.[Number(preview.dataset.preview)];if(x){setMobileSheet('collapsed');focusNamedLocation(x,'discovery')}}const suggest=e.target.closest('[data-suggest]');if(suggest){const x=window.__tripSuggestions?.[Number(suggest.dataset.suggest)];if(x){const saved=saveDiscoveredIdea(x);if(saved){suggest.disabled=true;suggest.textContent='Saved';}}return;}
  const planSuggestion=e.target.closest('[data-suggest-plan]');
  if(planSuggestion){const x=window.__tripSuggestions?.[Number(planSuggestion.dataset.suggestPlan)];if(x)planDiscoveredPlace(x);return;}
 });
