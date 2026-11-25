@@ -441,7 +441,7 @@ function createController(config){
  const editing=()=>tool==='routes';
  function matchesFilter(r){
   const day=$('routeMapDay').value,from=$('routeMapFrom').value,to=$('routeMapTo').value;
-  if(!day)return true;
+  if(!day){if(!from&&!to)return true;if(!r.startTime&&!r.endTime)return true;if(r.startDate&&r.endDate&&r.startDate!==r.endDate)return true;return !(from&&r.endTime&&r.endTime<from||to&&r.startTime&&r.startTime>to);}
   if(!r.startDate&&!r.endDate)return day==='undated';
   if(day==='undated')return false;
   const start=r.startDate||r.endDate,end=r.endDate||start;
@@ -450,7 +450,7 @@ function createController(config){
  }
  function visibleRoutes(){
   const list=routes().filter(r=>r.visible!==false&&matchesFilter(r));
-  if(editing()&&!$('routeMapDay').value)return comparedRoutes().filter(r=>r.visible!==false);
+  if(editing()&&!$('routeMapDay').value&&!$('routeMapFrom').value&&!$('routeMapTo').value)return comparedRoutes().filter(r=>r.visible!==false);
   return list;
  }
  const selected=()=>routes().find(r=>r.id===currentId)||null;
@@ -552,7 +552,7 @@ function createController(config){
      const editable=editing()&&active&&focused&&!row.gap;
      const dimmed=locked&&!focused;
      const line=L.polyline(part,{color:focused?'#187b79':color,weight:focused?11:active?7:5,opacity:dimmed?.22:active?1:.69,interactive:editing()&&!locked||editable,bubblingMouseEvents:false}).addTo(layer);
-     line.on('click',e=>{L.DomEvent.stopPropagation(e.originalEvent);if(!pick)selectNear(e.latlng);});
+     line.on('click',e=>{L.DomEvent.stopPropagation(e.originalEvent);if(pick)consumeMapClick(e.latlng);else selectNear(e.latlng);});
      if(editing()&&!dimmed){
       for(const fraction of (part.length>12?[.2,.5,.8]:[.5])){
       const midIndex=Math.max(0,Math.min(part.length-2,Math.floor(part.length*fraction)-1)),a=part[midIndex],b=part[midIndex+1];
