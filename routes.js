@@ -438,6 +438,21 @@ function createController(config){
  const validGaps=r=>{const points=routePoints(r),keys=new Set(points.slice(0,-1).map((_,i)=>sectionKey(points,i)));return (r.gaps||[]).filter(k=>keys.has(k));};
  const sectionRows=r=>{const p=routePoints(r),gaps=new Set(validGaps(r));return p.slice(0,-1).map((from,i)=>({i,key:sectionKey(p,i),from,to:p[i+1],gap:gaps.has(sectionKey(p,i))}));};
  let selectedSection='';
+ const editing=()=>tool==='routes';
+ function matchesFilter(r){
+  const day=$('routeMapDay').value,from=$('routeMapFrom').value,to=$('routeMapTo').value;
+  if(!day)return true;
+  if(!r.startDate&&!r.endDate)return day==='undated';
+  if(day==='undated')return false;
+  const start=r.startDate||r.endDate,end=r.endDate||start;
+  if(day<start||day>end)return false;
+  return !(from&&day===end&&r.endTime&&r.endTime<from||to&&day===start&&r.startTime&&r.startTime>to);
+ }
+ function visibleRoutes(){
+  const list=routes().filter(r=>r.visible!==false&&matchesFilter(r));
+  if(editing()&&!$('routeMapDay').value)return comparedRoutes().filter(r=>r.visible!==false);
+  return list;
+ }
  const selected=()=>routes().find(r=>r.id===currentId)||null;
  const report=msg=>{status=msg;if($('routeStatus'))$('routeStatus').textContent=msg;};
  function selectDefault(){if(!routes().some(r=>r.id===currentId)){currentId=routes()[0]?.id||'';undoStack=[];selectedSection='';}}
@@ -489,7 +504,7 @@ function createController(config){
   if(!layer)return;
   layer.clearLayers();dragHandle=null;dragHandleLeg=-1;dragHandleRoute='';
   const r=selected();if(!r||document.getElementById('mapShowRoutes')?.checked===false)return;
-  const shown=comparedRoutes();
+  const shown=visibleRoutes();
   const ordered=[...shown.filter(x=>x.id!==currentId),...shown.filter(x=>x.id===currentId)];
   for(const route of ordered){
    const variantIndex=shown.findIndex(x=>x.id===route.id);
@@ -504,16 +519,18 @@ function createController(config){
      if(part.length<2)continue;
      const row=rows[start+index];if(!row)continue;
      const focused=active&&selectedSection===row.key;
-     const line=L.polyline(part,{color:focused?'#187b79':color,weight:focused?9:active?7:5,opacity:active?1:.69,interactive:true}).addTo(layer);
+     const line=L.polyline(part,{color:focused?'#187b79':color,weight:focused?9:active?7:5,opacity:active?1:.69,interactive:editing(),bubblingMouseEvents:false}).addTo(layer);
      line.on('click',e=>{
-      if(!active){currentId=route.id;undoStack=[];selectedSection='';pick='';status='Alternative selected. Drag its path to customize it.';render();return;}
+      L.DomEvent.stopPropagation(e.originalEvent);if(!active){currentId=route.id;undoStack=[];selectedSection='';pick='';status='Alternative selected. Drag its path to customize it.';render();return;}
       selectedSection=row.key;render();showDragHandle(e.latlng||{lat:part[Math.floor(part.length/2)][0],lng:part[Math.floor(part.length/2)][1]},row.i,route.id);
-      $('routeSectionList')?.scrollIntoView({behavior:'smooth',block:'nearest'});
+
      });
-     if(active&&!row.gap){
+     if(editing()&&active&&!row.gap){
+      if(!busy&&!pick){const mid=part[Math.floor(part.length/2)];const handle=L.marker(mid,{draggable:true,autoPan:false,zIndexOffset:1500,icon:L.divIcon({className:'route-drag-handle-wrap',html:'<span class="route-drag-handle">↕</span>',iconSize:[30,30],iconAnchor:[15,15]})}).addTo(layer);handle.bindTooltip('Drag to reshape this section');handle.on('dragend',e=>addViaAt(route.id,row.i,e.target.getLatLng()));}
       line.on('mouseover',e=>showDragHandle(e.latlng,row.i,route.id));
       line.on('mousedown',e=>{
        if(busy||pick||!pointOK(e.latlng)||!map?.on)return;
+       L.DomEvent.stopPropagation(e.originalEvent);
        const origin=e.latlng;let last=origin,moved=false;
        const move=ev=>{
         if(!pointOK(ev.latlng))return;
@@ -533,7 +550,7 @@ function createController(config){
     }
    }
   }
-  if(r.visible===false)return;
+  if(!editing()||!shown.some(x=>x.id===r.id))return;
   for(const [role,p,color] of [['start',r.start,'#28766f'],['end',r.end,'#b45237']]){
    if(!pointOK(p))continue;
    if(typeof L.marker==='function'&&typeof L.divIcon==='function'){
@@ -563,7 +580,7 @@ function createController(config){
  }
  function fitMap(){
   const r=selected();if(!map||!r)return;
-  const shown=comparedRoutes(),combined=shown.flatMap(x=>routeGeometry(x).flatMap(seg=>decodePolyline(seg.polyline)));
+  const shown=visibleRoutes(),combined=shown.flatMap(x=>routeGeometry(x).flatMap(seg=>decodePolyline(seg.polyline)));
   const coords=combined.length?combined:[r.start,...(r.waypoints||[]),r.end].filter(pointOK).map(p=>[p.lat,p.lng]);
   if(coords.length>1)map.fitBounds(L.latLngBounds(coords).pad(0.12),{maxZoom:14});
   else if(coords.length===1)map.setView(coords[0],13);
@@ -835,7 +852,7 @@ function createController(config){
    const latest=selected();if(!latest||latest.id!==routeId)return;
    if(JSON.stringify({start:latest.start,end:latest.end,waypoints:latest.waypoints,preferences:latest.preferences,gaps:validGaps(latest)})!==signature)return report('Road sections changed during calculation. Recalculate.');
    update(route=>{route.segments=segments;route.legStats=stats;route.polyline=groups.length===1&&groups[0].length===rows.length?segments[0].polyline:'';route.distanceM=totalDistance;route.durationS=totalDuration;});
-   status='Connected roads calculated: '+summary(selected())+'. Removed sections remain disconnected.';render();fitMap();
+   status='Connected roads calculated: '+summary(selected())+'. Removed sections remain disconnected.';render();
   }catch(e){report(e.name==='AbortError'?'Routing request timed out.':'Routing failed: '+e.message);}
   finally{busy=false;render();}
  }
@@ -962,8 +979,10 @@ function createController(config){
   draw();
  }
  function setTool(next){tool=next==='routes'?'routes':'discover';if(tool!=='routes')pick='';config.onPickChange?.();render();}
- function onTripChange(){currentId='';undoStack=[];pick='';selectedSection='';status='';suggestedDay='';itinerarySuggestions=null;itineraryPreviewRequest++;render();}
+ function onTripChange(){for(const id of ['routeMapDay','routeMapFrom','routeMapTo'])$(id).value='';currentId='';undoStack=[];pick='';selectedSection='';status='';suggestedDay='';itinerarySuggestions=null;itineraryPreviewRequest++;render();}
  function bind(){
+  $('routeMapClear').addEventListener('click',()=>{for(const id of ['routeMapDay','routeMapFrom','routeMapTo'])$(id).value='';draw();});
+  for(const id of ['routeMapDay','routeMapFrom','routeMapTo'])$(id).addEventListener('change',()=>{if($('routeMapDay').value&&$('routeMapFrom').value&&$('routeMapTo').value&&$('routeMapFrom').value>$('routeMapTo').value){$('routeMapTo').value=$('routeMapFrom').value;}draw();});
   $('exploreToolTabs').addEventListener('click',e=>{const b=e.target.closest('[data-explore-tool]');if(b)setTool(b.dataset.exploreTool);});
   $('routeNew').addEventListener('click',()=>addRoute());
   $('routeSuggestItinerary').addEventListener('click',previewItinerary);
@@ -1092,7 +1111,7 @@ function createController(config){
   });
  }
  bind();
- return {attachMap,render,onTripChange,consumeMapClick,cancelPick,isPicking:()=>!!pick,getPick:()=>pick,setTool};
+ return {attachMap,render,onTripChange,consumeMapClick,cancelPick,isPicking:()=>!!pick,getPick:()=>pick,isEditing:editing,setTool};
 }
 root.VacationRouteDomain=Object.freeze({newRoute,decodePolyline,routeURL,parseRoute,routeDiscoveryGeometry,nearestRoadWindow,windowError,summary,pointOK,sectionGeometry,suggestItineraryRoutes,smartDailyItinerary,tentativeDayTimeline,itineraryTripOverview,itineraryDrivingAssessment,itinerarySnapshot});
 root.createVacationRoutes=createController;

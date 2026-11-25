@@ -941,3 +941,5 @@ body.mobile-workspace #mobileShowIdeaForm[hidden],body.mobile-workspace #mobileS
 button{overflow-wrap:normal!important;word-break:normal!important;hyphens:none!important}
 .entry-button-row,body.mobile-workspace #placeList .entry-button-row,body.mobile-workspace #activityList .entry-button-row{flex-wrap:wrap;gap:5px}
 .entry-button-row button,body.mobile-workspace #placeList .entry-button-row button,body.mobile-workspace #activityList .entry-button-row button{flex:0 1 auto;min-width:max-content;max-width:100%;width:auto;white-space:nowrap;padding:7px 9px;font-size:12px;line-height:1.2}
+
+.route-map-filters{display:flex;flex-wrap:wrap;gap:8px;align-items:end;min-width:0}.route-map-filters .field{flex:1 1 110px;min-width:0}.route-map-filters input{width:100%;min-width:0}.route-drag-handle{cursor:grab;touch-action:none}
