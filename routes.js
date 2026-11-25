@@ -483,6 +483,7 @@ function createController(config){
    report('Select a route with space for another road point.');return;
   }
   const rows=sectionRows(route);
+  if(rows[leg]?.key!==selectedSection)return report('Select the driving section first.');
   if(!rows[leg]||rows[leg].gap)return report('Reconnect the section before reshaping it.');
   update(r=>{r.waypoints.splice(leg,0,{id:config.uid(),lat:Number(latlng.lat),lng:Number(latlng.lng),label:'Dragged road point',kind:'via'});},true);
   selectedSection='';dragHandle=null;
@@ -519,13 +520,21 @@ function createController(config){
      if(part.length<2)continue;
      const row=rows[start+index];if(!row)continue;
      const focused=active&&selectedSection===row.key;
-     const line=L.polyline(part,{color:focused?'#187b79':color,weight:focused?9:active?7:5,opacity:active?1:.69,interactive:editing(),bubblingMouseEvents:false}).addTo(layer);
+     const locked=editing()&&!!selectedSection;
+     const editable=editing()&&active&&focused&&!row.gap;
+     const dimmed=locked&&!focused;
+     const line=L.polyline(part,{color:focused?'#187b79':color,weight:focused?11:active?7:5,opacity:dimmed?.22:active?1:.69,interactive:editing()&&!locked||editable,bubblingMouseEvents:false}).addTo(layer);
      line.on('click',e=>{
       L.DomEvent.stopPropagation(e.originalEvent);if(!active){currentId=route.id;undoStack=[];selectedSection='';pick='';status='Alternative selected. Drag its path to customize it.';render();return;}
       selectedSection=row.key;render();showDragHandle(e.latlng||{lat:part[Math.floor(part.length/2)][0],lng:part[Math.floor(part.length/2)][1]},row.i,route.id);
 
      });
-     if(editing()&&active&&!row.gap){
+     if(editing()&&active&&!dimmed){
+      const midIndex=Math.max(0,Math.min(part.length-2,Math.floor(part.length/2)-1)),a=part[midIndex],b=part[midIndex+1];
+      const bearing=Math.atan2((b[1]-a[1])*Math.cos(a[0]*Math.PI/180),b[0]-a[0])*180/Math.PI;
+      L.marker([(a[0]+b[0])/2,(a[1]+b[1])/2],{interactive:false,keyboard:false,icon:L.divIcon({className:'route-direction-wrap',html:'<span class="route-direction" style="--bearing:'+bearing+'deg">↑</span><b>'+(row.i+1)+'</b>',iconSize:[38,26],iconAnchor:[19,13]})}).addTo(layer);
+     }
+     if(editable){
       if(!busy&&!pick){const mid=part[Math.floor(part.length/2)];const handle=L.marker(mid,{draggable:true,autoPan:false,zIndexOffset:1500,icon:L.divIcon({className:'route-drag-handle-wrap',html:'<span class="route-drag-handle">↕</span>',iconSize:[30,30],iconAnchor:[15,15]})}).addTo(layer);handle.bindTooltip('Drag to reshape this section');handle.on('dragend',e=>addViaAt(route.id,row.i,e.target.getLatLng()));}
       line.on('mouseover',e=>showDragHandle(e.latlng,row.i,route.id));
       line.on('mousedown',e=>{
@@ -600,8 +609,10 @@ function createController(config){
    pick='';config.onPickChange?.();
   }else{
    if(selected().waypoints.length>=MAX_WAYPOINTS){report('Maximum '+MAX_WAYPOINTS+' road points/stops.');return true;}
-   update(r=>{r.waypoints.push({id:config.uid(),lat:Number(p.lat),lng:Number(p.lng),
+   const row=sectionRows(selected()).find(x=>x.key===selectedSection);if(!row||row.gap){report('Choose a connected driving section first.');return true;}
+   update(r=>{r.waypoints.splice(row.i,0,{id:config.uid(),lat:Number(p.lat),lng:Number(p.lng),
     label:(role==='stop'?'Stop ':'Road point ')+(r.waypoints.length+1),kind:role});},true);
+   selectedSection='';pick='';config.onPickChange?.();
   }
   status='Map point saved. Select Suggest route to calculate the road path.';render();
   return true;
@@ -712,9 +723,10 @@ function createController(config){
   const item=collection.find(x=>x.id===id);
   if(!item||!pointOK(item))return report('This Idea or activity has no mapped location.');
   if(r.waypoints.length>=MAX_WAYPOINTS)return report('Maximum '+MAX_WAYPOINTS+' intermediate points.');
-  update(route=>{route.waypoints.push({id:config.uid(),lat:Number(item.lat),lng:Number(item.lng),
+  const row=sectionRows(r).find(x=>x.key===selectedSection);if(!row||row.gap)return report('Choose a connected driving section first.');
+  update(route=>{route.waypoints.splice(row.i,0,{id:config.uid(),lat:Number(item.lat),lng:Number(item.lng),
    label:item.name||item.title||'Stop',kind:'stop',sourceType:kind,sourceId:id});},true);
-  status='Itinerary/Idea stop added.';render();
+  selectedSection='';status='Stop inserted into selected driving section.';render();void calculate();
  }
  async function geocode(role){
   const r=selected();if(!r)return;
@@ -927,7 +939,7 @@ function createController(config){
   $('routeControls').classList.toggle('hidden',!r);
   $('routeDelete').disabled=!r;
   $('routeAlternative').disabled=!r||list.length>=MAX_ROUTES;
-  if(!r){$('routeEmpty').textContent=list.length?'Select a route.':'Create an outbound, return, or day-trip route.';draw();return;}
+  if(!r){$('routeEditSection').innerHTML='<option value="">No route selected</option>';$('routeEmpty').textContent=list.length?'Select a route.':'Create an outbound, return, or day-trip route.';draw();return;}
   for(const [id,value] of [['routeName',r.name],['routeStart',r.start?.label],['routeEnd',r.end?.label],
    ['routeStartDate',r.startDate],['routeStartTime',r.startTime],['routeEndDate',r.endDate],['routeEndTime',r.endTime]]){
    $(id).value=value||'';
@@ -946,6 +958,8 @@ function createController(config){
   const sectionList=sectionRows(r),skipped=sectionList.filter(x=>x.gap).length;
   if(selectedSection&&!sectionList.some(x=>x.key===selectedSection))selectedSection='';
   const activeRow=sectionList.find(x=>x.key===selectedSection);
+  $('routeEditSection').innerHTML='<option value="">Choose driving section…</option>'+sectionList.map(x=>'<option value="'+esc(x.key)+'">'+esc((x.i+1)+'. '+(x.from?.label||'Start')+' → '+(x.to?.label||'End'))+'</option>').join('');
+  $('routeEditSection').value=selectedSection;
   $('routeSectionSummary').textContent=sectionList.length+' section'+(sectionList.length===1?'':'s')+(skipped?' · '+skipped+' skipped':'');
   $('routeSectionRemove').disabled=!activeRow||activeRow.gap;
   $('routeSectionRestore').disabled=!activeRow||!activeRow.gap;
@@ -981,6 +995,7 @@ function createController(config){
  function setTool(next){tool=next==='routes'?'routes':'discover';if(tool!=='routes')pick='';config.onPickChange?.();render();}
  function onTripChange(){for(const id of ['routeMapDay','routeMapFrom','routeMapTo'])$(id).value='';currentId='';undoStack=[];pick='';selectedSection='';status='';suggestedDay='';itinerarySuggestions=null;itineraryPreviewRequest++;render();}
  function bind(){
+  $('routeEditSection').addEventListener('change',e=>{selectedSection=e.target.value;render();});
   $('routeMapClear').addEventListener('click',()=>{for(const id of ['routeMapDay','routeMapFrom','routeMapTo'])$(id).value='';draw();});
   for(const id of ['routeMapDay','routeMapFrom','routeMapTo'])$(id).addEventListener('change',()=>{if($('routeMapDay').value&&$('routeMapFrom').value&&$('routeMapTo').value&&$('routeMapFrom').value>$('routeMapTo').value){$('routeMapTo').value=$('routeMapFrom').value;}draw();});
   $('exploreToolTabs').addEventListener('click',e=>{const b=e.target.closest('[data-explore-tool]');if(b)setTool(b.dataset.exploreTool);});
